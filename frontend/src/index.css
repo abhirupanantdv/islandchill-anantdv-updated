@@ -1,0 +1,47 @@
+:root {
+  --text-main: #374151;
+  --text-muted: #6b7280;
+  --text-heading: #111827;
+  --bg-app: #f9fafb;
+  --bg-card: #ffffff;
+  --bg-sidebar: #111111;
+  --accent: #f59e0b; /* Gold/Amber */
+  --accent-hover: #d97706;
+  --border-color: #e5e7eb;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --heading: 'Outfit', 'Inter', system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  font-family: var(--sans);
+  color-scheme: light;
+  color: var(--text-main);
+  background-color: var(--bg-app);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  box-sizing: border-box;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--heading);
+  color: var(--text-heading);
+  margin-top: 0;
+}
+
