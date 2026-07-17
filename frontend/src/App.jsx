@@ -2780,9 +2780,17 @@ function App() {
     try {
       const result = await frappe.login(CONFIG.ERPNEXT_SERVER_URL, loginUsername, loginPassword, true);
       if (result.success) {
+
+        
         setCurrentUser(result.user);
         setCurrentUserRole(result.role);
         setIsLoggedIn(true);
+
+        if(result.islandchill_user_type === 'Islandchill') {
+          window.location.href = `/islandchill`
+        } else {
+          window.location.href = `/app`
+        }
       } else {
         setLoginError(result.message || 'Failed to connect to ERPNext.');
       }
@@ -3345,7 +3353,9 @@ function App() {
     try {
       const uoms = await frappe.getItemUoms(wo.item || wo.product);
       if (uoms && uoms.length > 0) {
-        const altUom = uoms.find(u => !u.is_stock_uom) || uoms[0];
+        // Sort by conversion factor ascending to find the UOM with the lowest conversion factor
+        const sortedUoms = [...uoms].sort((a, b) => Number(a.conversion_factor || 1) - Number(b.conversion_factor || 1));
+        const altUom = sortedUoms[0];
         setFinishWoModal(prev => {
           if (!prev || prev.woId !== wo.id) return prev;
           return {
@@ -6590,21 +6600,13 @@ function App() {
                     <select
                       className="form-input"
                       value={finishWoModal.extraUom}
-                      onChange={(e) => {
-                        const newUom = e.target.value;
-                        const eq = Number(finishWoModal.extraQty || 0);
-                        const uomObj = (finishWoModal.uomsList || []).find(u => u.uom === newUom);
-                        const factor = Number(uomObj?.conversion_factor || 1.0);
-                        const extraBase = eq * factor;
-                        const target = Number(finishWoModal.targetQty || 0);
-                        const calculatedLoss = Math.max(0, Number((target - (Number(finishWoModal.qty || 0) + extraBase)).toFixed(6)));
-                        setFinishWoModal(prev => ({ ...prev, extraUom: newUom, processLossQty: calculatedLoss }));
-                      }}
+                      disabled
+                      style={{ opacity: 0.8, backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                     >
                       {finishWoModal.uomsList && finishWoModal.uomsList.length > 0 ? (
                         finishWoModal.uomsList.map(u => (
                           <option key={u.uom} value={u.uom}>
-                            {u.uom} ({u.conversion_factor})
+                            {u.uom} ({Number(u.conversion_factor || 0).toFixed(4)})
                           </option>
                         ))
                       ) : (

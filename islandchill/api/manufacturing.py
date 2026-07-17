@@ -530,6 +530,11 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
         else:
             process_loss = max(0.0, frappe.utils.flt(target_run_qty - qty_to_manufacture, 6))
 
+        # Update Work Order Operations with the calculated process loss to prevent Stock Entry from resetting it to 0.0
+        for op in wo.operations:
+            frappe.db.set_value("Work Order Operation", op.name, "process_loss_qty", process_loss)
+        wo.reload()
+
         from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
 
         try:
@@ -578,11 +583,38 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
                     })
 
         for item in stock_entry.get("items") or []:
-            item.allow_zero_valuation_rate = 1
+            # Only allow zero valuation rate for raw materials, not finished goods/extra goods
+            if not item.is_finished_item:
+                item.allow_zero_valuation_rate = 1
         for item in stock_entry.get("scrap_items") or []:
             item.allow_zero_valuation_rate = 1
 
         stock_entry.insert(ignore_permissions=False)
+
+        # After insertion, calculate and set correct rates for the extra goods row
+        main_fg = None
+        extra_fg = None
+        for item in stock_entry.items:
+            if item.is_finished_item:
+                if item.get("custom_is_extra_goods_row"):
+                    extra_fg = item
+                else:
+                    main_fg = item
+
+        if main_fg and extra_fg:
+            # Set rates and amounts matching the main finished goods row
+            extra_fg.basic_rate = frappe.utils.flt(main_fg.basic_rate * extra_fg.conversion_factor, 9)
+            extra_fg.valuation_rate = frappe.utils.flt(main_fg.basic_rate, 9)
+            extra_fg.amount = frappe.utils.flt(extra_fg.qty * extra_fg.basic_rate, 2)
+            extra_fg.basic_amount = frappe.utils.flt(extra_fg.qty * extra_fg.basic_rate, 2)
+            extra_fg.allow_zero_valuation_rate = 1  # Keep check enabled for stock ledger post
+            
+            # Recalculate totals for the Stock Entry header
+            stock_entry.total_incoming_value = sum(frappe.utils.flt(d.basic_amount) for d in stock_entry.items if d.is_finished_item)
+            stock_entry.value_difference = frappe.utils.flt(stock_entry.total_incoming_value - stock_entry.total_outgoing_value, 2)
+            stock_entry.db_update()
+            for item in stock_entry.items:
+                item.db_update()
 
         if frappe.utils.cint(submit):
             stock_entry.submit()

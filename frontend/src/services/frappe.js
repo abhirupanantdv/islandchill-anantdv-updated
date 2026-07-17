@@ -248,6 +248,7 @@ class FrappeService {
 
       // Try fetching profile details
       let fullName = userEmail;
+      let islandchill_user_type = '';
       try {
         const profileRes = await fetch(`${baseUrl}/api/resource/User/${userEmail}`, {
           method: 'GET',
@@ -260,6 +261,7 @@ class FrappeService {
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           fullName = profileData.data.full_name || userEmail;
+          islandchill_user_type = profileData?.data?.islandchill_user_type;
         }
       } catch (err) {
         console.warn('Profile fetch failed, using email instead', err);
@@ -279,7 +281,9 @@ class FrappeService {
       };
 
       this.setConnectionSettings(settings);
-      return { success: true, user: fullName, role: settings.role };
+
+      
+      return { success: true, user: fullName, role: settings.role, islandchill_user_type: islandchill_user_type  };
     } catch (error) {
       console.error('ERPNext login error:', error);
       return { success: false, message: error.message };
