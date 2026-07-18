@@ -836,12 +836,18 @@ def parse_remarks_list(remarks_str):
 @frappe.whitelist(allow_guest=False)
 def get_item_uoms(item_code):
     item = frappe.get_doc("Item", item_code)
-    uoms = [{"uom": item.stock_uom, "conversion_factor": 1.0, "is_stock_uom": 1}]
+    uoms = [{
+        "uom": item.stock_uom,
+        "conversion_factor": 1.0,
+        "is_stock_uom": 1,
+        "custom_min_stock_uom": frappe.db.get_value("UOM", item.stock_uom, "custom_min_stock_uom") or 0
+    }]
     for u in item.uoms:
         if u.uom != item.stock_uom:
             uoms.append({
                 "uom": u.uom,
                 "conversion_factor": frappe.utils.flt(u.conversion_factor or 1.0),
-                "is_stock_uom": 0
+                "is_stock_uom": 0,
+                "custom_min_stock_uom": frappe.db.get_value("UOM", u.uom, "custom_min_stock_uom") or 0
             })
     return uoms

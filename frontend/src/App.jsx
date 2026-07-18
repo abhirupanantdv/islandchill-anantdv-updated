@@ -3341,6 +3341,7 @@ function App() {
       extraQty: '',
       extraUom: '',
       uomsList: [],
+      disableUomSelect: false,
       processLossQty: 0,
       company: wo.company || defaultCompany,
       scrapWarehouse: wo.scrapWarehouse || '',
@@ -3353,15 +3354,26 @@ function App() {
     try {
       const uoms = await frappe.getItemUoms(wo.item || wo.product);
       if (uoms && uoms.length > 0) {
-        // Sort by conversion factor ascending to find the UOM with the lowest conversion factor
-        const sortedUoms = [...uoms].sort((a, b) => Number(a.conversion_factor || 1) - Number(b.conversion_factor || 1));
-        const altUom = sortedUoms[0];
+        const configuredMinUom = uoms.find(u => Number(u.custom_min_stock_uom) === 1);
+        let selectedUom = null;
+        let disableUomSelect = false;
+
+        if (configuredMinUom) {
+          selectedUom = configuredMinUom;
+          disableUomSelect = true;
+        } else {
+          const sortedUoms = [...uoms].sort((a, b) => Number(a.conversion_factor || 1) - Number(b.conversion_factor || 1));
+          selectedUom = sortedUoms[0];
+          disableUomSelect = false;
+        }
+
         setFinishWoModal(prev => {
           if (!prev || prev.woId !== wo.id) return prev;
           return {
             ...prev,
             uomsList: uoms,
-            extraUom: altUom?.uom || ''
+            extraUom: selectedUom?.uom || '',
+            disableUomSelect: disableUomSelect
           };
         });
       }
@@ -6541,7 +6553,7 @@ function App() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
-                    <label className="input-label" style={{ fontWeight: '600' }}>Finished Goods Qty (Good Qty) *</label>
+                    <label className="input-label" style={{ fontWeight: '600' }}>Finished Goods Qty *</label>
                     <input
                       type="number"
                       step="0.0001"
@@ -6600,8 +6612,18 @@ function App() {
                     <select
                       className="form-input"
                       value={finishWoModal.extraUom}
-                      disabled
-                      style={{ opacity: 0.8, backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                      disabled={finishWoModal.disableUomSelect}
+                      onChange={(e) => {
+                        const newUom = e.target.value;
+                        const uomObj = (finishWoModal.uomsList || []).find(u => u.uom === newUom);
+                        const factor = Number(uomObj?.conversion_factor || 1.0);
+                        const eq = Number(finishWoModal.extraQty || 0);
+                        const extraBase = eq * factor;
+                        const target = Number(finishWoModal.targetQty || 0);
+                        const calculatedLoss = Math.max(0, Number((target - (Number(finishWoModal.qty || 0) + extraBase)).toFixed(6)));
+                        setFinishWoModal(prev => ({ ...prev, extraUom: newUom, processLossQty: calculatedLoss }));
+                      }}
+                      style={finishWoModal.disableUomSelect ? { opacity: 0.8, backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
                     >
                       {finishWoModal.uomsList && finishWoModal.uomsList.length > 0 ? (
                         finishWoModal.uomsList.map(u => (
