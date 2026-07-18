@@ -3355,12 +3355,16 @@ function App() {
       const uoms = await frappe.getItemUoms(wo.item || wo.product);
       if (uoms && uoms.length > 0) {
         const configuredMinUom = uoms.find(u => Number(u.custom_min_stock_uom) === 1);
+        const nosUom = uoms.find(u => u.uom && u.uom.toLowerCase() === 'nos');
         let selectedUom = null;
         let disableUomSelect = false;
 
         if (configuredMinUom) {
           selectedUom = configuredMinUom;
           disableUomSelect = true;
+        } else if (nosUom) {
+          selectedUom = nosUom;
+          disableUomSelect = false;
         } else {
           const sortedUoms = [...uoms].sort((a, b) => Number(a.conversion_factor || 1) - Number(b.conversion_factor || 1));
           selectedUom = sortedUoms[0];
