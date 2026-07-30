@@ -3282,8 +3282,25 @@ function App() {
     setJcOpOperatorName('');
     setJcOpOperatorEmployeeId('');
     setJcOpOperatorRemarks('');
-    setJcActualStartTime('');
-    setJcActualEndTime('');
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const defaultNowDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    if (action === 'start' || action === 'resume') {
+      setJcActualStartTime(defaultNowDateTime);
+      setJcActualEndTime('');
+    } else if (action === 'pause' || action === 'finish') {
+      setJcActualStartTime('');
+      setJcActualEndTime(defaultNowDateTime);
+    } else {
+      setJcActualStartTime('');
+      setJcActualEndTime('');
+    }
 
     if (action === 'finish') {
       const forQty = Number(jc?.forQuantity || wo?.quantity || 0);
@@ -5432,7 +5449,7 @@ function App() {
                     onChange={(e) => setJcActualStartTime(e.target.value)}
                   />
                   <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Used only for Start/Resume. Leave blank to use current ERPNext time.
+                    Defaulted to current date & time. You can modify if needed.
                   </div>
                 </div>
               )}
@@ -5447,7 +5464,7 @@ function App() {
                     onChange={(e) => setJcActualEndTime(e.target.value)}
                   />
                   <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Used only for Pause/Finish. Leave blank to use current ERPNext time.
+                    Defaulted to current date & time. You can modify if needed.
                   </div>
                 </div>
               )}

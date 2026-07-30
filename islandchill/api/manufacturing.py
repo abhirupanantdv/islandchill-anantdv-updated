@@ -602,11 +602,16 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
                     main_fg = item
 
         if main_fg and extra_fg:
-            # Set rates and amounts matching the main finished goods row
-            extra_fg.basic_rate = frappe.utils.flt(main_fg.basic_rate * extra_fg.conversion_factor, 9)
-            extra_fg.valuation_rate = frappe.utils.flt(main_fg.basic_rate, 9)
-            extra_fg.amount = frappe.utils.flt(extra_fg.qty * extra_fg.basic_rate, 2)
-            extra_fg.basic_amount = frappe.utils.flt(extra_fg.qty * extra_fg.basic_rate, 2)
+            item_cf = frappe.db.get_value(
+                "UOM Conversion Detail",
+                {"parent": wo.production_item, "uom": extra_fg.uom},
+                "conversion_factor"
+            ) or 1.0
+            unit_rate = frappe.utils.flt(main_fg.basic_rate * item_cf, 9)
+            extra_fg.basic_rate = unit_rate
+            extra_fg.valuation_rate = unit_rate
+            extra_fg.amount = frappe.utils.flt(extra_fg.qty * unit_rate, 2)
+            extra_fg.basic_amount = frappe.utils.flt(extra_fg.qty * unit_rate, 2)
             extra_fg.allow_zero_valuation_rate = 1  # Keep check enabled for stock ledger post
             
             # Recalculate totals for the Stock Entry header
@@ -621,6 +626,9 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
 
         wo.reload()
         wo.update_status()
+        if frappe.utils.cint(submit) and wo.status != "Completed":
+            wo.db_set("status", "Completed")
+            wo.reload()
         frappe.db.commit()
 
         return {
