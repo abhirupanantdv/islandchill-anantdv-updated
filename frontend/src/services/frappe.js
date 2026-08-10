@@ -19,6 +19,86 @@ class FrappeService {
     this.connection = this.getConnectionSettings();
     // Tracks in-flight mutating requests to prevent accidental duplicate submissions
     this._pendingRequests = new Set();
+    this._sessionExpiredCallbacks = [];
+    this._isSessionExpiring = false;
+  }
+
+  onSessionExpired(callback) {
+    if (typeof callback === 'function') {
+      this._sessionExpiredCallbacks.push(callback);
+      return () => {
+        this._sessionExpiredCallbacks = this._sessionExpiredCallbacks.filter(cb => cb !== callback);
+      };
+    }
+    return () => {};
+  }
+
+  isSessionExpiredError(status, messageStr) {
+    if (status === 401) return true;
+    const msg = (messageStr || '').toLowerCase();
+    if (
+      msg.includes('logged out') ||
+      msg.includes('login to access') ||
+      msg.includes('session expired') ||
+      msg.includes('sessionexpired') ||
+      msg.includes('invalid session') ||
+      msg.includes('authentication failed') ||
+      msg.includes('user guest')
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  triggerSessionExpired(reason = 'Session expired') {
+    if (this._isSessionExpiring) return;
+    this._isSessionExpiring = true;
+    console.warn('[FrappeService] Session expired / logged out:', reason);
+
+    this.logout();
+
+    if (this._sessionExpiredCallbacks) {
+      this._sessionExpiredCallbacks.forEach(cb => {
+        try { cb(reason); } catch (e) { console.error('Session expired callback error:', e); }
+      });
+    }
+
+    setTimeout(() => {
+      this._isSessionExpiring = false;
+    }, 2000);
+  }
+
+  async checkSessionStatus() {
+    if (!this.connection.isLive) return true;
+
+    try {
+      const baseUrl = this.resolveUrl(this.connection.url);
+      const auth = this.getAuthHeader();
+      const headers = { Accept: 'application/json' };
+      if (auth) headers['Authorization'] = auth;
+
+      const response = await fetch(`${baseUrl}/api/method/frappe.auth.get_logged_user`, {
+        method: 'GET',
+        headers,
+        credentials: 'include'
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        this.triggerSessionExpired('Session invalid (401/403)');
+        return false;
+      }
+
+      const json = await response.json().catch(() => null);
+      const user = json?.message;
+      if (!user || user === 'Guest') {
+        this.triggerSessionExpired('Session logged out');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      // Network hiccup, do not trigger session logout
+      return true;
+    }
   }
 
   getConnectionSettings() {
@@ -27,14 +107,14 @@ class FrappeService {
       try {
         const conn = JSON.parse(connStr);
         if (!conn.url) conn.url = CONFIG.ERPNEXT_SERVER_URL;
-        // If no company stored, fall back to the active company
-        // It is set when the user logs in and selects their company
+        conn.isLive = true;
+        conn.connected = true;
         return conn;
       } catch {
-        return { isLive: false, url: CONFIG.ERPNEXT_SERVER_URL, apiKey: '', apiSecret: '', username: '', password: '', connected: false, defaultCompany: 'Carpenters Waters (Fiji) PTE Limited' };
+        return { isLive: true, url: CONFIG.ERPNEXT_SERVER_URL, apiKey: '', apiSecret: '', username: '', password: '', connected: true, defaultCompany: 'Carpenters Waters (Fiji) PTE Limited' };
       }
     }
-    return { isLive: false, url: CONFIG.ERPNEXT_SERVER_URL, apiKey: '', apiSecret: '', username: '', password: '', connected: false, defaultCompany: 'Carpenters Waters (Fiji) PTE Limited' };
+    return { isLive: true, url: CONFIG.ERPNEXT_SERVER_URL, apiKey: '', apiSecret: '', username: '', password: '', connected: true, defaultCompany: 'Carpenters Waters (Fiji) PTE Limited' };
   }
 
   setConnectionSettings(settings) {
@@ -140,71 +220,72 @@ class FrappeService {
   async callIslandChillMethod(methodName, payload = {}) {
     if (!this.connection.isLive) return { success: true, localOnly: true };
 
-    // Dedup guard: block duplicate in-flight calls for the same method
-    const requestKey = `method:${methodName}`;
-    if (this._pendingRequests.has(requestKey)) {
-      console.warn(`[FrappeService] Duplicate request blocked: ${requestKey}`);
-      throw new DuplicateRequestError(requestKey);
-    }
-    this._pendingRequests.add(requestKey);
-
-    const baseUrl = this.resolveUrl(this.connection.url);
-    const auth = this.getAuthHeader();
-
-    const headers = {
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
-    };
-
-    if (auth) {
-      headers.Authorization = auth;
-    } else {
-      const csrfToken =
-        window.csrf_token ||
-        window.frappe?.csrf_token ||
-        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-      if (csrfToken) {
-        headers['X-Frappe-CSRF-Token'] = csrfToken;
-        headers['X-CSRF-Token'] = csrfToken;
-      }
+    const requestKey = `method:${methodName}:${JSON.stringify(payload)}`;
+    if (!this._inFlightPromises) this._inFlightPromises = new Map();
+    if (this._inFlightPromises.has(requestKey)) {
+      return this._inFlightPromises.get(requestKey);
     }
 
-    try {
-      const response = await fetch(`${baseUrl}/api/method/islandchill.api.manufacturing.${methodName}`, {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
+    const promise = (async () => {
+      const baseUrl = this.resolveUrl(this.connection.url);
+      const auth = this.getAuthHeader();
 
-      const json = await response.json().catch(() => null);
+      const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      };
 
-      if (!response.ok) {
-        const rawMessage =
-          json?._server_messages ||
-          json?.exception ||
-          json?.exc ||
-          json?.message ||
-          response.statusText ||
-          'ERPNext request failed';
+      if (auth) {
+        headers.Authorization = auth;
+      } else {
+        const csrfToken =
+          window.csrf_token ||
+          window.frappe?.csrf_token ||
+          document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-        throw new Error(this.cleanFrappeError(rawMessage));
+        if (csrfToken) {
+          headers['X-Frappe-CSRF-Token'] = csrfToken;
+          headers['X-CSRF-Token'] = csrfToken;
+        }
       }
 
-      return json?.message || json;
-    } finally {
-      this._pendingRequests.delete(requestKey);
-    }
+      try {
+        const response = await fetch(`${baseUrl}/api/method/islandchill.api.manufacturing.${methodName}`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+
+        const json = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          const rawMessage =
+            json?._server_messages ||
+            json?.exception ||
+            json?.exc ||
+            json?.message ||
+            response.statusText ||
+            'ERPNext request failed';
+
+          const cleaned = this.cleanFrappeError(rawMessage);
+          if (this.isSessionExpiredError(response.status, rawMessage)) {
+            this.triggerSessionExpired(cleaned);
+          }
+          throw new Error(cleaned);
+        }
+
+        return json?.message || json;
+      } finally {
+        this._inFlightPromises.delete(requestKey);
+      }
+    })();
+
+    this._inFlightPromises.set(requestKey, promise);
+    return promise;
   }
 
-  async login(url, usernameOrKey, passwordOrSecret, isLive = false, defaultCompany = 'Carpenters Waters (Fiji) PTE Limited') {
-    if (!isLive) {
-      const mockSettings = { isLive: false, url: CONFIG.ERPNEXT_SERVER_URL, apiKey: '', apiSecret: '', username: '', password: '', connected: true, user: 'Alex Morgan', role: 'System Administrator', defaultCompany };
-      this.setConnectionSettings(mockSettings);
-      return { success: true, user: mockSettings.user, role: mockSettings.role };
-    }
-
+  async login(url, usernameOrKey, passwordOrSecret, isLive = true, defaultCompany = 'Carpenters Waters (Fiji) PTE Limited') {
     try {
       const targetUrl = url || CONFIG.ERPNEXT_SERVER_URL;
       const baseUrl = this.resolveUrl(targetUrl);
@@ -246,11 +327,15 @@ class FrappeService {
       const resData = await userRes.json();
       const userEmail = resData.message;
 
+      if (!userEmail || userEmail === 'Guest') {
+        throw new Error('Login failed: Invalid username or password.');
+      }
+
       // Try fetching profile details
       let fullName = userEmail;
       let islandchill_user_type = '';
       try {
-        const profileRes = await fetch(`${baseUrl}/api/resource/User/${userEmail}`, {
+        const profileRes = await fetch(`${baseUrl}/api/resource/User/${encodeURIComponent(userEmail)}`, {
           method: 'GET',
           credentials: 'include',
           headers: {
@@ -282,15 +367,27 @@ class FrappeService {
 
       this.setConnectionSettings(settings);
 
-      
-      return { success: true, user: fullName, role: settings.role, islandchill_user_type: islandchill_user_type  };
+      return { success: true, user: fullName, role: settings.role, islandchill_user_type: islandchill_user_type };
     } catch (error) {
       console.error('ERPNext login error:', error);
       return { success: false, message: error.message };
     }
   }
 
-  logout() {
+  async logout() {
+    try {
+      const baseUrl = this.resolveUrl(this.connection.url);
+      await fetch(`${baseUrl}/api/method/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('Logout API call failed:', e);
+    }
     this.setConnectionSettings({ isLive: false, url: CONFIG.ERPNEXT_SERVER_URL, apiKey: '', apiSecret: '', username: '', password: '', connected: false, defaultCompany: 'Carpenters Waters (Fiji) PTE Limited' });
   }
 
@@ -329,7 +426,11 @@ class FrappeService {
         const errData = await response.json();
         message = errData.exception || errData.message || errData._server_messages || message;
       } catch { }
-      throw new Error(this.cleanFrappeError(message));
+      const cleaned = this.cleanFrappeError(message);
+      if (this.isSessionExpiredError(response.status, message)) {
+        this.triggerSessionExpired(cleaned);
+      }
+      throw new Error(cleaned);
     }
 
     const res = await response.json();
@@ -396,7 +497,11 @@ class FrappeService {
             errData.message ||
             message;
         } catch { }
-        throw new Error(this.cleanFrappeError(message));
+        const cleaned = this.cleanFrappeError(message);
+        if (this.isSessionExpiredError(response.status, message)) {
+          this.triggerSessionExpired(cleaned);
+        }
+        throw new Error(cleaned);
       }
 
       return await response.json();
@@ -516,10 +621,19 @@ class FrappeService {
     return { success: true, name: `MFG-WO-2026-${Date.now().toString().slice(-5)}` };
   }
 
-  // Generic document cancellation helper via frappe.client.cancel
+  // Generic document cancellation helper via custom whitelisted methods or frappe.client.cancel
   async cancelDoc(doctype, docName) {
     if (!this.connection.isLive) return { success: true };
     try {
+      if (doctype === 'Work Order') {
+        const res = await this.callIslandChillMethod('cancel_work_order', { work_order: docName });
+        if (res && res.success) return { success: true };
+      }
+      if (doctype === 'Stock Entry') {
+        const res = await this.callIslandChillMethod('cancel_stock_entry', { stock_entry: docName });
+        if (res && res.success) return { success: true };
+      }
+
       const { url } = this.connection;
       const baseUrl = this.resolveUrl(url);
       const headers = {
@@ -835,54 +949,38 @@ class FrappeService {
     if (!this.connection.isLive) return null;
 
     try {
-      const boms = await this.fetchERP('BOM', {
-        fields: ['name', 'item', 'item_name', 'is_active', 'is_default', 'docstatus'],
-        filters: [
-          ['is_active', '=', 1],
-          ['docstatus', '=', 1]
-        ],
-        limit,
-        order_by: 'is_default desc, modified desc'
-      });
+      const boms = await this.callIslandChillMethod('get_all_boms_list', { limit });
 
       if (!boms || boms.length === 0) return [];
 
       const unique = new Map();
 
       for (const bom of boms) {
-        const code = bom.item;
+        const code = bom.item || bom.itemCode;
         if (!code || unique.has(code)) continue;
 
         unique.set(code, {
           code,
-          name: bom.item_name || code,
-          unit: 'Nos',
-          defaultBom: bom.name
+          name: bom.productName || bom.item || code,
+          unit: bom.unit || 'Nos',
+          defaultBom: bom.id || bom.name
         });
       }
 
       const codes = Array.from(unique.keys());
 
-      // Enrich names/UOM from Item if possible. If this fails, BOM data is still enough.
       try {
-        const items = await this.fetchERP('Item', {
-          fields: ['name', 'item_code', 'item_name', 'stock_uom', 'disabled', 'is_stock_item'],
-          filters: [
-            ['name', 'in', codes],
-            ['disabled', '=', 0]
-          ],
-          limit: codes.length
-        });
+        const items = await this.callIslandChillMethod('get_all_inventory_items', { limit: 200 });
 
         if (items && items.length > 0) {
           for (const item of items) {
-            const code = item.item_code || item.name;
+            const code = item.item_code || item.code || item.name;
             if (unique.has(code)) {
               unique.set(code, {
                 ...unique.get(code),
                 code,
-                name: item.item_name || unique.get(code).name || code,
-                unit: item.stock_uom || unique.get(code).unit || 'Nos'
+                name: item.item_name || item.name || unique.get(code).name || code,
+                unit: item.stock_uom || item.unit || unique.get(code).unit || 'Nos'
               });
             }
           }
@@ -977,10 +1075,7 @@ class FrappeService {
   async getCompanies() {
     if (this.connection.isLive) {
       try {
-        const res = await this.fetchERP('Company', {
-          fields: ['name', 'company_name'],
-          limit: 100
-        });
+        const res = await this.callIslandChillMethod('get_companies_list');
         return res || [];
       } catch (e) {
         console.error('Failed to fetch Companies:', e);
@@ -1003,21 +1098,13 @@ class FrappeService {
         const manufacturable = await this.getManufacturableItems(limit);
         if (manufacturable && manufacturable.length > 0) return manufacturable;
 
-        const res = await this.fetchERP('Item', {
-          fields: ['name', 'item_code', 'item_name', 'item_group', 'stock_uom', 'disabled', 'is_stock_item'],
-          filters: [
-            ['disabled', '=', 0],
-            ['is_stock_item', '=', 1]
-          ],
-          limit,
-          order_by: 'item_name asc'
-        });
+        const res = await this.callIslandChillMethod('get_all_inventory_items', { limit });
 
         if (res && res.length > 0) {
           return res.map(item => ({
-            code: item.item_code || item.name,
-            name: item.item_name || item.name,
-            unit: item.stock_uom || 'Nos'
+            code: item.item_code || item.code || item.name,
+            name: item.item_name || item.name || item.code,
+            unit: item.stock_uom || item.unit || 'Nos'
           }));
         }
 
@@ -1037,31 +1124,8 @@ class FrappeService {
       try {
         if (!itemCode) return [];
 
-        const res = await this.fetchERP('BOM', {
-          fields: ['name', 'item', 'item_name', 'is_active', 'is_default', 'docstatus', 'quantity', 'uom'],
-          filters: [
-            ['item', '=', itemCode],
-            ['is_active', '=', 1],
-            ['docstatus', '=', 1]
-          ],
-          limit,
-          order_by: 'is_default desc, modified desc'
-        });
-
-        if (res && res.length > 0) {
-          return res.map(bom => ({
-            id: bom.name,
-            name: bom.name,
-            productName: bom.item_name || bom.item,
-            item: bom.item,
-            active: bom.is_active || 1,
-            isDefault: Boolean(bom.is_default),
-            quantity: bom.quantity,
-            unit: bom.uom || 'Nos'
-          }));
-        }
-
-        return [];
+        const res = await this.callIslandChillMethod('get_boms_for_item', { item_code: itemCode, limit });
+        return res || [];
       } catch (e) {
         console.error(`Failed to fetch BOMs for ${itemCode} from ERPNext:`, e);
         return [];
@@ -1314,41 +1378,8 @@ class FrappeService {
   async getEmployees(searchQuery = '', limit = 50) {
     if (this.connection.isLive) {
       try {
-        const filters = searchQuery ? [['employee_name', 'like', `%${searchQuery}%`]] : undefined;
-        const res = await this.fetchERP('Employee', {
-          fields: ['name', 'employee_name', 'gender', 'date_of_birth', 'designation', 'status', 'image', 'department', 'company_email', 'personal_email', 'date_of_joining'],
-          filters,
-          limit
-        });
-
-        let employees = res || [];
-        if (employees.length === 0) {
-          // Fall back to User doctype if no Employees exist in the system yet
-          const userFilters = [['enabled', '=', 1]];
-          const users = await this.fetchERP('User', {
-            fields: ['name', 'first_name', 'last_name'],
-            filters: userFilters,
-            limit: 100
-          });
-          if (users && users.length > 0) {
-            employees = users.map(u => ({
-              name: u.name, // Email is the unique key
-              employee_name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.name,
-              designation: 'User Account',
-              status: 'Active'
-            }));
-          }
-        }
-
-        if (searchQuery && employees.length > 0) {
-          const q = searchQuery.toLowerCase().trim();
-          return employees.filter(emp =>
-            emp.employee_name.toLowerCase().includes(q) ||
-            emp.name.toLowerCase().includes(q)
-          ).slice(0, limit);
-        }
-
-        return employees.slice(0, limit);
+        const res = await this.callIslandChillMethod('get_employees_list', { search_term: searchQuery, limit });
+        return res || [];
       } catch (e) {
         console.error('Failed to fetch Employees from ERPNext:', e);
         return [];
@@ -1376,101 +1407,52 @@ class FrappeService {
   }
 
   // Fetch BOMs (Paginated)
-  async getBOMs(limit = 20, start = 0) {
+  async getBOMs(limit = 100, start = 0) {
     if (this.connection.isLive) {
       try {
-        const res = await this.fetchERP('BOM', {
-          fields: ['name', 'item', 'item_name', 'is_active'],
-          filters: [
-            ['is_active', '=', 1],
-            ['docstatus', '=', 1]
-          ],
-          limit,
-          start,
-          order_by: 'creation desc'
-        });
-        if (res && res.length > 0) {
-          return res.map(bom => ({
-            id: bom.name,
-            name: bom.name,
-            productName: bom.item_name || bom.item,
-            itemCode: bom.item,
-            active: bom.is_active || 1,
-            materials: []
-          }));
-        }
-        return [];
+        const res = await this.callIslandChillMethod('get_all_boms_list', { limit, start });
+        return res || [];
       } catch (e) {
         console.error('Failed to fetch BOMs from ERPNext:', e);
-        throw e;
+        return [];
       }
     }
-    return null;
+    return [];
   }
 
   // Fetch BOM Details (raw materials)
   async getBOMDetails(bomId) {
     if (this.connection.isLive) {
       try {
-        const res = await this.makeRequest('GET', 'BOM', bomId);
-        if (res && res.data && res.data.items) {
-          return res.data.items.map(item => ({
-            // Use item_code / item_name keys to match BOMTab.jsx table columns
-            item_code: item.item_code,
-            item_name: item.item_name,
-            // Also keep legacy keys for backward compatibility (e.g. handleStartWorkOrder)
-            code: item.item_code,
-            name: item.item_name,
-            qty: Number(item.qty || 0),
-            uom: item.uom || 'Qty',
-            unit: item.uom || 'Qty'
-          }));
-        }
+        const res = await this.callIslandChillMethod('get_bom_details_data', { bom_id: bomId });
+        return res || [];
       } catch (e) {
         console.error(`Failed to fetch BOM details for ${bomId}:`, e);
+        return [];
       }
     }
+    return [];
   }
 
-  // Fetch Items (Paginated)
-  async getItems(limit = 20, start = 0) {
+  // Fetch Items / Inventory Balances
+  async getItems(limit = 200, start = 0) {
     if (this.connection.isLive) {
       try {
-        const res = await this.fetchERP('Item', {
-          fields: ['name', 'item_code', 'item_name', 'item_group', 'stock_uom', 'safety_stock'],
-          limit,
-          start,
-          order_by: 'creation desc'
-        });
-        if (res && res.length > 0) {
-          return res.map(item => ({
-            code: item.item_code || item.name,
-            name: item.item_name || item.name,
-            category: item.item_group === 'Finished Goods' ? 'Finished Goods' : (item.item_group === 'Sub Assembly' || item.item_group === 'Raw Material' ? 'Raw Material' : 'Packaging'),
-            qty: 0,
-            unit: item.stock_uom || 'Nos',
-            minLevel: Number(item.safety_stock || 100)
-          }));
-        }
-        return [];
+        const res = await this.callIslandChillMethod('get_all_inventory_items', { limit });
+        return res || [];
       } catch (e) {
         console.error('Failed to fetch Items from ERPNext:', e);
-        throw e;
+        return [];
       }
     }
+    return [];
   }
 
   // Fetch Bin quantities for item codes
   async getBinQuantities(itemCodes) {
     if (this.connection.isLive) {
       try {
-        const res = await this.fetchERP('Bin', {
-          fields: ['item_code', 'warehouse', 'actual_qty'],
-          filters: [
-            ['item_code', 'in', itemCodes]
-          ],
-          limit: 100
-        });
+        const res = await this.callIslandChillMethod('get_bin_quantities', { item_codes: itemCodes });
         return res || [];
       } catch (e) {
         console.error('Failed to fetch Bin quantities from ERPNext:', e);
@@ -1484,12 +1466,7 @@ class FrappeService {
   async getMaintenanceSchedules(limit = 100, start = 0) {
     if (this.connection.isLive) {
       try {
-        const res = await this.fetchERP('Daily Preventative Maintenance Schedule', {
-          fields: ['*'],
-          limit,
-          start,
-          order_by: 'creation desc'
-        });
+        const res = await this.callIslandChillMethod('get_maintenance_schedules_list', { limit, start });
         if (res && res.length > 0) {
           return res.map(rec => {
             let checkgrid = {};
@@ -1500,13 +1477,14 @@ class FrappeService {
               id: rec.name,
               templateId: rec.template_id || rec.equipment,
               equipment: rec.equipment,
+              workOrder: rec.work_order,
               area: rec.area,
               name: rec.equipment,
               weekNo: rec.week_no,
               fromDate: rec.from_date,
               toDate: rec.to_date,
-              operator: rec.operator,
-              supervisor: rec.supervisor,
+              operator: rec.operator || rec.sign_of_the_operator,
+              supervisor: rec.supervisor || rec.sign_of_supervisor,
               checkgrid,
               remarks,
               totalChecked: Number(rec.total_checked || 0),
@@ -1524,35 +1502,71 @@ class FrappeService {
     return null;
   }
 
+  async getWorkOrderMaintenanceChecklists(workOrder) {
+    try {
+      return await this.callIslandChillMethod('get_work_order_maintenance_checklists', { work_order: workOrder });
+    } catch (e) {
+      console.error(`Failed to get maintenance checklists for ${workOrder}:`, e);
+      throw e;
+    }
+  }
+
+  async getMaintenanceDashboardStats(workOrder = null) {
+    try {
+      const params = workOrder ? { work_order: workOrder } : {};
+      return await this.callIslandChillMethod('get_maintenance_dashboard_stats', params);
+    } catch (e) {
+      console.error('Failed to get maintenance dashboard stats:', e);
+      return { total_checklists: 0, equipment_monitored: 0, total_task_checks: 0, last_activity: null };
+    }
+  }
+
+  async getMaintenanceLogHistory(workOrder = null, limit = 50, start = 0) {
+    try {
+      const params = { limit, start };
+      if (workOrder && workOrder !== 'all') params.work_order = workOrder;
+      return await this.callIslandChillMethod('get_maintenance_log_history', params);
+    } catch (e) {
+      console.error('Failed to get maintenance log history:', e);
+      return [];
+    }
+  }
+
   // Create Daily Preventative Maintenance Schedule
   async createMaintenanceSchedule(scheduleData) {
     if (this.connection.isLive) {
       const checklistItems = (scheduleData.tasks || []).map((task, idx) => {
         const isChecked = !!(scheduleData.checkgrid && scheduleData.checkgrid[idx]);
         const remarkVal = (scheduleData.remarks && scheduleData.remarks[idx]) || '';
+        const stdTime = scheduleData.stdTimes && scheduleData.stdTimes[idx] !== undefined
+          ? scheduleData.stdTimes[idx]
+          : (typeof task.std === 'number' ? task.std : (parseInt(task.std || '0') || 0));
         return {
-          doctype: "Daily PM Schedule Item",
           description: task.desc || task.description || '',
-          standard_time_mins: typeof task.std === 'number' ? task.std : (parseInt(task.std || '0') || 0),
+          standard_time_mins: stdTime,
           pass__fail: isChecked ? 'Pass' : 'Fail',
+          completed: isChecked,
           remarks: remarkVal,
-          date: scheduleData.fromDate || new Date().toISOString().slice(0, 10)
         };
       });
 
-      const basePayload = {
-        equipment: scheduleData.equipment,
-        area: scheduleData.area,
-        sign_of_the_operator: scheduleData.operator,
-        sign_of_supervisor: scheduleData.supervisor,
-        overall_remarks: scheduleData.overallComments,
-        maintenance_details: checklistItems,
-        docstatus: 1
-      };
-
       try {
-        const response = await this.makeRequest('POST', 'Daily Preventative Maintenance Schedule', '', basePayload);
-        return { success: true, name: response.data.name };
+        const res = await this.callIslandChillMethod('create_daily_pm_schedule', {
+          equipment: scheduleData.equipment,
+          area: scheduleData.area,
+          work_order: scheduleData.workOrder || scheduleData.work_order || '',
+          operator: scheduleData.operator || 'Administrator',
+          supervisor: scheduleData.supervisor || 'Administrator',
+          overall_remarks: scheduleData.overallComments || '',
+          maintenance_details: JSON.stringify(checklistItems),
+          week_no: scheduleData.weekNo || '',
+          from_date: scheduleData.fromDate || new Date().toISOString().slice(0, 10),
+          to_date: scheduleData.toDate || new Date().toISOString().slice(0, 10),
+        });
+        if (res && res.name) {
+          return { success: true, name: res.name };
+        }
+        throw new Error(res?.message || 'Failed to create Daily PM Schedule');
       } catch (err) {
         console.error('Failed to create Daily Preventative Maintenance Schedule on ERPNext:', err);
         throw err;
@@ -1972,19 +1986,13 @@ class FrappeService {
   async getWarehouses(searchQuery = '', company = '', limit = 50) {
     if (this.connection.isLive) {
       try {
-        const filters = [];
-        if (searchQuery) {
-          filters.push(['warehouse_name', 'like', `%${searchQuery}%`]);
+        const res = await this.callIslandChillMethod('get_warehouses_list', { company });
+        let warehouses = res || [];
+        if (searchQuery && warehouses.length > 0) {
+          const q = searchQuery.toLowerCase();
+          warehouses = warehouses.filter(w => (w.warehouse_name || w.name || '').toLowerCase().includes(q));
         }
-        if (company) {
-          filters.push(['company', '=', company]);
-        }
-        const res = await this.fetchERP('Warehouse', {
-          fields: ['name', 'warehouse_name', 'company'],
-          filters: filters.length > 0 ? filters : undefined,
-          limit
-        });
-        return res || [];
+        return warehouses;
       } catch (e) {
         console.error('Failed to fetch Warehouses from ERPNext:', e);
         return [];
@@ -2668,6 +2676,61 @@ class FrappeService {
       }
     }
     return { success: true };
+  }
+
+  // Fetch all Cleaning & Sanitation records across all 7 DocTypes
+  async fetchAllCleaningRecords() {
+    try {
+      const res = await this.callIslandChillMethod('get_all_cleaning_records');
+      if (res && Array.isArray(res)) {
+        return res;
+      }
+    } catch (e) {
+      console.warn('Backend RPC get_all_cleaning_records failed, falling back to fetchERP:', e);
+    }
+
+    const doctypes = [
+      'Cleaning of Toilets',
+      'Cleaning of Dining Room',
+      'Factory Floor',
+      'Cleaning of Lab and Office',
+      'Incubator Temperature Record',
+      'Balance Check or Callibration',
+      'equipment sanitation and cip'
+    ];
+
+    try {
+      const results = await Promise.allSettled(
+        doctypes.map(dt => this.fetchERP(dt, { fields: ['*'], limit: 100, order_by: 'creation desc' }))
+      );
+
+      const allRecords = [];
+      results.forEach((res, index) => {
+        const dt = doctypes[index];
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          res.value.forEach(item => {
+            allRecords.push({
+              id: item.name,
+              name: item.name,
+              type: dt,
+              timestamp: item.creation || item.modified || new Date().toISOString(),
+              status: item.sanitation_result || item.status || 'Clean',
+              cleaner: item.duties_performed_by || item.performed_by_operator || item.checked_by || 'Staff',
+              supervisor: item.checked_by || item.verified_by_supervisor || item.verified_by || '',
+              posting_date: item.date || (item.creation ? item.creation.split(' ')[0] : ''),
+              posting_time: item.time || (item.creation ? item.creation.split(' ')[1] : ''),
+              details: item
+            });
+          });
+        }
+      });
+
+      allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      return allRecords;
+    } catch (e) {
+      console.error('Failed to fetch all cleaning records from ERPNext:', e);
+      return [];
+    }
   }
 
 

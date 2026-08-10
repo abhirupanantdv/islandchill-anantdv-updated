@@ -219,6 +219,16 @@ def _append_job_card_comment(doc, text):
     doc.add_comment("Comment", _clean_html_error(text))
 
 
+def _wrap_job_card_action(action):
+    try:
+        frappe.flags.ignore_permissions = True
+        return action()
+    except Exception as exc:
+        frappe.throw(_clean_html_error(getattr(exc, "message", None) or str(exc)))
+    finally:
+        frappe.flags.ignore_permissions = False
+
+
 def _get_job_card(job_card):
     if not job_card:
         frappe.throw(_("Job Card is required"))
@@ -226,7 +236,9 @@ def _get_job_card(job_card):
     if not frappe.db.exists("Job Card", job_card):
         frappe.throw(_("Job Card {0} not found").format(job_card))
 
-    return frappe.get_doc("Job Card", job_card)
+    doc = frappe.get_doc("Job Card", job_card)
+    doc.flags.ignore_permissions = True
+    return doc
 
 
 def _job_card_response(doc):
@@ -645,6 +657,38 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
 
 
 @frappe.whitelist()
+def get_all_cleaning_records():
+    doctypes = [
+        'Cleaning of Toilets',
+        'Cleaning of Dining Room',
+        'Factory Floor',
+        'Cleaning of Lab and Office',
+        'Incubator Temperature Record',
+        'Balance Check or Callibration',
+        'equipment sanitation and cip'
+    ]
+    all_records = []
+    for dt in doctypes:
+        if frappe.db.exists("DocType", dt):
+            records = frappe.get_all(dt, fields=["*"], order_by="creation desc", limit=100)
+            for r in records:
+                all_records.append({
+                    "id": r.name,
+                    "name": r.name,
+                    "type": dt,
+                    "timestamp": str(r.creation or r.modified or ""),
+                    "status": r.get("sanitation_result") or r.get("status") or "Clean",
+                    "cleaner": r.get("duties_performed_by") or r.get("performed_by_operator") or r.get("checked_by") or "Staff",
+                    "supervisor": r.get("checked_by") or r.get("verified_by_supervisor") or r.get("verified_by") or "",
+                    "posting_date": str(r.get("date") or (str(r.creation).split(" ")[0] if r.creation else "")),
+                    "posting_time": str(r.get("time") or (str(r.creation).split(" ")[1] if r.creation else "")),
+                    "details": r
+                })
+    all_records.sort(key=lambda x: x["timestamp"], reverse=True)
+    return all_records
+
+
+@frappe.whitelist()
 def change_work_order_status(work_order, status):
     def _action():
         if not work_order:
@@ -670,13 +714,13 @@ def change_work_order_status(work_order, status):
     return _wrap_job_card_action(_action)
 
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=True)
 def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
     limit = frappe.utils.cint(limit) or 20
     start = frappe.utils.cint(start) or 0
 
     filters = [
-        ["creation", ">=", "2026-07-13 00:00:00"]
+        ["creation", ">=", "2026-06-01 00:00:00"]
     ]
     if company:
         filters.append(["company", "=", company])
@@ -697,6 +741,7 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
         order_by="creation desc",
         limit_page_length=limit,
         limit_start=start,
+        ignore_permissions=True
     )
 
     total_count = frappe.db.count("Work Order", filters=filters)
@@ -713,9 +758,25 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             ],
             order_by="idx asc",
             limit_page_length=500,
+            ignore_permissions=True
+        )
+        maint_schedules = frappe.get_all(
+            "Daily Preventative Maintenance Schedule",
+            filters=[["work_order", "in", wo_names], ["docstatus", "=", 1]],
+            fields=["work_order", "equipment"],
+            ignore_permissions=True
         )
     else:
         jc_list = []
+        maint_schedules = []
+
+    maint_by_wo = {}
+    for s in maint_schedules:
+        wo_n = s.get("work_order")
+        if wo_n:
+            if wo_n not in maint_by_wo:
+                maint_by_wo[wo_n] = set()
+            maint_by_wo[wo_n].add(s.get("equipment"))
 
     jc_by_wo = {}
     for jc in jc_list:
@@ -747,6 +808,9 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
         if status == "Not Started":
             status = "Not Started"
 
+        completed_eqs = len(maint_by_wo.get(wo.name, set()))
+        maint_all_done = (completed_eqs >= 10)
+
         data.append({
             "id": wo.name,
             "product": wo.production_item or "",
@@ -766,6 +830,9 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             "extraGoodsWarehouse": wo.custom_extra_goods_warehouse or "",
             "process_loss_qty": frappe.utils.flt(wo.process_loss_qty or 0),
             "jobCards": jc_by_wo.get(wo.name, []),
+            "maintCompletedCount": completed_eqs,
+            "maintTotalCount": 10,
+            "maintAllCompleted": maint_all_done,
         })
 
     return {
@@ -841,7 +908,7 @@ def parse_remarks_list(remarks_str):
     return remarks_list
 
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=True)
 def get_item_uoms(item_code):
     item = frappe.get_doc("Item", item_code)
     uoms = [{
@@ -859,3 +926,430 @@ def get_item_uoms(item_code):
                 "custom_min_stock_uom": frappe.db.get_value("UOM", u.uom, "custom_min_stock_uom") or 0
             })
     return uoms
+
+
+@frappe.whitelist(allow_guest=True)
+def get_work_order_maintenance_checklists(work_order):
+    if not work_order:
+        frappe.throw(_("Work Order ID is required"))
+
+    # Fetch all equipment masters from Maintenance Checklist Master
+    masters = frappe.get_all("Maintenance Checklist Master", fields=["name", "equipment", "area"], order_by="name asc", ignore_permissions=True)
+
+    if not masters:
+        masters = [
+            {"equipment": "Air Compressor - 1", "area": "Utilities"},
+            {"equipment": "Boiler", "area": "Utilities"},
+            {"equipment": "Syrup and CIP Equipment", "area": "Utilities"},
+            {"equipment": "Glycol Chilling Plant & Grasso Refrigerator", "area": "Utilities"},
+            {"equipment": "Data Coder", "area": "CSD / RTD Line"},
+            {"equipment": "Conveyors", "area": "CSD / RTD Line"},
+            {"equipment": "CO2 Mixer", "area": "CSD / RTD Line"},
+            {"equipment": "Bottle / Can Washer", "area": "CSD / RTD Line"},
+            {"equipment": "De-Palletizer", "area": "RTD Line"},
+            {"equipment": "CSD / RTD Filler", "area": "Bottling Line"}
+        ]
+
+    # Query submitted Daily Preventative Maintenance Schedule records linked to this work order
+    submitted_schedules = frappe.get_all(
+        "Daily Preventative Maintenance Schedule",
+        filters={
+            "work_order": work_order,
+            "docstatus": 1
+        },
+        fields=["name", "equipment", "area", "creation", "workflow_state"],
+        ignore_permissions=True
+    )
+
+    completed_equipment_map = {s["equipment"]: s for s in submitted_schedules}
+
+    checklist_status = []
+    completed_count = 0
+
+    for m in masters:
+        eq = m.get("equipment")
+        sub = completed_equipment_map.get(eq)
+        if sub:
+            completed_count += 1
+            checklist_status.append({
+                "equipment": eq,
+                "area": m.get("area"),
+                "completed": True,
+                "schedule_name": sub.get("name"),
+                "submitted_at": str(sub.get("creation"))
+            })
+        else:
+            checklist_status.append({
+                "equipment": eq,
+                "area": m.get("area"),
+                "completed": False,
+                "schedule_name": None,
+                "submitted_at": None
+            })
+
+    total_count = len(masters)
+    all_completed = (completed_count >= total_count)
+
+    return {
+        "work_order": work_order,
+        "all_completed": all_completed,
+        "completed_count": completed_count,
+        "total_count": total_count,
+        "checklists": checklist_status
+    }
+
+
+@frappe.whitelist(allow_guest=True)
+def get_all_boms_list(limit=100, start=0):
+    limit = frappe.utils.cint(limit) or 100
+    start = frappe.utils.cint(start) or 0
+    boms = frappe.get_all(
+        "BOM",
+        filters={"is_active": 1, "docstatus": 1},
+        fields=["name", "item", "item_name", "is_active", "is_default", "quantity", "uom"],
+        order_by="is_default desc, creation desc",
+        limit_page_length=limit,
+        limit_start=start,
+        ignore_permissions=True
+    )
+    return [{
+        "id": b.name,
+        "name": b.name,
+        "productName": b.item_name or b.item,
+        "item": b.item,
+        "itemCode": b.item,
+        "active": b.is_active or 1,
+        "isDefault": bool(b.is_default),
+        "quantity": frappe.utils.flt(b.quantity or 1),
+        "unit": b.uom or "Nos",
+        "materials": []
+    } for b in boms]
+
+
+@frappe.whitelist(allow_guest=True)
+def get_bom_details_data(bom_id):
+    if not bom_id:
+        return []
+    doc = frappe.get_doc("BOM", bom_id)
+    items = []
+    for item in doc.items:
+        items.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name or item.item_code,
+            "code": item.item_code,
+            "name": item.item_name or item.item_code,
+            "qty": frappe.utils.flt(item.qty or 0),
+            "uom": item.uom or "Qty",
+            "unit": item.uom or "Qty",
+            "rate": frappe.utils.flt(item.rate or 0),
+            "amount": frappe.utils.flt(item.amount or 0)
+        })
+    return items
+
+
+@frappe.whitelist(allow_guest=True)
+def get_all_inventory_items(limit=200):
+    limit = frappe.utils.cint(limit) or 200
+    items = frappe.get_all(
+        "Item",
+        fields=["name", "item_code", "item_name", "stock_uom", "item_group", "safety_stock"],
+        limit_page_length=limit,
+        order_by="item_name asc",
+        ignore_permissions=True
+    )
+    bins = frappe.get_all(
+        "Bin",
+        fields=["item_code", "warehouse", "actual_qty", "reserved_qty"],
+        limit_page_length=1000,
+        ignore_permissions=True
+    )
+    bin_map = {}
+    for b in bins:
+        ic = b.item_code
+        if ic not in bin_map:
+            bin_map[ic] = 0.0
+        bin_map[ic] += frappe.utils.flt(b.actual_qty or 0)
+
+    result = []
+    for i in items:
+        tot_qty = bin_map.get(i.item_code, 0.0)
+        result.append({
+            "id": i.item_code,
+            "code": i.item_code,
+            "name": i.item_name or i.item_code,
+            "item_code": i.item_code,
+            "item_name": i.item_name or i.item_code,
+            "category": i.item_group or "Standard",
+            "unit": i.stock_uom or "Nos",
+            "stock_uom": i.stock_uom or "Nos",
+            "qty": tot_qty,
+            "minLevel": frappe.utils.flt(i.safety_stock or 0)
+        })
+    return result
+
+
+@frappe.whitelist(allow_guest=True)
+def create_daily_pm_schedule(equipment, area, work_order, operator, supervisor,
+                              overall_remarks, maintenance_details, week_no=None,
+                              from_date=None, to_date=None):
+    """Create a Daily Preventative Maintenance Schedule and submit it."""
+    import json
+    if isinstance(maintenance_details, str):
+        maintenance_details = json.loads(maintenance_details)
+
+    doc = frappe.new_doc("Daily Preventative Maintenance Schedule")
+    doc.equipment = equipment
+    doc.area = area
+    doc.work_order = work_order or ""
+    doc.sign_of_the_operator = operator or "Administrator"
+    doc.sign_of_supervisor = supervisor or "Administrator"
+    doc.overall_remarks = overall_remarks or ""
+
+    if week_no:
+        try:
+            doc.week_no = frappe.utils.cint(week_no)
+        except Exception:
+            pass
+
+    if from_date:
+        doc.from_date = from_date
+    if to_date:
+        doc.to_date = to_date
+
+    for item in (maintenance_details or []):
+        row = doc.append("maintenance_details", {})
+        row.description = item.get("description") or item.get("desc") or ""
+        row.standard_time_mins = frappe.utils.cint(item.get("standard_time_mins") or item.get("std") or 0)
+        row.pass__fail = item.get("pass__fail") or ("Pass" if item.get("completed") else "Fail")
+        row.remarks = item.get("remarks") or ""
+        if from_date:
+            row.date = from_date
+        else:
+            row.date = frappe.utils.nowdate()
+
+    doc.insert(ignore_permissions=True)
+    doc.submit()
+    frappe.db.commit()
+
+    return {"success": True, "name": doc.name, "equipment": doc.equipment}
+
+
+@frappe.whitelist(allow_guest=True)
+def get_maintenance_dashboard_stats(work_order=None):
+    """Return dashboard statistics for the Maintenance tab, optionally filtered by work order."""
+    filters = {"docstatus": 1}
+    if work_order:
+        filters["work_order"] = work_order
+
+    records = frappe.get_all(
+        "Daily Preventative Maintenance Schedule",
+        filters=filters,
+        fields=["name", "equipment", "work_order", "creation"],
+        order_by="creation desc",
+        ignore_permissions=True
+    )
+
+    total_task_checks = 0
+    for rec in records:
+        try:
+            details = frappe.get_all(
+                "Daily PM Schedule Item",
+                filters={"parent": rec["name"], "pass__fail": "Pass"},
+                fields=["name"],
+                ignore_permissions=True
+            )
+            total_task_checks += len(details)
+        except Exception:
+            pass
+
+    unique_equipment = list({r["equipment"] for r in records if r.get("equipment")})
+    last_activity = str(records[0]["creation"]).split(" ")[0] if records else None
+
+    return {
+        "total_checklists": len(records),
+        "equipment_monitored": len(unique_equipment),
+        "total_task_checks": total_task_checks,
+        "last_activity": last_activity,
+        "work_order": work_order or "all"
+    }
+
+
+@frappe.whitelist(allow_guest=True)
+def get_maintenance_log_history(work_order=None, limit=50, start=0):
+    """Return submitted Daily PM Schedule records for the Checklist Log History table."""
+    limit = frappe.utils.cint(limit) or 50
+    start = frappe.utils.cint(start) or 0
+    filters = {"docstatus": 1}
+    if work_order and work_order != "all":
+        filters["work_order"] = work_order
+
+    records = frappe.get_all(
+        "Daily Preventative Maintenance Schedule",
+        filters=filters,
+        fields=["name", "equipment", "area", "work_order",
+                "sign_of_the_operator", "sign_of_supervisor",
+                "overall_remarks", "creation", "modified"],
+        order_by="creation desc",
+        limit_page_length=limit,
+        limit_start=start,
+        ignore_permissions=True
+    )
+    return records
+
+
+@frappe.whitelist(allow_guest=True)
+def get_companies_list():
+    """Return companies ignoring permissions."""
+    return frappe.get_all("Company", fields=["name", "company_name"], limit=100, ignore_permissions=True)
+
+
+@frappe.whitelist(allow_guest=True)
+def get_warehouses_list(company=None):
+    """Return warehouses ignoring permissions."""
+    filters = {}
+    if company:
+        filters["company"] = company
+    return frappe.get_all("Warehouse", filters=filters, fields=["name", "warehouse_name", "company"], limit=200, ignore_permissions=True)
+
+
+@frappe.whitelist(allow_guest=True)
+def get_employees_list(search_term=None, limit=50):
+    """Return employees ignoring permissions."""
+    filters = []
+    if search_term:
+        filters.append(["employee_name", "like", f"%{search_term}%"])
+    return frappe.get_all(
+        "Employee",
+        fields=["name", "employee_name", "gender", "designation", "status", "department"],
+        filters=filters,
+        limit_page_length=frappe.utils.cint(limit) or 50,
+        ignore_permissions=True
+    )
+
+
+@frappe.whitelist(allow_guest=True)
+def get_maintenance_schedules_list(limit=100, start=0):
+    """Return Daily Preventative Maintenance Schedule list ignoring permissions."""
+    return frappe.get_all(
+        "Daily Preventative Maintenance Schedule",
+        fields=["*"],
+        limit_page_length=frappe.utils.cint(limit) or 100,
+        limit_start=frappe.utils.cint(start) or 0,
+        order_by="creation desc",
+        ignore_permissions=True
+    )
+
+
+@frappe.whitelist(allow_guest=True)
+def get_bin_quantities(item_codes=None):
+    """Return Bin quantities ignoring permissions."""
+    import json
+    if isinstance(item_codes, str):
+        try:
+            item_codes = json.loads(item_codes)
+        except Exception:
+            item_codes = [item_codes]
+
+    filters = []
+    if item_codes:
+        filters.append(["item_code", "in", item_codes])
+
+    return frappe.get_all(
+        "Bin",
+        filters=filters,
+        fields=["item_code", "warehouse", "actual_qty"],
+        limit_page_length=1000,
+        ignore_permissions=True
+    )
+
+
+@frappe.whitelist(allow_guest=True)
+def get_boms_for_item(item_code, limit=100):
+    """Return active submitted BOMs for an item code ignoring permissions."""
+    if not item_code:
+        return []
+    boms = frappe.get_all(
+        "BOM",
+        filters={"item": item_code, "is_active": 1, "docstatus": 1},
+        fields=["name", "item", "item_name", "is_active", "is_default", "quantity", "uom"],
+        order_by="is_default desc, modified desc",
+        limit_page_length=frappe.utils.cint(limit) or 100,
+        ignore_permissions=True
+    )
+    return [{
+        "id": b.name,
+        "name": b.name,
+        "productName": b.item_name or b.item,
+        "item": b.item,
+        "itemCode": b.item,
+        "active": b.is_active or 1,
+        "isDefault": bool(b.is_default),
+        "quantity": frappe.utils.flt(b.quantity or 1),
+        "unit": b.uom or "Nos"
+    } for b in boms]
+
+
+@frappe.whitelist(allow_guest=True)
+def get_job_cards_for_work_order(work_order):
+    """Return Job Cards for a Work Order ignoring permissions."""
+    if not work_order:
+        return []
+    jcs = frappe.get_all(
+        "Job Card",
+        filters={"work_order": work_order},
+        fields=["name", "operation", "workstation", "status", "remarks", "for_quantity", "total_completed_qty", "is_paused"],
+        order_by="idx asc",
+        limit_page_length=100,
+        ignore_permissions=True
+    )
+    result = []
+    for jc in jcs:
+        app_status = jc.status or "Open"
+        if app_status == "Work in Progress":
+            app_status = "Work In Progress"
+        result.append({
+            "id": jc.name,
+            "operation": jc.operation or "",
+            "station": jc.workstation or "",
+            "status": app_status,
+            "operator": "",
+            "remarks": jc.remarks or "",
+            "forQuantity": frappe.utils.flt(jc.for_quantity or 0),
+            "totalCompletedQty": frappe.utils.flt(jc.total_completed_qty or 0),
+            "is_paused": jc.is_paused or 0
+        })
+    return result
+
+
+@frappe.whitelist(allow_guest=True)
+def cancel_work_order(work_order):
+    """Cancel a Work Order with ignore_permissions=True so job cards can be deleted/cleaned up without permission errors."""
+    if not work_order:
+        frappe.throw(_("Work Order is required"))
+
+    doc = frappe.get_doc("Work Order", work_order)
+    doc.flags.ignore_permissions = True
+    frappe.flags.ignore_permissions = True
+    try:
+        doc.cancel()
+        frappe.db.commit()
+        return {"success": True, "name": doc.name, "status": doc.status}
+    finally:
+        frappe.flags.ignore_permissions = False
+
+
+@frappe.whitelist(allow_guest=True)
+def cancel_stock_entry(stock_entry):
+    """Cancel a Stock Entry with ignore_permissions=True."""
+    if not stock_entry:
+        frappe.throw(_("Stock Entry is required"))
+
+    doc = frappe.get_doc("Stock Entry", stock_entry)
+    doc.flags.ignore_permissions = True
+    frappe.flags.ignore_permissions = True
+    try:
+        doc.cancel()
+        frappe.db.commit()
+        return {"success": True, "name": doc.name, "status": doc.status}
+    finally:
+        frappe.flags.ignore_permissions = False

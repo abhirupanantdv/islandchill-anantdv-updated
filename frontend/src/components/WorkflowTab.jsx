@@ -1,5 +1,4 @@
 import React from 'react';
-import { PRODUCTS } from '../data/mockData';
 
 /**
  * WorkflowTab Component

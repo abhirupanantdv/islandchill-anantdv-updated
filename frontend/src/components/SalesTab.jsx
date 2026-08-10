@@ -82,6 +82,21 @@ export function SalesInvoiceFormModal({ onClose, onSubmit, products, initialData
   const [activeItemRow, setActiveItemRow] = useState(null);
 
   useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (e.target.closest && !e.target.closest('.form-group') && !e.target.closest('td') && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('.dropdown-item')) {
+        setShowCustDropdown(false);
+        setActiveItemRow(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
     const fetchCustomers = async () => {
       const res = await frappe.getCustomers(customerSearch);
       setCustomerList(res || []);
@@ -321,6 +336,22 @@ export function DeliveryNoteFormModal({ onClose, onSubmit, products, initialData
   const [whSearchText, setWhSearchText] = useState({}); // { [idx]: string }
   const [whSuggestions, setWhSuggestions] = useState({}); // { [idx]: Array }
   const [activeWhRow, setActiveWhRow] = useState(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (e.target.closest && !e.target.closest('.form-group') && !e.target.closest('td') && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('.dropdown-item')) {
+        setShowCustDropdown(false);
+        setActiveItemRow(null);
+        setActiveWhRow(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchCustomers = async () => {

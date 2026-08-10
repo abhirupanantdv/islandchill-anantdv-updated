@@ -20,6 +20,7 @@ export default function WorkOrdersTab({
   JOB_CARD_RUNNING_STATUSES,
   JOB_CARD_PAUSED_STATUSES,
   handleStartWorkOrder,
+  handleCheckWorkOrderMaintenance,
   isWorkOrderReadyForFinish,
   woActionLoading,
   handleFinishWorkOrder,
@@ -90,6 +91,15 @@ export default function WorkOrdersTab({
                     pct = (completed / wo.jobCards.length) * 100;
                   }
 
+                  const isRawMaterialsIssued = Boolean(
+                    wo.materialTransferred ||
+                    wo.stockEntryCreated ||
+                    (wo.transferred_qty && Number(wo.transferred_qty) > 0) ||
+                    (wo.produced_qty && Number(wo.produced_qty) > 0) ||
+                    wo.status === 'In Process' ||
+                    wo.status === 'Completed'
+                  );
+
                   return (
                     <div key={wo.id} className="wo-card-container">
                       <div className="wo-card-header">
@@ -104,11 +114,61 @@ export default function WorkOrdersTab({
                           <span className={`badge badge-${wo.status.toLowerCase().replace(/\s+/g, '-')}`}>
                             {wo.status}
                           </span>
-                          {WORK_ORDER_STARTABLE_STATUSES.includes(wo.status) && (
-                            <button className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleStartWorkOrder(wo.id)}>
-                              Start Run
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: '11px',
+                              padding: '4px 8px',
+                              backgroundColor: wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                              color: wo.maintAllCompleted ? 'var(--success)' : 'var(--warning)',
+                              border: `1px solid ${wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => {
+                              if (handleCheckWorkOrderMaintenance) {
+                                handleCheckWorkOrderMaintenance(wo.id);
+                              } else {
+                                handleStartWorkOrder(wo.id);
+                              }
+                            }}
+                            title="Click to view & fill maintenance checklists for this Work Order"
+                          >
+                            {wo.maintAllCompleted ? '✓ Maint: Completed' : `🛠️ Maint: ${wo.maintCompletedCount || 0}/10 Pending`}
+                          </span>
+
+                          {!isRawMaterialsIssued ? (
+                            <button
+                              className="primary-btn"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                opacity: wo.maintAllCompleted ? 1 : 0.6,
+                                backgroundColor: wo.maintAllCompleted ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
+                                borderColor: wo.maintAllCompleted ? 'var(--primary)' : 'var(--text-muted, #9ca3af)'
+                              }}
+                              onClick={() => handleStartWorkOrder(wo.id)}
+                              title={wo.maintAllCompleted ? "Issue Raw Materials for Manufacture (Stock Entry)" : "Maintenance checklists must be 100% completed first"}
+                            >
+                              📦 Issue Raw Materials
                             </button>
+                          ) : (
+                            <span
+                              className="badge"
+                              style={{
+                                fontSize: '11px',
+                                padding: '4px 8px',
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                color: 'var(--success)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                fontWeight: 600
+                              }}
+                              title="Raw Materials have been transferred for manufacture (Single Stock Entry submitted)"
+                            >
+                              ✓ Raw Materials Issued
+                            </span>
                           )}
+
                           {isWorkOrderReadyForFinish(wo) && (
                             <button
                               className="primary-btn"

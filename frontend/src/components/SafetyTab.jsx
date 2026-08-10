@@ -29,6 +29,20 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
   const [supervisor, setSupervisor] = useState('');
   const [overallComments, setOverallComments] = useState('');
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (e.target.closest && !e.target.closest('.form-group') && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('.dropdown-item')) {
+        setShowEmployeeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [setShowEmployeeDropdown]);
+
   const handleSubmitForm = (e) => {
     e.preventDefault();
     onSubmit({

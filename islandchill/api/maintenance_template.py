@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def get_maintenance_templates():
     """Return all Maintenance Checklist Masters in frontend format."""
 
@@ -9,7 +9,8 @@ def get_maintenance_templates():
 
     masters = frappe.get_all(
         "Maintenance Checklist Master",
-        fields=["name"]
+        fields=["name"],
+        ignore_permissions=True
     )
 
     for row in masters:

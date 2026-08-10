@@ -23,16 +23,33 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
   // Cleaner / Checker autocomplete
   const [cleanerSearch, setCleanerSearch] = useState('');
   const [cleaner, setCleaner] = useState('');
+  const [cleanerId, setCleanerId] = useState('');
 
   // Supervisor autocomplete
   const [supervisorSearch, setSupervisorSearch] = useState('');
   const [supervisor, setSupervisor] = useState('');
+  const [supervisorId, setSupervisorId] = useState('');
 
   // Balance cleaning done by autocomplete
   const [balanceCleanerSearch, setBalanceCleanerSearch] = useState('');
   const [balanceCleaner, setBalanceCleaner] = useState('');
+  const [balanceCleanerId, setBalanceCleanerId] = useState('');
 
   const [formData, setFormData] = useState({});
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (e.target.closest && !e.target.closest('.form-group') && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('.dropdown-item')) {
+        setShowEmployeeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [setShowEmployeeDropdown]);
   const [purposesList, setPurposesList] = useState([]);
   const [selectedPurposes, setSelectedPurposes] = useState({});
   const [loadingPurposes, setLoadingPurposes] = useState(false);
@@ -208,20 +225,31 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
     if (templateId === 'incubator-temp') {
       if (!cleaner) { alert('Please select inspector name.'); return; }
       finalData.recorded_by = cleaner;
+      finalData.cleanerId = cleanerId;
     } else if (templateId === 'balance-calib') {
       if (!cleaner) { alert('Please select checking officer name.'); return; }
       finalData.checked_by = cleaner;
+      finalData.checkedById = cleanerId;
       if (!balanceCleaner) { alert('Please select who performed cleaning of the balance.'); return; }
       finalData.cleaning_of_the_balance_done_by = balanceCleaner;
+      finalData.balanceCleanerId = balanceCleanerId;
     } else if (templateId === 'sanitation') {
       if (!cleaner) { alert('Please select operator name.'); return; }
       finalData.performed_by = cleaner;
-      if (supervisor) finalData.supervisor = supervisor;
+      finalData.cleanerId = cleanerId;
+      if (supervisor) {
+        finalData.supervisor = supervisor;
+        finalData.supervisorId = supervisorId;
+      }
     } else {
       // Cleaning checklists
       if (!cleaner) { alert('Please select cleaner name.'); return; }
       finalData.cleaner = cleaner;
-      if (supervisor) finalData.supervisor = supervisor;
+      finalData.cleanerId = cleanerId;
+      if (supervisor) {
+        finalData.supervisor = supervisor;
+        finalData.supervisorId = supervisorId;
+      }
     }
     if (templateId === 'toilet-clean' || templateId === 'dining-clean' || templateId === 'floor-clean' || templateId === 'lab-office-clean') {
       const activePurposes = Object.keys(selectedPurposes).filter(k => selectedPurposes[k]);
@@ -256,32 +284,110 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
 
             {/* Operator/Cleaner field */}
             <div className="form-group" style={{ position: 'relative' }}>
-              <label className="input-label">
-                {templateId === 'incubator-temp' ? 'Recorded By (Analyst/Chemist) *' :
-                  templateId === 'balance-calib' ? 'Checked By (Officer/Tech) *' :
-                    templateId === 'sanitation' ? 'Performed By (Operator) *' : 'Cleaner Name *'}
+              <label className="input-label" style={{ fontWeight: '600', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>
+                  {templateId === 'incubator-temp' ? 'Recorded By (Analyst/Chemist) *' :
+                    templateId === 'balance-calib' ? 'Checked By (Officer/Tech) *' :
+                      templateId === 'sanitation' ? 'Performed By (Operator) *' : 'Cleaner Name *'}
+                </span>
+                {cleanerId && (
+                  <span style={{ fontSize: '10px', color: 'var(--success)', fontWeight: '700', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                    ✓ {cleanerId}
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 className="text-input"
                 required
-                placeholder="Search employee..."
+                placeholder="Search employee name or ID..."
                 value={cleanerSearch}
-                onChange={e => { setCleanerSearch(e.target.value); setCleaner(e.target.value); handleSearchEmployees(e.target.value, 'cleaner'); setShowEmployeeDropdown(true); }}
-                onFocus={() => { setActiveSearchField('cleaner'); setShowEmployeeDropdown(true); }}
+                onChange={e => {
+                  const val = e.target.value;
+                  setCleanerSearch(val);
+                  setCleaner(val);
+                  setCleanerId('');
+                  if (handleSearchEmployees) handleSearchEmployees(val, 'cleaner');
+                  setActiveSearchField('cleaner');
+                  setShowEmployeeDropdown(true);
+                }}
+                onFocus={() => {
+                  if (handleSearchEmployees && employeeList.length === 0) handleSearchEmployees('', 'cleaner');
+                  setActiveSearchField('cleaner');
+                  setShowEmployeeDropdown(true);
+                }}
               />
-              {showEmployeeDropdown && activeSearchField === 'cleaner' && employeeList.length > 0 && (
-                <div className="autocomplete-dropdown" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 100, maxHeight: '130px', overflowY: 'auto', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px' }}>
-                  {employeeList.map(emp => (
-                    <div
-                      key={emp.name}
-                      className="dropdown-item"
-                      style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', color: '#111' }}
-                      onClick={() => { setCleanerSearch(emp.employee_name); setCleaner(emp.employee_name); setShowEmployeeDropdown(false); }}
-                    >
-                      👤 {emp.employee_name} ({emp.designation})
+              {showEmployeeDropdown && activeSearchField === 'cleaner' && (
+                <div
+                  className="autocomplete-dropdown"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    right: 0,
+                    zIndex: 99999,
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid var(--border-color, #cbd5e1)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                    padding: '4px'
+                  }}
+                >
+                  {employeeList.length === 0 ? (
+                    <div style={{ padding: '10px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      No matching employees found
                     </div>
-                  ))}
+                  ) : (
+                    employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item"
+                        style={{
+                          padding: '8px 10px',
+                          cursor: 'pointer',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          marginBottom: '2px'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const fullName = emp.employee_name || emp.name;
+                          setCleanerSearch(`${fullName} (${emp.name})`);
+                          setCleaner(fullName);
+                          setCleanerId(emp.name);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          const fullName = emp.employee_name || emp.name;
+                          setCleanerSearch(`${fullName} (${emp.name})`);
+                          setCleaner(fullName);
+                          setCleanerId(emp.name);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--primary, #3b82f6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                          {(emp.employee_name || emp.name || 'E').substring(0, 2).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a' }}>{emp.employee_name || emp.name}</span>
+                            <span style={{ fontSize: '10px', fontWeight: '700', color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '1px 5px', borderRadius: '4px' }}>{emp.name}</span>
+                          </div>
+                          <span style={{ fontSize: '11px', color: '#64748b', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {emp.designation || 'Staff'} {emp.department ? `• ${emp.department}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -289,27 +395,105 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
             {/* Supervisor field (where applicable) */}
             {['toilet-clean', 'dining-clean', 'floor-clean', 'lab-office-clean', 'sanitation'].includes(templateId) && (
               <div className="form-group" style={{ position: 'relative' }}>
-                <label className="input-label">Verified By (Supervisor)</label>
+                <label className="input-label" style={{ fontWeight: '600', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Verified By (Supervisor)</span>
+                  {supervisorId && (
+                    <span style={{ fontSize: '10px', color: 'var(--success)', fontWeight: '700', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                      ✓ {supervisorId}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   className="text-input"
-                  placeholder="Search employee..."
+                  placeholder="Search employee name or ID..."
                   value={supervisorSearch}
-                  onChange={e => { setSupervisorSearch(e.target.value); setSupervisor(e.target.value); handleSearchEmployees(e.target.value, 'supervisor'); setShowEmployeeDropdown(true); }}
-                  onFocus={() => { setActiveSearchField('supervisor'); setShowEmployeeDropdown(true); }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setSupervisorSearch(val);
+                    setSupervisor(val);
+                    setSupervisorId('');
+                    if (handleSearchEmployees) handleSearchEmployees(val, 'supervisor');
+                    setActiveSearchField('supervisor');
+                    setShowEmployeeDropdown(true);
+                  }}
+                  onFocus={() => {
+                    if (handleSearchEmployees && employeeList.length === 0) handleSearchEmployees('', 'supervisor');
+                    setActiveSearchField('supervisor');
+                    setShowEmployeeDropdown(true);
+                  }}
                 />
-                {showEmployeeDropdown && activeSearchField === 'supervisor' && employeeList.length > 0 && (
-                  <div className="autocomplete-dropdown" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 100, maxHeight: '130px', overflowY: 'auto', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px' }}>
-                    {employeeList.map(emp => (
-                      <div
-                        key={emp.name}
-                        className="dropdown-item"
-                        style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', color: '#111' }}
-                        onClick={() => { setSupervisorSearch(emp.employee_name); setSupervisor(emp.employee_name); setShowEmployeeDropdown(false); }}
-                      >
-                        👤 {emp.employee_name} ({emp.designation})
+                {showEmployeeDropdown && activeSearchField === 'supervisor' && (
+                  <div
+                    className="autocomplete-dropdown"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 4px)',
+                      left: 0,
+                      right: 0,
+                      zIndex: 99999,
+                      maxHeight: '180px',
+                      overflowY: 'auto',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid var(--border-color, #cbd5e1)',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                      padding: '4px'
+                    }}
+                  >
+                    {employeeList.length === 0 ? (
+                      <div style={{ padding: '10px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        No matching employees found
                       </div>
-                    ))}
+                    ) : (
+                      employeeList.map(emp => (
+                        <div
+                          key={emp.name}
+                          className="dropdown-item"
+                          style={{
+                            padding: '8px 10px',
+                            cursor: 'pointer',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            marginBottom: '2px'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const fullName = emp.employee_name || emp.name;
+                            setSupervisorSearch(`${fullName} (${emp.name})`);
+                            setSupervisor(fullName);
+                            setSupervisorId(emp.name);
+                            setShowEmployeeDropdown(false);
+                          }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            const fullName = emp.employee_name || emp.name;
+                            setSupervisorSearch(`${fullName} (${emp.name})`);
+                            setSupervisor(fullName);
+                            setSupervisorId(emp.name);
+                            setShowEmployeeDropdown(false);
+                          }}
+                        >
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--primary, #3b82f6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                            {(emp.employee_name || emp.name || 'E').substring(0, 2).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a' }}>{emp.employee_name || emp.name}</span>
+                              <span style={{ fontSize: '10px', fontWeight: '700', color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '1px 5px', borderRadius: '4px' }}>{emp.name}</span>
+                            </div>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {emp.designation || 'Staff'} {emp.department ? `• ${emp.department}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -582,28 +766,106 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
                   </div>
                 </div>
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label className="input-label">Cleaning of the Balance done by *</label>
+                  <label className="input-label" style={{ fontWeight: '600', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Cleaning of the Balance done by *</span>
+                    {balanceCleanerId && (
+                      <span style={{ fontSize: '10px', color: 'var(--success)', fontWeight: '700', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                        ✓ {balanceCleanerId}
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="text"
                     className="text-input"
                     required
-                    placeholder="Search employee..."
+                    placeholder="Search employee name or ID..."
                     value={balanceCleanerSearch}
-                    onChange={e => { setBalanceCleanerSearch(e.target.value); setBalanceCleaner(e.target.value); handleSearchEmployees(e.target.value, 'balanceCleaner'); setShowEmployeeDropdown(true); }}
-                    onFocus={() => { setActiveSearchField('balanceCleaner'); setShowEmployeeDropdown(true); }}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setBalanceCleanerSearch(val);
+                      setBalanceCleaner(val);
+                      setBalanceCleanerId('');
+                      if (handleSearchEmployees) handleSearchEmployees(val, 'balanceCleaner');
+                      setActiveSearchField('balanceCleaner');
+                      setShowEmployeeDropdown(true);
+                    }}
+                    onFocus={() => {
+                      if (handleSearchEmployees && employeeList.length === 0) handleSearchEmployees('', 'balanceCleaner');
+                      setActiveSearchField('balanceCleaner');
+                      setShowEmployeeDropdown(true);
+                    }}
                   />
-                  {showEmployeeDropdown && activeSearchField === 'balanceCleaner' && employeeList.length > 0 && (
-                    <div className="autocomplete-dropdown" style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 100, maxHeight: '130px', overflowY: 'auto', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px' }}>
-                      {employeeList.map(emp => (
-                        <div
-                          key={emp.name}
-                          className="dropdown-item"
-                          style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', color: '#111' }}
-                          onClick={() => { setBalanceCleanerSearch(emp.employee_name); setBalanceCleaner(emp.employee_name); setShowEmployeeDropdown(false); }}
-                        >
-                          👤 {emp.employee_name} ({emp.designation})
+                  {showEmployeeDropdown && activeSearchField === 'balanceCleaner' && (
+                    <div
+                      className="autocomplete-dropdown"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 4px)',
+                        left: 0,
+                        right: 0,
+                        zIndex: 99999,
+                        maxHeight: '180px',
+                        overflowY: 'auto',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid var(--border-color, #cbd5e1)',
+                        borderRadius: '8px',
+                        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                        padding: '4px'
+                      }}
+                    >
+                      {employeeList.length === 0 ? (
+                        <div style={{ padding: '10px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                          No matching employees found
                         </div>
-                      ))}
+                      ) : (
+                        employeeList.map(emp => (
+                          <div
+                            key={emp.name}
+                            className="dropdown-item"
+                            style={{
+                              padding: '8px 10px',
+                              cursor: 'pointer',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              marginBottom: '2px'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const fullName = emp.employee_name || emp.name;
+                              setBalanceCleanerSearch(`${fullName} (${emp.name})`);
+                              setBalanceCleaner(fullName);
+                              setBalanceCleanerId(emp.name);
+                              setShowEmployeeDropdown(false);
+                            }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              const fullName = emp.employee_name || emp.name;
+                              setBalanceCleanerSearch(`${fullName} (${emp.name})`);
+                              setBalanceCleaner(fullName);
+                              setBalanceCleanerId(emp.name);
+                              setShowEmployeeDropdown(false);
+                            }}
+                          >
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--primary, #3b82f6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                              {(emp.employee_name || emp.name || 'E').substring(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a' }}>{emp.employee_name || emp.name}</span>
+                                <span style={{ fontSize: '10px', fontWeight: '700', color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '1px 5px', borderRadius: '4px' }}>{emp.name}</span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#64748b', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {emp.designation || 'Staff'} {emp.department ? `• ${emp.department}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
@@ -781,26 +1043,44 @@ export default function CleaningTab({
   cleaningPage,
   setCleaningPage,
   setActiveCleaningForm,
-  setViewingCleaningRecord
+  setViewingCleaningRecord,
+  onRefreshCleaningRecords
 }) {
-            const filtered = cleaningRecords.filter(rec => {
-            const matchesSearch =
-              rec.id.toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
-              rec.type.toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
-              (rec.cleaner || rec.recorded_by || rec.checked_by || rec.performed_by || '').toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
-              (rec.supervisor || '').toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
-              (rec.remarks || '').toLowerCase().includes(cleaningSearchQuery.toLowerCase());
+  useEffect(() => {
+    if (onRefreshCleaningRecords) {
+      onRefreshCleaningRecords();
+    }
+  }, []);
 
-            const matchesType = cleaningFilterType === 'All' || rec.type === cleaningFilterType;
-            return matchesSearch && matchesType;
-          });
+  const filtered = cleaningRecords.filter(rec => {
+    const matchesSearch =
+      rec.id.toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
+      rec.type.toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
+      (rec.cleaner || rec.recorded_by || rec.checked_by || rec.performed_by || '').toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
+      (rec.supervisor || '').toLowerCase().includes(cleaningSearchQuery.toLowerCase()) ||
+      (rec.remarks || '').toLowerCase().includes(cleaningSearchQuery.toLowerCase());
 
-          return (
-            <div className="maintenance-tab-container">
-              <div className="tab-title-desc">
-                <h2>Cleaning & Sanitation Control</h2>
-                <p>Track, schedule, and log hygiene compliance, toilet & dining facility checks, factory floor cleaning, incubator logs, and chemical balance calibrations.</p>
-              </div>
+    const matchesType = cleaningFilterType === 'All' || rec.type === cleaningFilterType;
+    return matchesSearch && matchesType;
+  });
+
+  return (
+    <div className="maintenance-tab-container">
+      <div className="tab-title-desc" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2>Cleaning & Sanitation Control</h2>
+          <p>Track, schedule, and log hygiene compliance, toilet & dining facility checks, factory floor cleaning, incubator logs, and chemical balance calibrations.</p>
+        </div>
+        {onRefreshCleaningRecords && (
+          <button
+            onClick={() => onRefreshCleaningRecords()}
+            className="secondary-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontSize: '12px', cursor: 'pointer', borderRadius: '6px' }}
+          >
+            🔄 Sync ERPNext Logs
+          </button>
+        )}
+      </div>
 
               {/* Quick Metrics */}
               <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>

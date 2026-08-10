@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PRODUCTS, BOMS, INITIAL_INVENTORY, INITIAL_WORK_ORDERS } from './data/mockData';
+import { WORKFLOW_STEPS, PRODUCTS, BOMS } from './data/mockData';
 import { frappe, DuplicateRequestError } from './services/frappe';
 import { generateSecret, verifyTOTP } from './services/totp';
 import SupportModule from './modules/SupportModule';
@@ -249,7 +249,7 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('administrator');
   const [loginPassword, setLoginPassword] = useState('••••••••');
   const [isLive, setIsLive] = useState(false);
-  const [erpUrl, setErpUrl] = useState('https://demo.erpnext.com');
+  // const [erpUrl, setErpUrl] = useState('https://demo.erpnext.com');
   const [erpApiKey, setErpApiKey] = useState('');
   const [erpApiSecret, setErpApiSecret] = useState('');
   const [showAdvancedLogin, setShowAdvancedLogin] = useState(false);
@@ -292,6 +292,18 @@ function App() {
   const [labSaving, setLabSaving] = useState(false);
   const [woCreating, setWoCreating] = useState(false);
   const [maintSaving, setMaintSaving] = useState(false);
+
+  // Pre-start maintenance checklist validation states
+  const [maintValidationModal, setMaintValidationModal] = useState({
+    isOpen: false,
+    woId: '',
+    checklists: [],
+    completedCount: 0,
+    totalCount: 10,
+    allCompleted: false,
+    loading: false
+  });
+  const [quickMaintFillModal, setQuickMaintFillModal] = useState(null);
 
   // New Work Order dynamic loading states
   const [woProductsList, setWoProductsList] = useState([]);
@@ -521,16 +533,19 @@ function App() {
   const loadBOMs = async () => {
     setBomLoading(true);
     const conn = frappe.getConnectionSettings();
-    if (conn.isLive && conn.connected) {
+    if (conn.isLive) {
       try {
         const offset = (bomPage - 1) * 20;
         const liveBOMs = await frappe.getBOMs(20, offset);
         if (liveBOMs && liveBOMs.length > 0) {
           setBomList(liveBOMs);
           if (!selectedBomId) setSelectedBomId(liveBOMs[0].id);
+        } else {
+          setBomList([]);
         }
       } catch (err) {
         console.error("Failed to load BOMs from ERPNext:", err);
+        setBomList([]);
       } finally {
         setBomLoading(false);
       }
@@ -554,26 +569,24 @@ function App() {
   useEffect(() => {
     const fetchBOMDetails = async () => {
       const conn = frappe.getConnectionSettings();
-      if (conn.isLive) {
-        if (conn.connected && selectedBomId) {
-          try {
-            const details = await frappe.getBOMDetails(selectedBomId);
-            if (details) {
-              setActiveBomMaterials(details);
-              return;
-            }
-          } catch (err) {
-            console.error("Failed to fetch BOM details:", err);
+      if (conn.isLive && selectedBomId) {
+        try {
+          const details = await frappe.getBOMDetails(selectedBomId);
+          if (details) {
+            setActiveBomMaterials(details);
+            return;
           }
+        } catch (err) {
+          console.error("Failed to fetch BOM details:", err);
         }
         setActiveBomMaterials([]);
         return;
       }
-      if (BOMS[selectedBomId]) {
+      if (BOMS && BOMS[selectedBomId]) {
         setActiveBomMaterials(BOMS[selectedBomId].materials);
       } else {
-        const firstKey = Object.keys(BOMS)[0];
-        setActiveBomMaterials(BOMS[selectedBomId] || BOMS[firstKey]?.materials || []);
+        const firstKey = BOMS ? Object.keys(BOMS)[0] : null;
+        setActiveBomMaterials((BOMS && firstKey && BOMS[firstKey]) ? BOMS[firstKey].materials : []);
       }
     };
     fetchBOMDetails();
@@ -683,6 +696,70 @@ function App() {
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [activeSearchField, setActiveSearchField] = useState(null); // 'pauseModal' | 'remarksModal' | 'maintOperator' | 'maintSupervisor'
 
+  // Automatic Session Expiration Handler & Idle Focus Checker
+  useEffect(() => {
+    const unbind = frappe.onSessionExpired((reason) => {
+      setIsLoggedIn(false);
+      setLoginError('Your session has expired or you were logged out. Please log in again.');
+      setCurrentTab('dashboard');
+    });
+
+    const handleFocusCheck = () => {
+      if (document.visibilityState === 'visible' && isLoggedIn) {
+        frappe.checkSessionStatus();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusCheck);
+    document.addEventListener('visibilitychange', handleFocusCheck);
+
+    return () => {
+      unbind();
+      window.removeEventListener('focus', handleFocusCheck);
+      document.removeEventListener('visibilitychange', handleFocusCheck);
+    };
+  }, [isLoggedIn]);
+
+  // Universal Dropdown Click-Outside & Escape Key Listener
+  useEffect(() => {
+    const handleGlobalClickOutside = (e) => {
+      // If clicked element is inside a dropdown container or dropdown menu item, keep open
+      if (
+        e.target.closest && (
+          e.target.closest('.app-dropdown-container') ||
+          e.target.closest('.app-dropdown-menu') ||
+          e.target.closest('.employee-dropdown-item')
+        )
+      ) {
+        return;
+      }
+      // Clicked outside: close all search dropdowns
+      setShowEmployeeDropdown(false);
+      if (quickMaintFillModal) {
+        setQuickMaintFillModal(prev => prev ? ({ ...prev, showOpDropdown: false, showSvDropdown: false }) : null);
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowEmployeeDropdown(false);
+        if (quickMaintFillModal) {
+          setQuickMaintFillModal(prev => prev ? ({ ...prev, showOpDropdown: false, showSvDropdown: false }) : null);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleGlobalClickOutside);
+    document.addEventListener('touchstart', handleGlobalClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClickOutside);
+      document.removeEventListener('touchstart', handleGlobalClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [quickMaintFillModal]);
+
   useEffect(() => {
     if (!isLoggedIn) return;
     const fetchCompaniesList = async () => {
@@ -732,16 +809,16 @@ function App() {
       const kw = keyword.toLowerCase();
       return availableWarehouses.find(w => w.name.toLowerCase().includes(kw) || (w.warehouse_name || '').toLowerCase().includes(kw));
     };
-    const stores   = find('stores');
-    const fg       = find('finished goods') || find('finished');
-    const wip      = find('work in progress') || find('wip');
-    const scrap    = find('scrap');
-    const extra    = find('extra') || find('goods');
-    if (stores)  setWoSourceWarehouse(prev => prev || stores.name);
-    if (fg)      setWoFgWarehouse(prev => prev || fg.name);
-    if (wip)     setWoWipWarehouse(prev => prev || wip.name);
-    if (scrap)   setWoScrapWarehouse(prev => prev || scrap.name);
-    if (extra)   setWoExtraGoodsWarehouse(prev => prev || extra.name);
+    const stores = find('stores');
+    const fg = find('finished goods') || find('finished');
+    const wip = find('work in progress') || find('wip');
+    const scrap = find('scrap');
+    const extra = find('extra') || find('goods');
+    if (stores) setWoSourceWarehouse(prev => prev || stores.name);
+    if (fg) setWoFgWarehouse(prev => prev || fg.name);
+    if (wip) setWoWipWarehouse(prev => prev || wip.name);
+    if (scrap) setWoScrapWarehouse(prev => prev || scrap.name);
+    if (extra) setWoExtraGoodsWarehouse(prev => prev || extra.name);
   }, [availableWarehouses]);
 
   // Reset warehouse selections when company changes so they re-default from the new company's list
@@ -870,8 +947,11 @@ function App() {
   const [maintCheckgrid, setMaintCheckgrid] = useState({}); // { rowIdx-day: boolean }
   const [maintRemarks, setMaintRemarks] = useState({}); // { rowIdx: string }
   const [maintStdTimes, setMaintStdTimes] = useState({}); // { tIdx: number }
-  const [maintOperator, setMaintOperator] = useState('');
-  const [maintSupervisor, setMaintSupervisor] = useState('');
+  const [maintOperator, setMaintOperator] = useState('');       // Employee ID for ERPNext Link field
+  const [maintOperatorDisplay, setMaintOperatorDisplay] = useState('');  // Human name for display
+  const [maintSupervisor, setMaintSupervisor] = useState('');     // Employee ID for ERPNext Link field
+  const [maintSupervisorDisplay, setMaintSupervisorDisplay] = useState(''); // Human name for display
+  const [maintWorkOrder, setMaintWorkOrder] = useState('');
   const [maintViewMode, setMaintViewMode] = useState('grid'); // 'grid' | 'list'
   const [activeMaintSubTab, setActiveMaintSubTab] = useState('preventive'); // 'preventive' | 'regular-breakdown'
   const [activeMaintForm, setActiveMaintForm] = useState(null); // 'weight-check' | 'breakdown' | null
@@ -944,6 +1024,21 @@ function App() {
     localStorage.setItem('fiji_cleaning_records', JSON.stringify(cleaningRecords));
   }, [cleaningRecords]);
 
+  const loadCleaningRecordsFromERP = async () => {
+    try {
+      const liveRecords = await frappe.fetchAllCleaningRecords();
+      if (liveRecords && Array.isArray(liveRecords)) {
+        setCleaningRecords(liveRecords);
+      }
+    } catch (e) {
+      console.error('Failed to load live cleaning records:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadCleaningRecordsFromERP();
+  }, []);
+
   useEffect(() => {
     setCleaningPage(1);
   }, [cleaningSearchQuery, cleaningFilterType]);
@@ -979,31 +1074,28 @@ function App() {
               cleaning_purpose: data.purpose
             });
           } else if (doctype === 'Cleaning of Toilets') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
-            };
-
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
             const dateTimeStr = `${data.posting_date} ${data.posting_time || '12:00'}:00`;
-            const duties_performed_by = resolveEmployeeId(data.cleaner, extractEmployeeId(data.cleaner));
-            const checked_by = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
+            const duties_performed_by = resolveEmpId(data.cleanerId, data.cleaner);
+            const checked_by = resolveEmpId(data.supervisorId, data.supervisor);
 
             let activePurposes = data.selectedPurposes || [];
-
             if (activePurposes.length === 0) {
               const purposes = await frappe.getToiletCleaningPurposes();
               activePurposes = purposes.length > 0 ? [purposes[0].name] : [];
@@ -1022,28 +1114,26 @@ function App() {
             };
             response = await frappe.createToiletCleaningRecord(erpPayload);
           } else if (doctype === 'Cleaning of Dining Room') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
-            };
-
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
             const dateTimeStr = `${data.posting_date} ${data.posting_time || '12:00'}:00`;
-            const duties_performed_by = resolveEmployeeId(data.cleaner, extractEmployeeId(data.cleaner));
-            const checked_by = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
+            const duties_performed_by = resolveEmpId(data.cleanerId, data.cleaner);
+            const checked_by = resolveEmpId(data.supervisorId, data.supervisor);
 
             let activePurposes = data.selectedPurposes || [];
             if (activePurposes.length === 0) {
@@ -1062,28 +1152,26 @@ function App() {
             };
             response = await frappe.createDiningRoomCleaningRecord(erpPayload);
           } else if (doctype === 'Factory Floor') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
-            };
-
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
             const dateTimeStr = `${data.posting_date} ${data.posting_time || '12:00'}:00`;
-            const duties_performed_by = resolveEmployeeId(data.cleaner, extractEmployeeId(data.cleaner));
-            const checked_by = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
+            const duties_performed_by = resolveEmpId(data.cleanerId, data.cleaner);
+            const checked_by = resolveEmpId(data.supervisorId, data.supervisor);
 
             let activePurposes = data.selectedPurposes || [];
             if (activePurposes.length === 0) {
@@ -1102,28 +1190,26 @@ function App() {
             };
             response = await frappe.createFactoryFloorCleaningRecord(erpPayload);
           } else if (doctype === 'Cleaning of Lab and Office') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
-            };
-
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
             const dateTimeStr = `${data.posting_date} ${data.posting_time || '12:00'}:00`;
-            const duties_performed_by = resolveEmployeeId(data.cleaner, extractEmployeeId(data.cleaner));
-            const checked_by = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
+            const duties_performed_by = resolveEmpId(data.cleanerId, data.cleaner);
+            const checked_by = resolveEmpId(data.supervisorId, data.supervisor);
 
             let activePurposes = data.selectedPurposes || [];
             if (activePurposes.length === 0) {
@@ -1143,28 +1229,26 @@ function App() {
             };
             response = await frappe.createLabOfficeCleaningRecord(erpPayload);
           } else if (doctype === 'Balance Check or Callibration') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
-            };
-
-            const checked_by = resolveEmployeeId(data.checked_by, extractEmployeeId(data.checked_by));
-            const verified_by = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
-            const balance_cleaner = resolveEmployeeId(data.cleaning_of_the_balance_done_by, extractEmployeeId(data.cleaning_of_the_balance_done_by));
+            const checked_by = resolveEmpId(data.checkedById, data.checked_by);
+            const verified_by = resolveEmpId(data.supervisorId, data.supervisor);
+            const balance_cleaner = resolveEmpId(data.balanceCleanerId, data.cleaning_of_the_balance_done_by);
 
             const erpPayload = {
               date: data.posting_date,
@@ -1180,27 +1264,25 @@ function App() {
             };
             response = await frappe.createBalanceCheckRecord(erpPayload);
           } else if (doctype === 'Incubator Temperature Record') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
-            };
-
-            const checked_by_emp = resolveEmployeeId(data.recorded_by, extractEmployeeId(data.recorded_by));
-            const verified_by_emp = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
+            const checked_by_emp = resolveEmpId(data.cleanerId, data.recorded_by);
+            const verified_by_emp = resolveEmpId(data.supervisorId, data.supervisor);
 
             const erpPayload = {
               date: data.posting_date,
@@ -1219,27 +1301,25 @@ function App() {
             };
             response = await frappe.createIncubatorTemperatureRecord(erpPayload);
           } else if (doctype === 'equipment sanitation and cip') {
-            const extractEmployeeId = (val) => {
-              if (!val) return '';
-              const match = val.match(/\(([^)]+)\)/);
-              return match ? match[1] : val;
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
             };
 
-            const resolveEmployeeId = (val, defaultVal) => {
-              const extracted = extractEmployeeId(val);
-              if (!extracted) return defaultVal;
-              const searchVal = extracted.toLowerCase().trim();
-              const found = (employeeList || []).find(emp => {
-                const empName = (emp.employee_name || emp.name || '').toLowerCase();
-                const empId = (emp.name || '').toLowerCase();
-                const initials = empName.split(' ').map(n => n[0]).join('');
-                return empName === searchVal || empId === searchVal || initials === searchVal;
-              });
-              return found ? found.name : defaultVal;
-            };
-
-            const performed_by_emp = resolveEmployeeId(data.performed_by, extractEmployeeId(data.performed_by));
-            const verified_by_emp = resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor));
+            const performed_by_emp = resolveEmpId(data.cleanerId, data.performed_by);
+            const verified_by_emp = resolveEmpId(data.supervisorId, data.supervisor);
 
             const erpPayload = {
               date: data.posting_date,
@@ -1274,7 +1354,7 @@ function App() {
       setCleaningRecords(prev => [newRecord, ...prev]);
       setActiveCleaningForm(null);
       showAlert(`${doctype} logged successfully!`, 'success', 'QC Log Saved');
-      loadCleaningRecords();
+      await loadCleaningRecordsFromERP();
     } finally {
       setCleaningSaving(false);
     }
@@ -2030,10 +2110,13 @@ function App() {
     });
 
     let newId = `MAINT-${Date.now().toString().slice(-6)}`;
+    const activeWoId = maintWorkOrder || (globalMaintWO ? globalMaintWO.id : '');
     const newRecordData = {
       templateId: template.id,
       equipment: template.equipment,
       area: template.area,
+      workOrder: activeWoId,
+      work_order: activeWoId,
       name: template.name,
       weekNo: maintWeekNo,
       fromDate: maintFromDate,
@@ -2069,6 +2152,7 @@ function App() {
       };
 
       setMaintenanceRecords(prev => [newRecord, ...prev]);
+      loadMaintenanceSchedules();
       setActiveMaintTemplate(null);
       setMaintWeekNo('');
       setMaintFromDate('');
@@ -2077,8 +2161,12 @@ function App() {
       setMaintRemarks({});
       setMaintStdTimes({});
       setMaintOperator('');
+      setMaintOperatorDisplay('');
       setMaintSupervisor('');
+      setMaintSupervisorDisplay('');
+      setMaintWorkOrder('');
       setMaintOverallComments('');
+
 
       showAlert(`Maintenance checklist for ${template.equipment} logged successfully!`, 'success', 'Maintenance Log Saved');
     } finally {
@@ -2209,6 +2297,7 @@ function App() {
       ...data
     };
     setMaintenanceRecords(prev => [newRecord, ...prev]);
+    loadMaintenanceSchedules();
     setActiveMaintForm(null);
     showAlert(`${newRecord.name} logged successfully!`, 'success', 'Log Saved');
   };
@@ -2781,12 +2870,12 @@ function App() {
       const result = await frappe.login(CONFIG.ERPNEXT_SERVER_URL, loginUsername, loginPassword, true);
       if (result.success) {
 
-        
+
         setCurrentUser(result.user);
         setCurrentUserRole(result.role);
         setIsLoggedIn(true);
 
-        if(result.islandchill_user_type === 'Islandchill') {
+        if (result.islandchill_user_type === 'Islandchill') {
           window.location.href = `/islandchill`
         } else {
           window.location.href = `/app`
@@ -2812,9 +2901,13 @@ function App() {
     }, 600);
   };
 
-  const handleLogout = () => {
-    frappe.logout();
+  const handleLogout = async () => {
+    await frappe.logout();
     setIsLoggedIn(false);
+    setCurrentUser(null);
+    setCurrentUserRole('');
+    setLoginUsername('');
+    setLoginPassword('');
     setCurrentTab('dashboard');
     setIs2FAPhase('none');
   };
@@ -2833,11 +2926,22 @@ function App() {
     setLoginError('2FA settings reset successfully. You can re-enroll.');
   };
 
-  // Start a Work Order Run
-  const handleStartWorkOrder = async (woId) => {
+  // Helper to proceed with Work Order Start Run once pre-start maintenance is verified
+  const proceedToStartRun = async (woToStart) => {
+    const isAlreadyIssued = Boolean(
+      woToStart.materialTransferred ||
+      woToStart.stockEntryCreated ||
+      (woToStart.transferred_qty && Number(woToStart.transferred_qty) > 0) ||
+      (woToStart.produced_qty && Number(woToStart.produced_qty) > 0) ||
+      woToStart.status === 'Completed'
+    );
+
+    if (isAlreadyIssued) {
+      showAlert(`Raw Materials have already been issued for Work Order ${woToStart.id} (Single Stock Entry submitted). Re-issuing raw materials multiple times is not allowed.`, 'info', 'Raw Materials Already Issued');
+      return;
+    }
+
     const conn = frappe.getConnectionSettings();
-    const woToStart = workOrders.find(wo => wo.id === woId);
-    if (!woToStart) return;
 
     // First check ERPNext for an existing Draft Stock Entry.
     // If found, reopen the same draft so the user can edit qty/warehouses and submit it.
@@ -2901,18 +3005,6 @@ function App() {
       }
     }
 
-    if (materials.length === 0 && !conn.isLive) {
-      const mockBom = BOMS[woToStart.bomNo] || Object.values(BOMS)[0];
-      materials = (mockBom?.materials || []).map(m => ({
-        code: m.code,
-        name: m.name,
-        qty: Number((m.qty * (woToStart.quantity || 1)).toFixed(4)),
-        unit: m.unit,
-        sourceWarehouse: woToStart.sourceWarehouse || '',
-        targetWarehouse: woToStart.wipWarehouse || ''
-      }));
-    }
-
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -2927,12 +3019,211 @@ function App() {
       postingTime: formattedTime,
       items: materials,
 
-      // Draft/submission state for the two-step ERPNext flow
       stockEntryName: '',
       docstatus: 0,
       saved: false,
       submitted: false
     });
+  };
+
+  const refreshMaintChecklistValidation = async (woId) => {
+    try {
+      const checkRes = await frappe.getWorkOrderMaintenanceChecklists(woId);
+      if (checkRes) {
+        setMaintValidationModal({
+          isOpen: true,
+          woId: woId,
+          checklists: checkRes.checklists || [],
+          completedCount: checkRes.completed_count || 0,
+          totalCount: checkRes.total_count || 10,
+          allCompleted: checkRes.all_completed || false,
+          loading: false
+        });
+      }
+    } catch (err) {
+      console.error('Failed to refresh maintenance checklists:', err);
+    }
+  };
+
+  const handleOpenQuickFillChecklist = (equipmentName, areaName, woId) => {
+    const templateList = maintTemplates || MAINTENANCE_TEMPLATES_STATIC || [];
+    const template = templateList.find(t =>
+      (t.equipment && t.equipment.toLowerCase() === equipmentName.toLowerCase()) ||
+      (t.name && t.name.toLowerCase().includes(equipmentName.toLowerCase()))
+    ) || {
+      id: 'default',
+      name: `Daily Preventive Maintenance Schedule (${equipmentName})`,
+      equipment: equipmentName,
+      area: areaName,
+      tasks: [
+        { id: 1, desc: 'Visual inspection & clean surface', std: 0 },
+        { id: 2, desc: 'Check line pressure & connections', std: 0 },
+        { id: 3, desc: 'Verify safety guards & emergency stops', std: 0 },
+        { id: 4, desc: 'Check lubrication & smooth operation', std: 0 }
+      ]
+    };
+
+    const initialCheckgrid = {};
+    const initialRemarks = {};
+    const initialStdTimes = {};
+
+    (template.tasks || []).forEach((task, idx) => {
+      initialCheckgrid[idx] = false;
+      initialRemarks[idx] = '';
+      initialStdTimes[idx] = 0;
+    });
+
+    // Compute current week number
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const weekNo = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+    const todayStr = now.toISOString().slice(0, 10);
+
+    setQuickMaintFillModal({
+      isOpen: true,
+      equipment: equipmentName,
+      area: areaName,
+      workOrder: woId || '',   // pre-fill from WO context but keep editable
+      template: template,
+      checkgrid: initialCheckgrid,
+      remarks: initialRemarks,
+      stdTimes: initialStdTimes,
+      overallComments: '',
+      operator: '',
+      supervisor: '',
+      weekNo: String(weekNo),
+      fromDate: todayStr,
+      toDate: todayStr,
+      // employee search state embedded in modal
+      operatorSearch: '',
+      supervisorSearch: '',
+      showOpDropdown: false,
+      showSvDropdown: false,
+    });
+  };
+
+  const handleSaveQuickChecklist = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!quickMaintFillModal) return;
+
+    if (!quickMaintFillModal.workOrder) {
+      showAlert('Work Order ID is required. Please select a Work Order before submitting.', 'error', 'Validation Error');
+      return;
+    }
+    if (!quickMaintFillModal.operator) {
+      showAlert('Sign. of Operator is required.', 'error', 'Validation Error');
+      return;
+    }
+    if (!quickMaintFillModal.supervisor) {
+      showAlert('Sign. of Supervisor is required.', 'error', 'Validation Error');
+      return;
+    }
+
+    try {
+      setSyncStatusMsg('Saving Maintenance Checklist to ERPNext...');
+      const payload = {
+        equipment: quickMaintFillModal.equipment,
+        area: quickMaintFillModal.area,
+        workOrder: quickMaintFillModal.workOrder,
+        operator: quickMaintFillModal.operator,
+        supervisor: quickMaintFillModal.supervisor,
+        overallComments: quickMaintFillModal.overallComments,
+        checkgrid: quickMaintFillModal.checkgrid,
+        remarks: quickMaintFillModal.remarks,
+        stdTimes: quickMaintFillModal.stdTimes,
+        tasks: quickMaintFillModal.template.tasks || [],
+        weekNo: quickMaintFillModal.weekNo,
+        fromDate: quickMaintFillModal.fromDate,
+        toDate: quickMaintFillModal.toDate,
+      };
+
+      const res = await frappe.createMaintenanceSchedule(payload);
+      if (res && res.name) {
+        const newRecord = {
+          id: res.name,
+          templateId: quickMaintFillModal.template.id,
+          equipment: quickMaintFillModal.equipment,
+          area: quickMaintFillModal.area,
+          workOrder: quickMaintFillModal.workOrder,
+          operator: quickMaintFillModal.operator,
+          supervisor: quickMaintFillModal.supervisor,
+          checkgrid: quickMaintFillModal.checkgrid,
+          remarks: quickMaintFillModal.remarks,
+          totalChecked: Object.values(quickMaintFillModal.checkgrid || {}).filter(Boolean).length,
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
+        };
+        setMaintenanceRecords(prev => [newRecord, ...prev]);
+        await loadMaintenanceSchedules();
+        showAlert(`Checklist submitted for ${quickMaintFillModal.equipment} (${res.name})`, 'success', 'Checklist Submitted');
+        const savedWoId = quickMaintFillModal.workOrder;
+        setQuickMaintFillModal(null);
+        refreshMaintChecklistValidation(savedWoId);
+        loadWorkOrders();
+      }
+    } catch (err) {
+      showAlert(`Failed to submit checklist: ${err.message}`, 'error', 'ERPNext Error');
+    } finally {
+      setSyncStatusMsg('');
+    }
+  };
+
+  // Open Pre-Start Maintenance Validation Modal for a Work Order
+  const handleCheckWorkOrderMaintenance = async (woId) => {
+    const conn = frappe.getConnectionSettings();
+    if (conn.isLive) {
+      setSyncStatusMsg('Verifying Maintenance Checklists for Work Order...');
+      try {
+        const checkRes = await frappe.getWorkOrderMaintenanceChecklists(woId);
+        if (checkRes) {
+          setMaintValidationModal({
+            isOpen: true,
+            woId: woId,
+            checklists: checkRes.checklists || [],
+            completedCount: checkRes.completed_count || 0,
+            totalCount: checkRes.total_count || 10,
+            allCompleted: checkRes.all_completed || false,
+            loading: false
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to verify maintenance checklists for ${woId}:`, err);
+        showAlert(`Maintenance verification failed: ${err.message}`, 'error', 'ERPNext Error');
+      } finally {
+        setSyncStatusMsg('');
+      }
+    }
+  };
+
+  // Start a Work Order Run with Mandatory Pre-Start Maintenance Validation
+  const handleStartWorkOrder = async (woId) => {
+    const conn = frappe.getConnectionSettings();
+    const woToStart = workOrders.find(wo => wo.id === woId);
+    if (!woToStart) return;
+
+    if (conn.isLive && conn.connected) {
+      setSyncStatusMsg('Verifying Maintenance Checklists for Work Order...');
+      try {
+        const checkRes = await frappe.getWorkOrderMaintenanceChecklists(woId);
+        if (checkRes && !checkRes.all_completed) {
+          setMaintValidationModal({
+            isOpen: true,
+            woId: woId,
+            checklists: checkRes.checklists || [],
+            completedCount: checkRes.completed_count || 0,
+            totalCount: checkRes.total_count || 10,
+            allCompleted: false,
+            loading: false
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn(`Failed to verify maintenance checklists for ${woId}:`, err);
+      } finally {
+        setSyncStatusMsg('');
+      }
+    }
+
+    proceedToStartRun(woToStart);
   };
 
   // const handleConfirmStockEntry = async (seData) => {
@@ -3024,42 +3315,6 @@ function App() {
     setSeSaving(true);
 
     try {
-      const conn = frappe.getConnectionSettings();
-
-      if (!conn.isLive || !conn.connected) {
-        const demoStockEntryName = `DEMO-SE-${Date.now().toString().slice(-6)}`;
-
-        setStockEntryModal(prev => ({
-          ...prev,
-          stockEntryName: demoStockEntryName,
-          docstatus: 0,
-          saved: true,
-          submitted: false
-        }));
-
-        setWorkOrders(prev =>
-          prev.map(wo =>
-            wo.id === seData.woId
-              ? {
-                ...wo,
-                stockEntryCreated: true,
-                stockEntryName: demoStockEntryName,
-                stockEntryPostingDate: seData.postingDate,
-                stockEntryPostingTime: seData.postingTime
-              }
-              : wo
-          )
-        );
-
-        showAlert(
-          `Stock Entry ${demoStockEntryName} saved as Draft in demo mode. Now submit it to continue the flow.`,
-          'success',
-          'Stock Entry Draft Saved'
-        );
-
-        return;
-      }
-
       setSyncStatusMsg('Saving Stock Entry draft on ERPNext...');
 
       const seRes = await frappe.saveStockEntryDraft({
@@ -3291,7 +3546,30 @@ function App() {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const defaultNowDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-    if (action === 'start' || action === 'resume') {
+    if (action === 'start') {
+      const isRawMaterialsIssued = Boolean(
+        wo?.materialTransferred ||
+        wo?.stockEntryCreated ||
+        (wo?.transferred_qty && Number(wo?.transferred_qty) > 0) ||
+        (wo?.produced_qty && Number(wo?.produced_qty) > 0) ||
+        wo?.status === 'In Process' ||
+        wo?.status === 'Completed'
+      );
+
+      if (wo && !wo.maintAllCompleted) {
+        if (handleCheckWorkOrderMaintenance) handleCheckWorkOrderMaintenance(wo.id);
+        showAlert(`Maintenance checklists for Work Order ${wo.id} must be 100% completed before starting Job Cards.`, 'warning', 'Maintenance Pending');
+        return;
+      }
+
+      if (wo && !isRawMaterialsIssued) {
+        showAlert(`Raw Materials must be issued (Stock Entry) before starting Job Cards for Work Order ${wo.id}. Please click "📦 Issue Raw Materials".`, 'warning', 'Raw Materials Pending');
+        return;
+      }
+
+      setJcActualStartTime(defaultNowDateTime);
+      setJcActualEndTime('');
+    } else if (action === 'resume') {
       setJcActualStartTime(defaultNowDateTime);
       setJcActualEndTime('');
     } else if (action === 'pause' || action === 'finish') {
@@ -3343,7 +3621,7 @@ function App() {
     const month = String(localDate.getMonth() + 1).padStart(2, '0');
     const day = String(localDate.getDate()).padStart(2, '0');
     const defaultDate = `${year}-${month}-${day}`;
-    
+
     const hours = String(localDate.getHours()).padStart(2, '0');
     const minutes = String(localDate.getMinutes()).padStart(2, '0');
     const seconds = String(localDate.getSeconds()).padStart(2, '0');
@@ -3423,7 +3701,7 @@ function App() {
       }
 
       showAlert(`Work Order ${data.woId} finished successfully. Stock Entry ${res.stock_entry || ''} submitted.`, 'success', 'Work Order Finished');
-      
+
       const conn = frappe.getConnectionSettings();
       if (!conn.isLive || !conn.connected) {
         setWorkOrders(prev => {
@@ -3975,54 +4253,27 @@ function App() {
 
     try {
       const conn = frappe.getConnectionSettings();
-      if (conn.isLive) {
-        setSyncStatusMsg('Creating Work Order on ERPNext...');
-        const res = await frappe.createWorkOrder(newWO);
-        if (res.success) {
-          let jobCards = [];
-          const ops = await frappe.getBOMOperations(bomNo);
-          if (ops && ops.length > 0) {
-            jobCards = ops;
-          }
-
-          const nextWO = {
-            id: res.name,
-            ...newWO,
-            item: product.name,
-            produced: 0,
-            status: 'Pending',
-            jobCards: jobCards
-          };
-          setWorkOrders(prev => [nextWO, ...prev]);
-          setSelectedWOId(res.name);
-          setShowNewWODrawer(false);
-          loadWorkOrders();
+      setSyncStatusMsg('Creating Work Order on ERPNext...');
+      const res = await frappe.createWorkOrder(newWO);
+      if (res.success) {
+        let jobCards = [];
+        const ops = await frappe.getBOMOperations(bomNo);
+        if (ops && ops.length > 0) {
+          jobCards = ops;
         }
-      } else {
-        const mockName = `MFG-WO-2026-${String(workOrders.length + 98).padStart(5, '0')}`;
+
         const nextWO = {
-          id: mockName,
+          id: res.name,
           ...newWO,
           item: product.name,
           produced: 0,
           status: 'Pending',
-          jobCards: [
-            { id: 'PO-JOB00601', operation: 'Mixing', station: 'Mixing Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00602', operation: 'Lab Testing', station: 'Lab Testing Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00603', operation: 'Can/Bottle Prep', station: 'Can Preparation Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00604', operation: 'Filling', station: 'Filling Machine', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00605', operation: 'Initial Quality Check', station: 'Initial QC Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00606', operation: 'Warmer', station: 'Warmer Machine', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00607', operation: 'Laser Labeling', station: 'Labeling Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00608', operation: 'Final Quality Check', station: 'Final QC Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00609', operation: 'Hand Packing', station: 'Packing Station', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00610', operation: 'Palletising', station: 'Palletisation Area', status: 'Not Started', operator: '', remarks: '', remarksList: [] },
-            { id: 'PO-JOB00611', operation: 'Store & Dispatch', station: 'Warehouse/Logistics', status: 'Not Started', operator: '', remarks: '', remarksList: [] }
-          ]
+          jobCards: jobCards
         };
         setWorkOrders(prev => [nextWO, ...prev]);
-        setSelectedWOId(mockName);
+        setSelectedWOId(res.name);
         setShowNewWODrawer(false);
+        loadWorkOrders();
       }
     } catch (err) {
       showAlert(`Error creating Work Order on ERPNext: ${err.message}`, 'error', 'ERPNext Error');
@@ -4631,6 +4882,7 @@ function App() {
             recordsPerPage={recordsPerPage}
             logo={logo}
             handleStartWorkOrder={handleStartWorkOrder}
+            handleCheckWorkOrderMaintenance={handleCheckWorkOrderMaintenance}
             isWorkOrderReadyForFinish={isWorkOrderReadyForFinish}
             woActionLoading={woActionLoading}
             handleFinishWorkOrder={handleFinishWorkOrder}
@@ -4753,6 +5005,7 @@ function App() {
         {/* Maintenance Tab */}
         {currentTab === 'maintenance' && (
           <MaintenanceTab
+            workOrders={workOrders}
             maintenanceRecords={maintenanceRecords}
             setMaintenanceRecords={setMaintenanceRecords}
             maintSearchQuery={maintSearchQuery}
@@ -4785,6 +5038,8 @@ function App() {
             setMaintOperator={setMaintOperator}
             maintSupervisor={maintSupervisor}
             setMaintSupervisor={setMaintSupervisor}
+            maintWorkOrder={maintWorkOrder}
+            setMaintWorkOrder={setMaintWorkOrder}
             activeMaintForm={activeMaintForm}
             setActiveMaintForm={setActiveMaintForm}
             maintPage={maintPage}
@@ -4891,8 +5146,8 @@ function App() {
             showEmployeeDropdown={showEmployeeDropdown}
             setShowEmployeeDropdown={setShowEmployeeDropdown}
             activeSearchField={activeSearchField}
-            setActiveSearchField={setActiveSearchField}
             isLoggedIn={isLoggedIn}
+            onRefreshCleaningRecords={loadCleaningRecordsFromERP}
           />
         )}
 
@@ -5618,7 +5873,7 @@ function App() {
                                   value={replyText}
                                   onChange={(e) => setReplyText(e.target.value)}
                                   placeholder="Type your reply comment..."
-                                 animate="off"
+                                  animate="off"
                                 />
                                 <button
                                   type="button"
@@ -5829,7 +6084,7 @@ function App() {
                 <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
 
                   {/* Top metadata input */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
                     <div>
                       <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Equipment</label>
                       <input type="text" className="form-input" value={template.equipment} disabled style={{ backgroundColor: '#f3f4f6' }} />
@@ -5837,6 +6092,19 @@ function App() {
                     <div>
                       <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Area</label>
                       <input type="text" className="form-input" value={template.area} disabled style={{ backgroundColor: '#f3f4f6' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Work Order ID</label>
+                      <select
+                        className="form-input"
+                        value={maintWorkOrder}
+                        onChange={e => setMaintWorkOrder(e.target.value)}
+                      >
+                        <option value="">Select Work Order</option>
+                        {workOrders.map(wo => (
+                          <option key={wo.id} value={wo.id}>{wo.id} - {wo.productName || wo.product}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>WEEK NO</label>
@@ -5967,108 +6235,118 @@ function App() {
 
                   {/* Signatures & Employee Autocomplete Search */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                    <div style={{ position: 'relative' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Sign. Of the Operator</label>
+                    <div className="app-dropdown-container" style={{ position: 'relative' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Sign. Of the Operator <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <input
                         type="text"
                         className="form-input"
-                        value={maintOperator}
-                        onChange={(e) => handleSearchEmployees(e.target.value, 'maintOperator')}
+                        value={maintOperatorDisplay || ''}
+                        onChange={(e) => {
+                          setMaintOperatorDisplay(e.target.value);
+                          setMaintOperator('');
+                          handleSearchEmployees(e.target.value, 'maintOperator');
+                        }}
                         onFocus={() => {
                           setActiveSearchField('maintOperator');
-                          if (maintOperator.trim().length >= 3 || employeeList.length > 0) {
-                            setShowEmployeeDropdown(true);
-                          }
+                          setShowEmployeeDropdown(true);
+                          if ((maintOperatorDisplay || '').trim().length === 0) handleSearchEmployees('', 'maintOperator');
                         }}
                         placeholder="Search employee..."
                         required
                         autoComplete="off"
                       />
                       {showEmployeeDropdown && activeSearchField === 'maintOperator' && employeeList.length > 0 && (
-                        <div style={{
+                        <div className="app-dropdown-menu" style={{
                           position: 'absolute',
-                          bottom: '100%',
+                          top: '100%',
                           left: 0,
                           right: 0,
-                          backgroundColor: 'white',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '6px',
-                          maxHeight: '130px',
+                          marginTop: '4px',
+                          backgroundColor: 'var(--card-bg, #ffffff)',
+                          border: '1px solid var(--border-color, #e5e7eb)',
+                          borderRadius: '8px',
+                          maxHeight: '180px',
                           overflowY: 'auto',
-                          zIndex: 1001,
-                          boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          zIndex: 3000,
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
                         }}>
                           {employeeList.map((emp) => (
                             <div
                               key={emp.name}
                               style={{
-                                padding: '6px 10px',
+                                padding: '8px 12px',
                                 cursor: 'pointer',
-                                fontSize: '11px',
+                                fontSize: '12px',
                                 borderBottom: '1px solid #f3f4f6',
-                                color: '#374151'
+                                color: 'var(--text-main, #374151)'
                               }}
                               onMouseDown={() => {
-                                setMaintOperator(emp.employee_name);
+                                setMaintOperator(emp.name);
+                                setMaintOperatorDisplay(emp.employee_name || emp.name);
                                 setShowEmployeeDropdown(false);
                               }}
                               className="employee-dropdown-item"
                             >
-                              <strong>{emp.employee_name}</strong> <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>({emp.name})</span>
+                              <strong>{emp.employee_name}</strong> <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>({emp.name})</span>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    <div style={{ position: 'relative' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Sign. Of the Supervisor</label>
+                    <div className="app-dropdown-container" style={{ position: 'relative' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Sign. Of the Supervisor <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <input
                         type="text"
                         className="form-input"
-                        value={maintSupervisor}
-                        onChange={(e) => handleSearchEmployees(e.target.value, 'maintSupervisor')}
+                        value={maintSupervisorDisplay || ''}
+                        onChange={(e) => {
+                          setMaintSupervisorDisplay(e.target.value);
+                          setMaintSupervisor('');
+                          handleSearchEmployees(e.target.value, 'maintSupervisor');
+                        }}
                         onFocus={() => {
                           setActiveSearchField('maintSupervisor');
-                          if (maintSupervisor.trim().length >= 3 || employeeList.length > 0) {
-                            setShowEmployeeDropdown(true);
-                          }
+                          setShowEmployeeDropdown(true);
+                          if ((maintSupervisorDisplay || '').trim().length === 0) handleSearchEmployees('', 'maintSupervisor');
                         }}
                         placeholder="Search employee..."
                         required
                         autoComplete="off"
                       />
                       {showEmployeeDropdown && activeSearchField === 'maintSupervisor' && employeeList.length > 0 && (
-                        <div style={{
+                        <div className="app-dropdown-menu" style={{
                           position: 'absolute',
-                          bottom: '100%',
+                          top: '100%',
                           left: 0,
                           right: 0,
-                          backgroundColor: 'white',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '6px',
-                          maxHeight: '130px',
+                          marginTop: '4px',
+                          backgroundColor: 'var(--card-bg, #ffffff)',
+                          border: '1px solid var(--border-color, #e5e7eb)',
+                          borderRadius: '8px',
+                          maxHeight: '180px',
                           overflowY: 'auto',
-                          zIndex: 1001,
-                          boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          zIndex: 3000,
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
                         }}>
                           {employeeList.map((emp) => (
                             <div
                               key={emp.name}
                               style={{
-                                padding: '6px 10px',
+                                padding: '8px 12px',
                                 cursor: 'pointer',
-                                fontSize: '11px',
+                                fontSize: '12px',
                                 borderBottom: '1px solid #f3f4f6',
-                                color: '#374151'
+                                color: 'var(--text-main, #374151)'
                               }}
                               onMouseDown={() => {
-                                setMaintSupervisor(emp.employee_name);
+                                setMaintSupervisor(emp.name);
+                                setMaintSupervisorDisplay(emp.employee_name || emp.name);
                                 setShowEmployeeDropdown(false);
                               }}
                               className="employee-dropdown-item"
                             >
-                              <strong>{emp.employee_name}</strong> <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>({emp.name})</span>
+                              <strong>{emp.employee_name}</strong> <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>({emp.name})</span>
                             </div>
                           ))}
                         </div>
@@ -7114,6 +7392,374 @@ function App() {
           }}
         />
       )}
+
+      {/* Modal: Work Order Pre-Start Maintenance Validation */}
+      {maintValidationModal.isOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-panel" style={{ width: '850px', maxWidth: '95%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>🛠️ Work Order Pre-Start Maintenance Validation</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Work Order: <strong style={{ color: 'var(--accent)' }}>{maintValidationModal.woId}</strong>
+                </p>
+              </div>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={() => setMaintValidationModal(prev => ({ ...prev, isOpen: false }))}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 0' }}>
+              <div style={{ marginBottom: '20px', backgroundColor: 'var(--card-bg)', padding: '14px 18px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>Daily Preventive Maintenance Progress</span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: maintValidationModal.allCompleted ? 'var(--success)' : 'var(--warning)' }}>
+                    {maintValidationModal.completedCount} / {maintValidationModal.totalCount} Checklists Submitted
+                  </span>
+                </div>
+                <div style={{ height: '8px', width: '100%', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${(maintValidationModal.completedCount / maintValidationModal.totalCount) * 100}%`,
+                    backgroundColor: maintValidationModal.allCompleted ? 'var(--success)' : 'var(--warning)',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                {!maintValidationModal.allCompleted && (
+                  <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--warning)', fontStyle: 'italic' }}>
+                    ⚠️ All 10 Daily Preventive Checklists must be submitted before starting this Work Order.
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '12px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
+                {maintValidationModal.checklists.map((chk, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    border: `1px solid ${chk.completed ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`,
+                    backgroundColor: chk.completed ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-secondary)'
+                  }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ fontSize: '13px' }}>{chk.equipment}</strong>
+                        <span className="badge" style={{ fontSize: '10px', padding: '2px 6px' }}>{chk.area}</span>
+                      </div>
+                      {chk.completed ? (
+                        <span style={{ fontSize: '11px', color: 'var(--success)', display: 'block', marginTop: '2px' }}>
+                          ✓ Submitted ID: {chk.schedule_name}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: 'var(--warning)', display: 'block', marginTop: '2px' }}>
+                          ⏳ Unsubmitted / Pending Check
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      {chk.completed ? (
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--success)', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>
+                          Completed
+                        </span>
+                      ) : (
+                        <button
+                          className="primary-btn"
+                          style={{ fontSize: '12px', padding: '4px 10px' }}
+                          onClick={() => {
+                            handleOpenQuickFillChecklist(chk.equipment, chk.area, maintValidationModal.woId);
+                          }}
+                        >
+                          Fill Checklist
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
+              <button className="secondary-btn" onClick={() => setMaintValidationModal(prev => ({ ...prev, isOpen: false }))}>
+                Close
+              </button>
+              <button
+                className="primary-btn"
+                disabled={!maintValidationModal.allCompleted}
+                style={{
+                  opacity: maintValidationModal.allCompleted ? 1 : 0.5,
+                  cursor: maintValidationModal.allCompleted ? 'pointer' : 'not-allowed',
+                  backgroundColor: maintValidationModal.allCompleted ? 'var(--success)' : undefined,
+                  borderColor: maintValidationModal.allCompleted ? 'var(--success)' : undefined
+                }}
+                onClick={() => {
+                  const woIdToStart = maintValidationModal.woId;
+                  setMaintValidationModal(prev => ({ ...prev, isOpen: false }));
+                  const woObj = workOrders.find(w => w.id === woIdToStart);
+                  if (woObj) proceedToStartRun(woObj);
+                }}
+              >
+                {maintValidationModal.allCompleted ? '✓ Proceed & Start Work Order' : 'Complete All 10 Checklists to Start'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Quick Fill Maintenance Checklist — matches original Daily PM form exactly */}
+      {quickMaintFillModal && (() => {
+        const modal = quickMaintFillModal;
+        const tasks = modal.template.tasks || [];
+        const completedCount = tasks.filter((_, idx) => !!modal.checkgrid[idx]).length;
+        // Work orders that are NOT completed
+        const activeWOs = workOrders.filter(wo =>
+          !['Completed', 'Stopped', 'Cancelled'].includes(wo.status)
+        );
+        return (
+          <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+            <div className="modal-panel" style={{ width: '920px', maxWidth: '97%' }}>
+              <div className="modal-header">
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Water Fiji PTE Limited</h3>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Daily Preventive Maintenance Schedule</span>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={() => setQuickMaintFillModal(null)}>✕</button>
+              </div>
+
+              <form onSubmit={handleSaveQuickChecklist}>
+                <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+
+                  {/* Metadata grid — Equipment (readonly), Area (readonly), Work Order ID (mandatory select), Week No */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Equipment</label>
+                      <input type="text" className="form-input" value={modal.equipment} disabled style={{ backgroundColor: 'var(--bg-secondary)' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Area</label>
+                      <input type="text" className="form-input" value={modal.area} disabled style={{ backgroundColor: 'var(--bg-secondary)' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px', color: 'var(--accent)' }}>Work Order ID <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        className="form-input"
+                        required
+                        value={modal.workOrder}
+                        onChange={e => setQuickMaintFillModal(prev => ({ ...prev, workOrder: e.target.value }))}
+                        style={{ borderColor: !modal.workOrder ? 'var(--danger)' : undefined }}
+                      >
+                        <option value="">— Select Work Order —</option>
+                        {activeWOs.map(wo => (
+                          <option key={wo.id} value={wo.id}>
+                            {wo.id} — {wo.productName || wo.product || wo.item} [{wo.status}]
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>WEEK NO</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={modal.weekNo || ''}
+                        disabled
+                        style={{ backgroundColor: 'var(--bg-secondary)' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Checklist Table — SR.NO / DESCRIPTION / STD TIME / COMPLETED / REMARKS */}
+                  <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
+                    <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                          <th style={{ width: '40px', padding: '6px', textAlign: 'center' }}>SR.NO</th>
+                          <th style={{ minWidth: '220px', padding: '6px', textAlign: 'left' }}>DESCRIPTION</th>
+                          <th style={{ width: '80px', padding: '6px', textAlign: 'center' }}>STD TIME</th>
+                          <th style={{ width: '80px', padding: '6px', textAlign: 'center' }}>COMPLETED</th>
+                          <th style={{ minWidth: '160px', padding: '6px' }}>REMARKS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tasks.map((task, tIdx) => (
+                          <tr key={task.id || tIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ textAlign: 'center', padding: '6px', fontWeight: '600' }}>{tIdx + 1}</td>
+                            <td style={{ padding: '6px', fontWeight: '500' }}>{task.desc || task.description}</td>
+                            <td style={{ textAlign: 'center', padding: '4px' }}>
+                              <select
+                                className="form-input"
+                                style={{ padding: '2px 4px', fontSize: '11px', height: '26px', width: '72px', textAlign: 'center' }}
+                                value={modal.stdTimes && modal.stdTimes[tIdx] !== undefined ? modal.stdTimes[tIdx] : 0}
+                                onChange={e => setQuickMaintFillModal(prev => ({
+                                  ...prev,
+                                  stdTimes: { ...(prev.stdTimes || {}), [tIdx]: parseInt(e.target.value) || 0 }
+                                }))}
+                              >
+                                <option value={0}>-</option>
+                                <option value={1}>1 min</option>
+                                <option value={2}>2 min</option>
+                                <option value={3}>3 min</option>
+                                <option value={4}>4 min</option>
+                                <option value={5}>5 min</option>
+                                <option value={10}>10 min</option>
+                                <option value={15}>15 min</option>
+                                <option value={20}>20 min</option>
+                                <option value={30}>30 min</option>
+                                <option value={45}>45 min</option>
+                                <option value={60}>60 min</option>
+                                <option value={90}>90 min</option>
+                                <option value={120}>120 min</option>
+                              </select>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '4px' }}>
+                              <input
+                                type="checkbox"
+                                checked={!!modal.checkgrid[tIdx]}
+                                onChange={e => {
+                                  const checked = e.target.checked;
+                                  setQuickMaintFillModal(prev => ({
+                                    ...prev,
+                                    checkgrid: { ...prev.checkgrid, [tIdx]: checked }
+                                  }));
+                                }}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                              />
+                            </td>
+                            <td style={{ padding: '4px' }}>
+                              <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Remarks/Observations"
+                                style={{ padding: '4px 8px', fontSize: '11px', height: '28px' }}
+                                value={modal.remarks[tIdx] || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setQuickMaintFillModal(prev => ({
+                                    ...prev,
+                                    remarks: { ...prev.remarks, [tIdx]: val }
+                                  }));
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Overall Comments */}
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: '600' }}>OVERALL COMMENTS / REMARKS</label>
+                    <textarea
+                      className="form-input"
+                      style={{ minHeight: '56px', padding: '6px' }}
+                      value={modal.overallComments}
+                      onChange={e => setQuickMaintFillModal(prev => ({ ...prev, overallComments: e.target.value }))}
+                      placeholder="Enter overall comments or observations about this maintenance run..."
+                    />
+                  </div>
+
+                  {/* Signatures & Computed Metrics */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                    {/* Operator */}
+                    <div className="app-dropdown-container" style={{ position: 'relative' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Sign. Of the Operator <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={modal.operatorSearch !== undefined ? modal.operatorSearch : modal.operator}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setQuickMaintFillModal(prev => ({ ...prev, operatorSearch: val, showOpDropdown: true }));
+                          handleSearchEmployees(val, 'qmOperator');
+                        }}
+                        onFocus={() => {
+                          setActiveSearchField('qmOperator');
+                          setQuickMaintFillModal(prev => ({ ...prev, showOpDropdown: true }));
+                          if ((modal.operatorSearch || '').length === 0) handleSearchEmployees('', 'qmOperator');
+                        }}
+                        placeholder="Search employee..."
+                        required
+                        autoComplete="off"
+                      />
+                      {modal.showOpDropdown && showEmployeeDropdown && activeSearchField === 'qmOperator' && employeeList.length > 0 && (
+                        <div className="app-dropdown-menu" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', backgroundColor: 'var(--card-bg, #ffffff)', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: '8px', maxHeight: '180px', overflowY: 'auto', zIndex: 3000, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)' }}>
+                          {employeeList.map(emp => (
+                            <div key={emp.name} className="employee-dropdown-item" style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '12px', borderBottom: '1px solid #f3f4f6' }}
+                              onMouseDown={() => {
+                                const displayName = emp.employee_name || emp.name;
+                                setQuickMaintFillModal(prev => ({ ...prev, operator: emp.name, operatorSearch: displayName, showOpDropdown: false }));
+                                setShowEmployeeDropdown(false);
+                              }}>
+                              👤 <strong>{emp.employee_name || emp.name}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>({emp.name})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {modal.operator && <div style={{ fontSize: '10px', color: 'var(--success)', marginTop: '2px' }}>✓ {modal.operatorSearch || modal.operator}</div>}
+                    </div>
+
+                    {/* Supervisor */}
+                    <div className="app-dropdown-container" style={{ position: 'relative' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Sign. Of the Supervisor <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={modal.supervisorSearch !== undefined ? modal.supervisorSearch : modal.supervisor}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setQuickMaintFillModal(prev => ({ ...prev, supervisorSearch: val, showSvDropdown: true }));
+                          handleSearchEmployees(val, 'qmSupervisor');
+                        }}
+                        onFocus={() => {
+                          setActiveSearchField('qmSupervisor');
+                          setQuickMaintFillModal(prev => ({ ...prev, showSvDropdown: true }));
+                          if ((modal.supervisorSearch || '').length === 0) handleSearchEmployees('', 'qmSupervisor');
+                        }}
+                        placeholder="Search employee..."
+                        required
+                        autoComplete="off"
+                      />
+                      {modal.showSvDropdown && showEmployeeDropdown && activeSearchField === 'qmSupervisor' && employeeList.length > 0 && (
+                        <div className="app-dropdown-menu" style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', backgroundColor: 'var(--card-bg, #ffffff)', border: '1px solid var(--border-color, #e5e7eb)', borderRadius: '8px', maxHeight: '180px', overflowY: 'auto', zIndex: 3000, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)' }}>
+                          {employeeList.map(emp => (
+                            <div key={emp.name} className="employee-dropdown-item" style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '12px', borderBottom: '1px solid #f3f4f6' }}
+                              onMouseDown={() => {
+                                const displayName = emp.employee_name || emp.name;
+                                setQuickMaintFillModal(prev => ({ ...prev, supervisor: emp.name, supervisorSearch: displayName, showSvDropdown: false }));
+                                setShowEmployeeDropdown(false);
+                              }}>
+                              👤 <strong>{emp.employee_name || emp.name}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>({emp.name})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {modal.supervisor && <div style={{ fontSize: '10px', color: 'var(--success)', marginTop: '2px' }}>✓ {modal.supervisorSearch || modal.supervisor}</div>}
+                    </div>
+
+                    {/* Computed Metrics */}
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px', color: 'var(--accent)' }}>Computed Metrics</label>
+                      <div className="form-input" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--accent)', fontWeight: '600', fontSize: '12px' }}>
+                        Total Tasks Completed: {completedCount}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                  <button type="button" className="secondary-btn" onClick={() => setQuickMaintFillModal(null)}>Cancel</button>
+                  <button type="submit" className="primary-btn">
+                    Save Checklist Record
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
 
       {/* Custom Alert Message Modal */}
       {alertModal && (
