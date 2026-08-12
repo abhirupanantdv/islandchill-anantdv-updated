@@ -1086,7 +1086,9 @@ export default function CleaningTab({
               <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
                 <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
                   <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>TOTAL LOGS SUBMITTED</span>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--text-heading)' }}>{cleaningRecords.length} Records</div>
+                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--text-heading)' }}>
+                    {cleaningRecords.length} Logs {cleaningFilterType !== 'All' || cleaningSearchQuery ? `(${filtered.length} Filtered)` : ''}
+                  </div>
                 </div>
                 <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
                   <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>COMPLIANCE STATUS</span>

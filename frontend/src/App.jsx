@@ -1008,21 +1008,14 @@ function App() {
     setLabPage(1);
   }, [labSearchQuery, labFilterType]);
 
-  // Cleaning & Sanitation states
-  const [cleaningRecords, setCleaningRecords] = useState(() => {
-    const saved = localStorage.getItem('fiji_cleaning_records');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Cleaning & Sanitation states - single source of truth from ERPNext DB
+  const [cleaningRecords, setCleaningRecords] = useState([]);
   const [activeCleaningForm, setActiveCleaningForm] = useState(null);
   const [viewingCleaningRecord, setViewingCleaningRecord] = useState(null);
   const [cleaningSearchQuery, setCleaningSearchQuery] = useState('');
   const [cleaningFilterType, setCleaningFilterType] = useState('All');
   const [cleaningPage, setCleaningPage] = useState(1);
   const [cleaningSaving, setCleaningSaving] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('fiji_cleaning_records', JSON.stringify(cleaningRecords));
-  }, [cleaningRecords]);
 
   const loadCleaningRecordsFromERP = async () => {
     try {
@@ -1036,6 +1029,8 @@ function App() {
   };
 
   useEffect(() => {
+    // Clear old mock localStorage items to prevent stale data mixing
+    localStorage.removeItem('fiji_cleaning_records');
     loadCleaningRecordsFromERP();
   }, []);
 
@@ -1351,7 +1346,6 @@ function App() {
         ...newRecordData
       };
 
-      setCleaningRecords(prev => [newRecord, ...prev]);
       setActiveCleaningForm(null);
       showAlert(`${doctype} logged successfully!`, 'success', 'QC Log Saved');
       await loadCleaningRecordsFromERP();
