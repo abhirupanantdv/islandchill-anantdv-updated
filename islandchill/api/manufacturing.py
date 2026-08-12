@@ -670,7 +670,7 @@ def get_all_cleaning_records():
     all_records = []
     for dt in doctypes:
         if frappe.db.exists("DocType", dt):
-            records = frappe.get_all(dt, fields=["*"], order_by="creation desc", limit=100)
+            records = frappe.get_all(dt, fields=["*"], order_by="creation desc", limit=200, ignore_permissions=True)
             for r in records:
                 all_records.append({
                     "id": r.name,
@@ -686,6 +686,66 @@ def get_all_cleaning_records():
                 })
     all_records.sort(key=lambda x: x["timestamp"], reverse=True)
     return all_records
+
+
+@frappe.whitelist()
+def create_cleaning_sanitation_log(doctype, payload=None):
+    if isinstance(payload, str):
+        payload = frappe.parse_json(payload)
+    if not payload:
+        payload = frappe.form_dict.get("payload") or {}
+        if isinstance(payload, str):
+            payload = frappe.parse_json(payload)
+
+    allowed_doctypes = {
+        'Cleaning of Toilets',
+        'Cleaning of Dining Room',
+        'Factory Floor',
+        'Cleaning of Lab and Office',
+        'Incubator Temperature Record',
+        'Balance Check or Callibration',
+        'equipment sanitation and cip',
+        'Toilet Cleaning purpose',
+        'Dining Room Cleaning Purpose',
+        'Factory Floor Cleaning Purpose',
+        'Lab and Office Cleaning Purpose'
+    }
+
+    if doctype not in allowed_doctypes:
+        frappe.throw(_("Invalid Cleaning & Sanitation DocType {0}").format(doctype))
+
+    # Auto-ensure purpose link records exist to avoid LinkValidationError
+    purpose_doctype_map = {
+        'Cleaning of Toilets': ('table_hcqa', 'Toilet Cleaning purpose'),
+        'Cleaning of Dining Room': ('table_knse', 'Dining Room Cleaning Purpose'),
+        'Factory Floor': ('table_oftv', 'Factory Floor Cleaning Purpose'),
+        'Cleaning of Lab and Office': ('table_ntim', 'Lab and Office Cleaning Purpose')
+    }
+
+    if doctype in purpose_doctype_map and isinstance(payload, dict):
+        table_field, purpose_dt = purpose_doctype_map[doctype]
+        table_rows = payload.get(table_field) or []
+        for row in table_rows:
+            if isinstance(row, dict) and row.get("cleaning_purpose"):
+                p_name = row["cleaning_purpose"]
+                if not frappe.db.exists(purpose_dt, p_name):
+                    try:
+                        p_doc = frappe.new_doc(purpose_dt)
+                        p_doc.cleaning_purpose = p_name
+                        p_doc.flags.ignore_permissions = True
+                        p_doc.insert(ignore_permissions=True)
+                    except Exception as pe:
+                        frappe.log_error(f"Auto-create purpose {p_name} failed: {str(pe)}")
+
+    doc = frappe.new_doc(doctype)
+    doc.update(payload)
+    doc.flags.ignore_permissions = True
+    doc.insert(ignore_permissions=True)
+    doc.flags.ignore_permissions = True
+    doc.submit()
+    frappe.db.commit()
+
+    return {"success": True, "name": doc.name, "doc": doc.as_dict()}
 
 
 @frappe.whitelist()

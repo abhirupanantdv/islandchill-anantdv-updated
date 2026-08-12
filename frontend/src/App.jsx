@@ -234,11 +234,11 @@ function App() {
   // Authentication & Connection States
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     const conn = frappe.getConnectionSettings();
-    return conn.connected;
+    return Boolean(conn.connected && conn.user && conn.user !== 'Guest');
   });
   const [currentUser, setCurrentUser] = useState(() => {
     const conn = frappe.getConnectionSettings();
-    return conn.user || 'Guest';
+    return conn.connected && conn.user && conn.user !== 'Guest' ? conn.user : '';
   });
   const [currentUserRole, setCurrentUserRole] = useState(() => {
     const conn = frappe.getConnectionSettings();
@@ -1018,6 +1018,7 @@ function App() {
   const [cleaningSaving, setCleaningSaving] = useState(false);
 
   const loadCleaningRecordsFromERP = async () => {
+    if (!isLoggedIn) return;
     try {
       const liveRecords = await frappe.fetchAllCleaningRecords();
       if (liveRecords && Array.isArray(liveRecords)) {
@@ -1031,8 +1032,10 @@ function App() {
   useEffect(() => {
     // Clear old mock localStorage items to prevent stale data mixing
     localStorage.removeItem('fiji_cleaning_records');
-    loadCleaningRecordsFromERP();
-  }, []);
+    if (isLoggedIn) {
+      loadCleaningRecordsFromERP();
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     setCleaningPage(1);
@@ -2558,6 +2561,7 @@ function App() {
 
 
   const loadWorkOrders = async () => {
+    if (!isLoggedIn) return;
     Promise.resolve().then(() => setWoLoading(true));
 
     const conn = frappe.getConnectionSettings();
@@ -2691,41 +2695,9 @@ function App() {
     }
   };
 
-  const loadCleaningRecords = async () => {
-    const conn = frappe.getConnectionSettings();
-    if (conn.isLive && conn.connected) {
-      try {
-        const fetchPromises = CLEANING_TEMPLATES.map(async (tpl) => {
-          try {
-            const records = await frappe.getCleaningSanitationRecords(tpl.doctype);
-            if (records) {
-              return records.map(r => ({
-                id: r.name,
-                type: tpl.doctype,
-                timestamp: r.creation ? r.creation.replace('T', ' ').substring(0, 19) : '',
-                ...r
-              }));
-            }
-          } catch (e) {
-            console.warn(`Could not load records for ${tpl.doctype} from ERPNext:`, e);
-          }
-          return [];
-        });
-
-        const results = await Promise.all(fetchPromises);
-        const merged = results.flat().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-        if (merged.length > 0) {
-          setCleaningRecords(merged);
-        }
-      } catch (err) {
-        console.error("Failed to fetch Cleaning records:", err);
-      }
-    }
-  };
-
   useEffect(() => {
     if (isLoggedIn && currentTab === 'cleaning') {
-      loadCleaningRecords();
+      loadCleaningRecordsFromERP();
     }
   }, [currentTab, isLoggedIn]);
 
@@ -2898,7 +2870,7 @@ function App() {
   const handleLogout = async () => {
     await frappe.logout();
     setIsLoggedIn(false);
-    setCurrentUser(null);
+    setCurrentUser('');
     setCurrentUserRole('');
     setLoginUsername('');
     setLoginPassword('');
@@ -4467,12 +4439,14 @@ function App() {
     : Math.max(1, Math.ceil(filteredWorkOrders.length / recordsPerPage));
 
   useEffect(() => {
-    loadWorkOrders();
-    loadMaintenanceSchedules();
+    if (isLoggedIn) {
+      loadWorkOrders();
+      loadMaintenanceSchedules();
+    }
   }, [currentPage, isLoggedIn, defaultCompany, woStatusFilter]);
 
-  // Render Login page if offline/not authenticated
-  if (!isLoggedIn) {
+  // Render Login page if not authenticated
+  if (!isLoggedIn || !currentUser || currentUser === 'Guest') {
     return (
       <LoginPage
         is2FAPhase={is2FAPhase}
