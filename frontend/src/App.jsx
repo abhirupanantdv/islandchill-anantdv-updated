@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { WORKFLOW_STEPS, PRODUCTS, BOMS } from './data/mockData';
+import { WORKFLOW_STEPS, PRODUCTS, BOMS, INITIAL_WORK_ORDERS } from './data/mockData';
 import { frappe, DuplicateRequestError } from './services/frappe';
 import { generateSecret, verifyTOTP } from './services/totp';
 import SupportModule from './modules/SupportModule';
