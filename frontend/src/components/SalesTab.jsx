@@ -213,11 +213,11 @@ export function SalesInvoiceFormModal({ onClose, onSubmit, products, initialData
               </div>
               <div>
                 <label className="input-label">Posting Date *</label>
-                <input type="date" className="text-input" required value={postingDate} onChange={e => setPostingDate(e.target.value)} />
+                <input type="date" className="text-input" required min={new Date().toISOString().split('T')[0]} value={postingDate} onChange={e => setPostingDate(e.target.value)} />
               </div>
               <div>
                 <label className="input-label">Due Date *</label>
-                <input type="date" className="text-input" required value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                <input type="date" className="text-input" required min={postingDate || new Date().toISOString().split('T')[0]} value={dueDate} onChange={e => setDueDate(e.target.value)} />
               </div>
             </div>
 
@@ -486,7 +486,7 @@ export function DeliveryNoteFormModal({ onClose, onSubmit, products, initialData
               </div>
               <div>
                 <label className="input-label">Posting Date *</label>
-                <input type="date" className="text-input" required value={postingDate} onChange={e => setPostingDate(e.target.value)} />
+                <input type="date" className="text-input" required min={new Date().toISOString().split('T')[0]} value={postingDate} onChange={e => setPostingDate(e.target.value)} />
               </div>
             </div>
 

@@ -274,7 +274,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="form-group">
                 <label className="input-label">Date *</label>
-                <input type="date" className="text-input" required value={postingDate} onChange={e => setPostingDate(e.target.value)} />
+                <input type="date" className="text-input" required min={new Date().toISOString().split('T')[0]} value={postingDate} onChange={e => setPostingDate(e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="input-label">Time *</label>

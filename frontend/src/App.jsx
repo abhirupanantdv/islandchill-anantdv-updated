@@ -4201,6 +4201,15 @@ function App() {
       return;
     }
 
+    if (plannedStart) {
+      const selectedDate = new Date(plannedStart);
+      const now = new Date();
+      if (selectedDate < new Date(now.getTime() - 60000)) {
+        showAlert('Planned Start Time cannot be a past date or time.', 'warning', 'Invalid Start Time');
+        return;
+      }
+    }
+
     setWoCreating(true);
     const plannedDateStr = plannedStart ? plannedStart.replace('T', ' ') : new Date().toISOString().replace('T', ' ').substring(0, 19);
     const newWO = {
@@ -5541,6 +5550,7 @@ function App() {
                   name="plannedStart"
                   className="form-input"
                   defaultValue={getNowDateTimeLocal()}
+                  min={getNowDateTimeLocal()}
                   required
                 />
               </div>
@@ -5668,6 +5678,7 @@ function App() {
                   <input
                     type="datetime-local"
                     className="form-input"
+                    min={getNowDateTimeLocal()}
                     value={jcActualStartTime}
                     onChange={(e) => setJcActualStartTime(e.target.value)}
                   />
@@ -5683,6 +5694,7 @@ function App() {
                   <input
                     type="datetime-local"
                     className="form-input"
+                    min={getNowDateTimeLocal()}
                     value={jcActualEndTime}
                     onChange={(e) => setJcActualEndTime(e.target.value)}
                   />
@@ -6927,6 +6939,7 @@ function App() {
                     <input
                       type="date"
                       className="form-input"
+                      min={new Date().toISOString().split('T')[0]}
                       value={finishWoModal.postingDate}
                       onChange={(e) => setFinishWoModal(prev => ({ ...prev, postingDate: e.target.value }))}
                       required
@@ -7002,6 +7015,7 @@ function App() {
                     <input
                       type="date"
                       className="text-input"
+                      min={new Date().toISOString().split('T')[0]}
                       value={stockEntryModal.postingDate}
                       onChange={(e) => setStockEntryModal(prev => ({ ...prev, postingDate: e.target.value }))}
                       required

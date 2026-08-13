@@ -179,7 +179,7 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date and Time of Occurrence *</label>
-                  <input type="datetime-local" className="form-input" required value={incidentTime} onChange={e => setIncidentTime(e.target.value)} />
+                  <input type="datetime-local" className="form-input" required min={new Date().toISOString().slice(0, 16)} value={incidentTime} onChange={e => setIncidentTime(e.target.value)} />
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Type of Incident</label>
@@ -218,7 +218,7 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date Notified to Chief Inspector</label>
-                  <input type="date" className="form-input" value={dateNotified} onChange={e => setDateNotified(e.target.value)} />
+                  <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={dateNotified} onChange={e => setDateNotified(e.target.value)} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '12px' }}>
@@ -232,7 +232,7 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date of Resumption of Work</label>
-                  <input type="date" className="form-input" value={dateResumption} onChange={e => setDateResumption(e.target.value)} />
+                  <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={dateResumption} onChange={e => setDateResumption(e.target.value)} />
                 </div>
               </div>
             </div>
@@ -247,7 +247,7 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date Action Taken</label>
-                  <input type="date" className="form-input" value={dateActionTaken} onChange={e => setDateActionTaken(e.target.value)} />
+                  <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={dateActionTaken} onChange={e => setDateActionTaken(e.target.value)} />
                 </div>
               </div>
               <div className="form-group" style={{ marginTop: '12px', marginBottom: '12px' }}>
@@ -383,7 +383,7 @@ export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handl
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Time</label>
@@ -603,7 +603,7 @@ export function SafetySwabFormModal({ onClose, onSubmit, saving, employeeList, h
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date of Swab *</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
             </div>
 
@@ -1074,7 +1074,7 @@ export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, han
                 </div>
                 <div>
                   <label>Date</label>
-                  <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} />
+                  <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
                 </div>
               </div>
 
@@ -1105,7 +1105,7 @@ export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, han
                 </div>
                 <div>
                   <label>Induction Date</label>
-                  <input type="date" className="form-input" value={inductorDate} onChange={e => setInductorDate(e.target.value)} />
+                  <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={inductorDate} onChange={e => setInductorDate(e.target.value)} />
                 </div>
               </div>
             </div>

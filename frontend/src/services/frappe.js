@@ -1993,7 +1993,7 @@ class FrappeService {
     if (this.connection.isLive) {
       try {
         const res = await this.callIslandChillMethod('get_warehouses_list', { company });
-        let warehouses = res || [];
+        let warehouses = (res || []).filter(w => !w.is_group || w.is_group === 0 || w.is_group === '0');
         if (searchQuery && warehouses.length > 0) {
           const q = searchQuery.toLowerCase();
           warehouses = warehouses.filter(w => (w.warehouse_name || w.name || '').toLowerCase().includes(q));

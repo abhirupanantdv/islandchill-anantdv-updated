@@ -1266,10 +1266,10 @@ def get_companies_list():
 @frappe.whitelist(allow_guest=True)
 def get_warehouses_list(company=None):
     """Return warehouses ignoring permissions."""
-    filters = {}
+    filters = {"is_group": 0}
     if company:
         filters["company"] = company
-    return frappe.get_all("Warehouse", filters=filters, fields=["name", "warehouse_name", "company"], limit=200, ignore_permissions=True)
+    return frappe.get_all("Warehouse", filters=filters, fields=["name", "warehouse_name", "company", "is_group"], limit=200, ignore_permissions=True)
 
 
 @frappe.whitelist(allow_guest=True)

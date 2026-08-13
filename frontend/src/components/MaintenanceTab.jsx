@@ -74,7 +74,7 @@ export function MaintWeightCheckModal({ onClose, onSubmit, employeeList, handleS
                   <tr key={idx}>
                     <td style={{ textAlign: 'center' }}><strong>#{idx + 1}</strong></td>
                     <td>
-                      <input type="date" className="form-input" style={{ height: '28px' }} required value={row.date} onChange={e => handleRowChange(idx, 'date', e.target.value)} />
+                      <input type="date" className="form-input" style={{ height: '28px' }} required min={new Date().toISOString().split('T')[0]} value={row.date} onChange={e => handleRowChange(idx, 'date', e.target.value)} />
                     </td>
                     <td style={{ position: 'relative' }}>
                       <input
@@ -225,7 +225,7 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <div style={{ flex: 1 }}>
                     <label>Breakdown Date</label>
-                    <input type="date" className="form-input" value={breakdownDate} onChange={e => setBreakdownDate(e.target.value)} />
+                    <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={breakdownDate} onChange={e => setBreakdownDate(e.target.value)} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <label>Time</label>
@@ -312,7 +312,7 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <div style={{ flex: 1 }}>
                     <label>Date Repaired</label>
-                    <input type="date" className="form-input" value={dateRepaired} onChange={e => setDateRepaired(e.target.value)} />
+                    <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={dateRepaired} onChange={e => setDateRepaired(e.target.value)} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <label>Time Repaired</label>

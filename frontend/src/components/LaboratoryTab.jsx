@@ -86,7 +86,7 @@ export function LabForm1Modal({ onClose, onSubmit, saving, employeeList, handleS
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date of Analysis</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div style={{ position: 'relative' }}>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Analyst Name *</label>
@@ -179,13 +179,13 @@ export function LabForm1Modal({ onClose, onSubmit, saving, employeeList, handleS
                       </td>
                       <td style={{ padding: '4px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <input type="date" className="form-input" style={{ height: '30px', fontSize: '10px' }} value={row.inDate} onChange={e => handleRowChange(idx, 'inDate', e.target.value)} />
+                          <input type="date" className="form-input" style={{ height: '30px', fontSize: '10px' }} min={new Date().toISOString().split('T')[0]} value={row.inDate} onChange={e => handleRowChange(idx, 'inDate', e.target.value)} />
                           <input type="time" className="form-input" style={{ height: '30px', fontSize: '10px' }} value={row.inTime} onChange={e => handleRowChange(idx, 'inTime', e.target.value)} />
                         </div>
                       </td>
                       <td style={{ padding: '4px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <input type="date" className="form-input" style={{ height: '30px', fontSize: '10px' }} value={row.outDate} onChange={e => handleRowChange(idx, 'outDate', e.target.value)} />
+                          <input type="date" className="form-input" style={{ height: '30px', fontSize: '10px' }} min={row.inDate || new Date().toISOString().split('T')[0]} value={row.outDate} onChange={e => handleRowChange(idx, 'outDate', e.target.value)} />
                           <input type="time" className="form-input" style={{ height: '30px', fontSize: '10px' }} value={row.outTime} onChange={e => handleRowChange(idx, 'outTime', e.target.value)} />
                         </div>
                       </td>
@@ -283,7 +283,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Type of Water</label>
@@ -568,11 +568,11 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date of Analysis</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date of Product</label>
-                <input type="date" className="form-input" required value={dateOfProduct} onChange={e => setDateOfProduct(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={dateOfProduct} onChange={e => setDateOfProduct(e.target.value)} />
               </div>
               <div style={{ position: 'relative' }}>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Analyst Name *</label>
@@ -642,7 +642,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>SPC Agar Prep Date</label>
-                <input type="date" className="form-input" value={spcAgarDate} onChange={e => setSpcAgarDate(e.target.value)} />
+                <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={spcAgarDate} onChange={e => setSpcAgarDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incubator ID / Room</label>
@@ -661,11 +661,11 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>TCC Incubation In *</label>
-                  <input type="datetime-local" className="form-input" required value={tccIncubationIn} onChange={e => setTccIncubationIn(e.target.value)} />
+                  <input type="datetime-local" className="form-input" required min={new Date().toISOString().slice(0, 16)} value={tccIncubationIn} onChange={e => setTccIncubationIn(e.target.value)} />
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>TCC Incubation Out *</label>
-                  <input type="datetime-local" className="form-input" required value={tccIncubationOut} onChange={e => setTccIncubationOut(e.target.value)} />
+                  <input type="datetime-local" className="form-input" required min={tccIncubationIn || new Date().toISOString().slice(0, 16)} value={tccIncubationOut} onChange={e => setTccIncubationOut(e.target.value)} />
                 </div>
               </div>
             )}
@@ -674,11 +674,11 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>HPC Incubation In *</label>
-                  <input type="datetime-local" className="form-input" required value={hpcIncubationIn} onChange={e => setHpcIncubationIn(e.target.value)} />
+                  <input type="datetime-local" className="form-input" required min={new Date().toISOString().slice(0, 16)} value={hpcIncubationIn} onChange={e => setHpcIncubationIn(e.target.value)} />
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>HPC Incubation Out *</label>
-                  <input type="datetime-local" className="form-input" required value={hpcIncubationOut} onChange={e => setHpcIncubationOut(e.target.value)} />
+                  <input type="datetime-local" className="form-input" required min={hpcIncubationIn || new Date().toISOString().slice(0, 16)} value={hpcIncubationOut} onChange={e => setHpcIncubationOut(e.target.value)} />
                 </div>
               </div>
             )}
@@ -804,7 +804,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Default Sample Size</label>
@@ -871,7 +871,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 <tbody>
                   {tasteRows.map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td><input type="date" className="form-input" style={{ height: '30px' }} value={row.sampleDate} onChange={e => handleTasteRowChange(idx, 'sampleDate', e.target.value)} /></td>
+                      <td><input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={row.sampleDate} onChange={e => handleTasteRowChange(idx, 'sampleDate', e.target.value)} /></td>
                       <td><input type="text" className="form-input" style={{ height: '30px' }} value={row.sampleSize} onChange={e => handleTasteRowChange(idx, 'sampleSize', e.target.value)} /></td>
                       <td>
                         <select className="form-input" style={{ height: '30px' }} value={row.h4_taste} onChange={e => handleTasteRowChange(idx, 'h4_taste', e.target.value)}>
@@ -946,7 +946,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 <tbody>
                   {particleRows.map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td><input type="date" className="form-input" style={{ height: '30px' }} value={row.sampleDate} onChange={e => handleParticleRowChange(idx, 'sampleDate', e.target.value)} /></td>
+                      <td><input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={row.sampleDate} onChange={e => handleParticleRowChange(idx, 'sampleDate', e.target.value)} /></td>
                       <td><input type="text" className="form-input" style={{ height: '30px' }} value={row.sampleSize} onChange={e => handleParticleRowChange(idx, 'sampleSize', e.target.value)} /></td>
                       <td>
                         <select className="form-input" style={{ height: '30px' }} value={row.d5_particle} onChange={e => handleParticleRowChange(idx, 'd5_particle', e.target.value)}>
@@ -1524,7 +1524,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600' }}>Date of Batch</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600' }}>Tank Number</label>
@@ -1777,7 +1777,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600' }}>Shift Date</label>
-                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
+                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600' }}>Time Start</label>
@@ -2079,7 +2079,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '8px' }}>
                 <div>
                   <label>Date</label>
-                  <input type="date" className="form-input" style={{ height: '30px' }} value={date1} onChange={e => setDate1(e.target.value)} />
+                  <input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={date1} onChange={e => setDate1(e.target.value)} />
                 </div>
                 <div style={{ position: 'relative' }}>
                   <label>Technician *</label>
@@ -2152,7 +2152,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '8px' }}>
                 <div>
                   <label>Date</label>
-                  <input type="date" className="form-input" style={{ height: '30px' }} value={date2} onChange={e => setDate2(e.target.value)} />
+                  <input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={date2} onChange={e => setDate2(e.target.value)} />
                 </div>
                 <div style={{ position: 'relative' }}>
                   <label>Technician</label>
@@ -2225,7 +2225,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '8px' }}>
                 <div>
                   <label>Date</label>
-                  <input type="date" className="form-input" style={{ height: '30px' }} value={date3} onChange={e => setDate3(e.target.value)} />
+                  <input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={date3} onChange={e => setDate3(e.target.value)} />
                 </div>
                 <div style={{ position: 'relative' }}>
                   <label>Technician</label>
