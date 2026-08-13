@@ -2593,13 +2593,16 @@ function App() {
           ...live,
 
           // Preserve local-only values
-          materialTransferred: Boolean(
-            localMatch?.materialTransferred ||
-            localMatch?.stockEntryCreated
+          stockEntrySubmitted: Boolean(
+            live.stockEntrySubmitted ||
+            (live.transferred_qty && Number(live.transferred_qty) > 0) ||
+            localMatch?.stockEntrySubmitted
           ),
 
-          stockEntryCreated: Boolean(
-            localMatch?.stockEntryCreated
+          materialTransferred: Boolean(
+            live.stockEntrySubmitted ||
+            (live.transferred_qty && Number(live.transferred_qty) > 0) ||
+            localMatch?.stockEntrySubmitted
           ),
 
           stockEntryName:
@@ -2895,8 +2898,7 @@ function App() {
   // Helper to proceed with Work Order Start Run once pre-start maintenance is verified
   const proceedToStartRun = async (woToStart) => {
     const isAlreadyIssued = Boolean(
-      woToStart.materialTransferred ||
-      woToStart.stockEntryCreated ||
+      woToStart.stockEntrySubmitted ||
       (woToStart.transferred_qty && Number(woToStart.transferred_qty) > 0) ||
       (woToStart.produced_qty && Number(woToStart.produced_qty) > 0) ||
       woToStart.status === 'Completed'
@@ -3316,7 +3318,6 @@ function App() {
           wo.id === seData.woId
             ? {
               ...wo,
-              stockEntryCreated: true,
               stockEntryName,
               stockEntryPostingDate: seData.postingDate,
               stockEntryPostingTime: seData.postingTime
@@ -3358,7 +3359,7 @@ function App() {
                 ...wo,
                 status: 'In Process',
                 materialTransferred: true,
-                stockEntryCreated: true,
+                stockEntrySubmitted: true,
                 submitted: true
               }
               : wo
@@ -3382,6 +3383,19 @@ function App() {
         );
         return;
       }
+
+      setWorkOrders(prev =>
+        prev.map(wo =>
+          wo.id === woId
+            ? {
+              ...wo,
+              status: 'In Process',
+              materialTransferred: true,
+              stockEntrySubmitted: true
+            }
+            : wo
+        )
+      );
 
       showAlert(
         `Stock Entry ${stockEntryModal.stockEntryName} submitted. ERPNext will update the Work Order status.`,
@@ -3514,8 +3528,7 @@ function App() {
 
     if (action === 'start') {
       const isRawMaterialsIssued = Boolean(
-        wo?.materialTransferred ||
-        wo?.stockEntryCreated ||
+        wo?.stockEntrySubmitted ||
         (wo?.transferred_qty && Number(wo?.transferred_qty) > 0) ||
         (wo?.produced_qty && Number(wo?.produced_qty) > 0) ||
         wo?.status === 'In Process' ||
@@ -6131,7 +6144,25 @@ function App() {
                           <th style={{ width: '40px', padding: '6px' }}>Sr.No</th>
                           <th style={{ minWidth: '220px', padding: '6px', textAlign: 'left' }}>Description</th>
                           <th style={{ width: '60px', padding: '6px' }}>Std Time</th>
-                          <th style={{ width: '80px', padding: '6px', textAlign: 'center' }}>Completed</th>
+                          <th style={{ width: '100px', padding: '6px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <span>Completed</span>
+                              <label style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', fontWeight: 'normal' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={template.tasks.length > 0 && template.tasks.every((_, tIdx) => !!maintCheckgrid[tIdx])}
+                                  onChange={e => {
+                                    const checked = e.target.checked;
+                                    const newGrid = {};
+                                    template.tasks.forEach((_, tIdx) => { newGrid[tIdx] = checked; });
+                                    setMaintCheckgrid(newGrid);
+                                  }}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                                <span>Select All</span>
+                              </label>
+                            </div>
+                          </th>
                           <th style={{ minWidth: '150px', padding: '6px' }}>Remarks</th>
                         </tr>
                       </thead>
@@ -7554,11 +7585,32 @@ function App() {
                   <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
                     <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                       <thead>
-                        <tr style={{ backgroundColor: 'var(--bg-secondary)' }}>
-                          <th style={{ width: '40px', padding: '6px', textAlign: 'center' }}>SR.NO</th>
-                          <th style={{ minWidth: '220px', padding: '6px', textAlign: 'left' }}>DESCRIPTION</th>
+                        <tr style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <th style={{ width: '40px', padding: '6px', textAlign: 'center' }}>NO</th>
+                          <th style={{ padding: '6px', textAlign: 'left' }}>TASK DESCRIPTION</th>
                           <th style={{ width: '80px', padding: '6px', textAlign: 'center' }}>STD TIME</th>
-                          <th style={{ width: '80px', padding: '6px', textAlign: 'center' }}>COMPLETED</th>
+                          <th style={{ width: '100px', padding: '6px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <span>COMPLETED</span>
+                              <label style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', fontWeight: 'normal' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={tasks.length > 0 && tasks.every((_, tIdx) => !!modal.checkgrid?.[tIdx])}
+                                  onChange={e => {
+                                    const checked = e.target.checked;
+                                    const updated = {};
+                                    tasks.forEach((_, tIdx) => { updated[tIdx] = checked; });
+                                    setQuickMaintFillModal(prev => ({
+                                      ...prev,
+                                      checkgrid: updated
+                                    }));
+                                  }}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                                <span>Select All</span>
+                              </label>
+                            </div>
+                          </th>
                           <th style={{ minWidth: '160px', padding: '6px' }}>REMARKS</th>
                         </tr>
                       </thead>

@@ -826,9 +826,22 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             fields=["work_order", "equipment"],
             ignore_permissions=True
         )
+        submitted_stes = frappe.get_all(
+            "Stock Entry",
+            filters=[
+                ["work_order", "in", wo_names],
+                ["stock_entry_type", "=", "Material Transfer for Manufacture"],
+                ["docstatus", "=", 1]
+            ],
+            fields=["work_order", "name"],
+            ignore_permissions=True
+        )
     else:
         jc_list = []
         maint_schedules = []
+        submitted_stes = []
+
+    submitted_ste_wos = set(s.work_order for s in submitted_stes if s.get("work_order"))
 
     maint_by_wo = {}
     for s in maint_schedules:
@@ -870,6 +883,7 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
 
         completed_eqs = len(maint_by_wo.get(wo.name, set()))
         maint_all_done = (completed_eqs >= 10)
+        is_ste_submitted = (wo.name in submitted_ste_wos) or (frappe.utils.flt(wo.get("material_transferred_for_manufacturing") or 0) > 0)
 
         data.append({
             "id": wo.name,
@@ -893,6 +907,9 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             "maintCompletedCount": completed_eqs,
             "maintTotalCount": 10,
             "maintAllCompleted": maint_all_done,
+            "stockEntrySubmitted": is_ste_submitted,
+            "materialTransferred": is_ste_submitted,
+            "transferred_qty": frappe.utils.flt(wo.get("material_transferred_for_manufacturing") or 0),
         })
 
     return {

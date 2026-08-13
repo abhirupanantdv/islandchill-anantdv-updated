@@ -92,11 +92,9 @@ export default function WorkOrdersTab({
                   }
 
                   const isRawMaterialsIssued = Boolean(
-                    wo.materialTransferred ||
-                    wo.stockEntryCreated ||
+                    wo.stockEntrySubmitted ||
                     (wo.transferred_qty && Number(wo.transferred_qty) > 0) ||
                     (wo.produced_qty && Number(wo.produced_qty) > 0) ||
-                    wo.status === 'In Process' ||
                     wo.status === 'Completed'
                   );
 
