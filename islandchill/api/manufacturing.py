@@ -75,9 +75,6 @@ def save_stock_entry_draft(work_order, company, posting_date, posting_time=None,
     if not company:
         frappe.throw(_("Company is required"))
 
-    if not posting_date:
-        frappe.throw(_("Posting Date is required"))
-
     if not items:
         frappe.throw(_("Stock Entry items are required"))
 
@@ -94,12 +91,11 @@ def save_stock_entry_draft(work_order, company, posting_date, posting_time=None,
         doc.purpose = "Material Transfer for Manufacture"
         doc.work_order = work_order
 
+    posting_now = frappe.utils.now_datetime()
     doc.company = company
-    doc.posting_date = posting_date
+    doc.posting_date = posting_now.date()
+    doc.posting_time = posting_now.time().replace(microsecond=0)
     doc.set_posting_time = 1
-
-    if posting_time:
-        doc.posting_time = posting_time
 
     for row in items:
         item_code = row.get("code") or row.get("item_code")
@@ -155,6 +151,10 @@ def submit_stock_entry(stock_entry_name):
     if doc.docstatus != 0:
         frappe.throw(_("Only Draft Stock Entry can be submitted"))
 
+    posting_now = frappe.utils.now_datetime()
+    doc.posting_date = posting_now.date()
+    doc.posting_time = posting_now.time().replace(microsecond=0)
+    doc.set_posting_time = 1
     doc.submit()
     frappe.db.commit()
 
@@ -570,11 +570,10 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
             stock_entry.company = company
         if process_loss and stock_entry.meta.has_field("process_loss_qty"):
             stock_entry.process_loss_qty = process_loss
-        if posting_date:
-            stock_entry.posting_date = posting_date
-        if posting_time:
-            stock_entry.posting_time = posting_time
-            stock_entry.use_posting_time = 1
+        posting_now = frappe.utils.now_datetime()
+        stock_entry.posting_date = posting_now.date()
+        stock_entry.posting_time = posting_now.time().replace(microsecond=0)
+        stock_entry.set_posting_time = 1
 
         if scrap_items:
             items_list = scrap_items

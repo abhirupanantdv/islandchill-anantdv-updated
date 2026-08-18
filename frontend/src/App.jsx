@@ -228,6 +228,30 @@ const getNowDateTimeLocal = () => {
   return localISOTime;
 };
 
+const FIJI_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Pacific/Fiji',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23'
+});
+
+const getFijiNowDateTime = (date = new Date()) => {
+  const parts = Object.fromEntries(
+    FIJI_DATE_TIME_FORMATTER.formatToParts(date)
+      .filter(({ type }) => type !== 'literal')
+      .map(({ type, value }) => [type, value])
+  );
+
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}:${parts.second}`
+  };
+};
+
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -266,6 +290,7 @@ function App() {
 
   // Real-time Clock State synced with browser's time zone
   const [currentTime, setCurrentTime] = useState(new Date());
+  const currentFijiDateTime = getFijiNowDateTime(currentTime);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -2973,12 +2998,7 @@ function App() {
       }
     }
 
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const formattedDate = `${yyyy}-${mm}-${dd}`;
-    const formattedTime = today.toTimeString().split(' ')[0].substring(0, 5);
+    const { date: formattedDate, time: formattedTime } = getFijiNowDateTime();
 
     setStockEntryModal({
       woId: woToStart.id,
@@ -3284,12 +3304,13 @@ function App() {
 
     try {
       setSyncStatusMsg('Saving Stock Entry draft on ERPNext...');
+      const postingNow = getFijiNowDateTime();
 
       const seRes = await frappe.saveStockEntryDraft({
         workOrder: seData.woId,
         company: seData.company,
-        postingDate: seData.postingDate,
-        postingTime: seData.postingTime,
+        postingDate: postingNow.date,
+        postingTime: postingNow.time,
         stockEntryName: seData.stockEntryName || '',
         items: seData.items
       });
@@ -3319,8 +3340,8 @@ function App() {
             ? {
               ...wo,
               stockEntryName,
-              stockEntryPostingDate: seData.postingDate,
-              stockEntryPostingTime: seData.postingTime
+              stockEntryPostingDate: postingNow.date,
+              stockEntryPostingTime: postingNow.time
             }
             : wo
         )
@@ -3595,16 +3616,7 @@ function App() {
       return;
     }
 
-    const localDate = new Date();
-    const year = localDate.getFullYear();
-    const month = String(localDate.getMonth() + 1).padStart(2, '0');
-    const day = String(localDate.getDate()).padStart(2, '0');
-    const defaultDate = `${year}-${month}-${day}`;
-
-    const hours = String(localDate.getHours()).padStart(2, '0');
-    const minutes = String(localDate.getMinutes()).padStart(2, '0');
-    const seconds = String(localDate.getSeconds()).padStart(2, '0');
-    const defaultTime = `${hours}:${minutes}:${seconds}`;
+    const { date: defaultDate, time: defaultTime } = getFijiNowDateTime();
 
     setFinishWoModal({
       woId: wo.id,
@@ -3663,14 +3675,15 @@ function App() {
   const handleConfirmFinishWorkOrder = async (data) => {
     setWoActionLoading(true);
     try {
+      const postingNow = getFijiNowDateTime();
       const res = await frappe.finishWorkOrder(data.woId, {
         qty: Number(data.qty || 0),
         processLossQty: Number(data.processLossQty || 0),
         scrapItems: data.scrapItems || [],
         company: data.company,
         submit: 1,
-        postingDate: data.postingDate || null,
-        postingTime: data.postingTime || null,
+        postingDate: postingNow.date,
+        postingTime: postingNow.time,
         extraQty: Number(data.extraQty || 0) > 0 ? Number(data.extraQty) : null,
         extraUom: Number(data.extraQty || 0) > 0 ? data.extraUom : null
       });
@@ -6970,9 +6983,9 @@ function App() {
                     <input
                       type="date"
                       className="form-input"
-                      min={new Date().toISOString().split('T')[0]}
-                      value={finishWoModal.postingDate}
-                      onChange={(e) => setFinishWoModal(prev => ({ ...prev, postingDate: e.target.value }))}
+                      min={currentFijiDateTime.date}
+                      value={currentFijiDateTime.date}
+                      readOnly
                       required
                     />
                   </div>
@@ -6982,8 +6995,8 @@ function App() {
                       type="time"
                       step="1"
                       className="form-input"
-                      value={finishWoModal.postingTime}
-                      onChange={(e) => setFinishWoModal(prev => ({ ...prev, postingTime: e.target.value }))}
+                      value={currentFijiDateTime.time}
+                      readOnly
                       required
                     />
                   </div>
@@ -7046,9 +7059,9 @@ function App() {
                     <input
                       type="date"
                       className="text-input"
-                      min={new Date().toISOString().split('T')[0]}
-                      value={stockEntryModal.postingDate}
-                      onChange={(e) => setStockEntryModal(prev => ({ ...prev, postingDate: e.target.value }))}
+                      min={currentFijiDateTime.date}
+                      value={currentFijiDateTime.date}
+                      readOnly
                       required
                     />
                   </div>
@@ -7056,9 +7069,10 @@ function App() {
                     <label className="input-label">Posting Time *</label>
                     <input
                       type="time"
+                      step="1"
                       className="text-input"
-                      value={stockEntryModal.postingTime}
-                      onChange={(e) => setStockEntryModal(prev => ({ ...prev, postingTime: e.target.value }))}
+                      value={currentFijiDateTime.time}
+                      readOnly
                       required
                     />
                   </div>
@@ -7826,5 +7840,4 @@ function App() {
 // Sub-components for Health & Safety Tab
 
 export default App;
-
 
