@@ -213,20 +213,55 @@ def _now_or(value):
     return frappe.utils.now_datetime()
 
 
-def _append_job_card_comment(doc, text):
-    if not text:
+def _append_job_card_remark(doc, remarks=None, default_operator=None, default_action=None):
+    """
+    Appends formatted remarks/timeline actions to Job Card `remarks` field in ERPNext DB,
+    and adds a system comment.
+    """
+    timestamp = frappe.utils.now_datetime().strftime("%Y-%m-%d %H:%M:%S")
+    clean_op = (default_operator or frappe.session.user or "Operator").strip()
+
+    lines_to_add = []
+    if remarks and ("[" in str(remarks) and "]" in str(remarks)):
+        # Already formatted multiline remarks block from frontend or prior logs
+        lines_to_add = [l.strip() for l in str(remarks).split("\n") if l.strip()]
+    elif remarks and str(remarks).strip():
+        action_prefix = f"{default_action}: " if default_action else ""
+        lines_to_add = [f"[{timestamp}] {clean_op}: {action_prefix}{str(remarks).strip()}"]
+    elif default_action:
+        lines_to_add = [f"[{timestamp}] {clean_op}: {default_action}"]
+
+    if not lines_to_add:
         return
-    doc.add_comment("Comment", _clean_html_error(text))
+
+    existing_lines = [l.strip() for l in (doc.remarks or "").split("\n") if l.strip()]
+
+    for line in lines_to_add:
+        if line not in existing_lines:
+            existing_lines.append(line)
+
+    doc.remarks = "\n".join(existing_lines)
+
+    if doc.docstatus == 1:
+        frappe.db.set_value("Job Card", doc.name, "remarks", doc.remarks, update_modified=True)
+    else:
+        doc.db_set("remarks", doc.remarks, update_modified=True)
+
+    try:
+        summary_text = lines_to_add[-1]
+        doc.add_comment("Comment", _clean_html_error(summary_text))
+        if doc.work_order:
+            wo_doc = frappe.get_doc("Work Order", doc.work_order)
+            wo_doc.add_comment("Comment", f"[{doc.operation or doc.name}]: {_clean_html_error(summary_text)}")
+    except Exception:
+        pass
 
 
 def _wrap_job_card_action(action):
     try:
-        frappe.flags.ignore_permissions = True
         return action()
     except Exception as exc:
         frappe.throw(_clean_html_error(getattr(exc, "message", None) or str(exc)))
-    finally:
-        frappe.flags.ignore_permissions = False
 
 
 def _get_job_card(job_card):
@@ -251,14 +286,9 @@ def _job_card_response(doc):
         "work_order": doc.work_order,
         "is_paused": getattr(doc, "is_paused", 0),
         "time_logs": [row.as_dict() for row in (doc.time_logs or [])],
+        "remarks": doc.remarks or "",
+        "remarksList": parse_remarks_list(doc.remarks or ""),
     }
-
-
-def _wrap_job_card_action(action):
-    try:
-        return action()
-    except Exception as exc:
-        frappe.throw(_clean_html_error(getattr(exc, "message", None) or str(exc)))
 
 
 @frappe.whitelist()
@@ -274,6 +304,7 @@ def start_job_card(job_card, employee, remarks=None, actual_start_time=None):
                 frappe.throw(_("Job Card {0} timer is already running").format(doc.name))
 
         employee_id = _resolve_employee(employee)
+        employee_name = frappe.db.get_value("Employee", employee_id, "employee_name") or employee_id
         start_time = _now_or(actual_start_time)
 
         doc.start_timer(
@@ -281,9 +312,13 @@ def start_job_card(job_card, employee, remarks=None, actual_start_time=None):
             employees=[{"employee": employee_id}],
         )
 
-        if remarks:
-            doc.reload()
-            _append_job_card_comment(doc, remarks)
+        doc.reload()
+        _append_job_card_remark(
+            doc,
+            remarks=remarks,
+            default_operator=employee_name,
+            default_action="🟢 Started Job Card"
+        )
 
         if doc.work_order:
             _force_work_order_in_progress(doc.work_order)
@@ -309,9 +344,14 @@ def pause_job_card(job_card, remarks=None, actual_end_time=None):
         end_time = _now_or(actual_end_time)
         doc.pause_job(end_time=end_time)
 
-        if remarks:
-            doc.reload()
-            _append_job_card_comment(doc, remarks)
+        user_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user or "Operator"
+        doc.reload()
+        _append_job_card_remark(
+            doc,
+            remarks=remarks,
+            default_operator=user_name,
+            default_action="⏸ Paused Job Card"
+        )
 
         frappe.db.commit()
         return _job_card_response(doc)
@@ -334,9 +374,14 @@ def resume_job_card(job_card, remarks=None, actual_start_time=None):
         start_time = _now_or(actual_start_time)
         doc.resume_job(start_time=start_time)
 
-        if remarks:
-            doc.reload()
-            _append_job_card_comment(doc, remarks)
+        user_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user or "Operator"
+        doc.reload()
+        _append_job_card_remark(
+            doc,
+            remarks=remarks,
+            default_operator=user_name,
+            default_action="▶️ Resumed Job Card"
+        )
 
         if doc.work_order:
             _force_work_order_in_progress(doc.work_order)
@@ -379,9 +424,14 @@ def submit_job_card(
             auto_submit=1,
         )
 
-        if remarks:
-            doc.reload()
-            _append_job_card_comment(doc, remarks)
+        user_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user or "Operator"
+        doc.reload()
+        _append_job_card_remark(
+            doc,
+            remarks=remarks,
+            default_operator=user_name,
+            default_action=f"✅ Completed Job Card (Produced: {completed_qty})"
+        )
 
         if doc.work_order:
             status = frappe.db.get_value("Work Order", doc.work_order, "status")
@@ -402,36 +452,17 @@ def add_job_card_comment(job_card, content, operator=None):
         if not clean_content:
             frappe.throw(_("Comment is required"))
 
-        timestamp = frappe.utils.now_datetime().strftime("%Y-%m-%d %H:%M:%S")
         clean_op = (operator or frappe.session.user or "Operator").strip()
+        _append_job_card_remark(doc, remarks=clean_content, default_operator=clean_op)
 
-        new_remark = "[{0}] {1}: {2}".format(timestamp, clean_op, clean_content.strip())
-
-        if doc.remarks:
-            doc.remarks = "{0}{1}{2}".format(doc.remarks.strip(), chr(10), new_remark)
-        else:
-            doc.remarks = new_remark
-
-        if doc.docstatus == 1:
-            frappe.db.set_value("Job Card", doc.name, "remarks", doc.remarks, update_modified=True)
-        else:
-            doc.save(ignore_permissions=True)
-
-        try:
-            doc.add_comment("Comment", "({0}): {1}".format(clean_op, clean_content.strip()))
-            if doc.work_order:
-                wo_doc = frappe.get_doc("Work Order", doc.work_order)
-                wo_doc.add_comment("Comment", "({0}) [{1}]: {2}".format(clean_op, doc.operation, clean_content.strip()))
-        except Exception:
-            pass
-
+        doc.reload()
         frappe.db.commit()
 
         return {
             "success": True,
             "job_card": doc.name,
-            "remarks": doc.remarks,
-            "remarksList": parse_remarks_list(doc.remarks)
+            "remarks": doc.remarks or "",
+            "remarksList": parse_remarks_list(doc.remarks or "")
         }
 
     return _wrap_job_card_action(_action)
@@ -533,6 +564,23 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
                 conversion_factor = 1.0
             extra_qty_base = frappe.utils.flt(e_qty * conversion_factor)
 
+        # Validation: Manufactured Qty + Extra Qty in base UOM cannot exceed remaining planned quantity
+        if (qty_to_manufacture + extra_qty_base) > (target_run_qty + 1e-6):
+            max_extra_allowed = max(0.0, target_run_qty - qty_to_manufacture)
+            conv_fac = conversion_factor if (e_qty > 0 and extra_uom and 'conversion_factor' in locals() and conversion_factor) else 1.0
+            max_extra_in_uom = max_extra_allowed / conv_fac if conv_fac > 0 else max_extra_allowed
+            frappe.throw(
+                _("Extra Quantity ({0} {1}) plus Finished Goods Quantity ({2} {3}) exceeds remaining Work Order planned quantity ({4} {3}). Maximum allowed extra quantity is {5} {1}. Process loss cannot be negative.")
+                .format(
+                    e_qty,
+                    extra_uom or wo.stock_uom,
+                    qty_to_manufacture,
+                    wo.stock_uom,
+                    target_run_qty,
+                    frappe.utils.flt(max_extra_in_uom, 4)
+                )
+            )
+
         # Auto-calculate process loss: target - (good qty + extra qty in base UOM)
         if e_qty > 0:
             process_loss = target_run_qty - (qty_to_manufacture + extra_qty_base)
@@ -570,9 +618,30 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
             stock_entry.company = company
         if process_loss and stock_entry.meta.has_field("process_loss_qty"):
             stock_entry.process_loss_qty = process_loss
-        posting_now = frappe.utils.now_datetime()
-        stock_entry.posting_date = posting_now.date()
-        stock_entry.posting_time = posting_now.time().replace(microsecond=0)
+
+        # Resolve posting date and time
+        posting_d = posting_date or frappe.utils.nowdate()
+        posting_t = posting_time or frappe.utils.nowtime()
+
+        # Ensure manufacture entry is never timestamped before the latest material transfer
+        latest_transfer = frappe.get_all(
+            "Stock Entry",
+            filters={"work_order": work_order, "docstatus": 1},
+            fields=["posting_date", "posting_time"],
+            order_by="posting_date desc, posting_time desc",
+            limit=1
+        )
+        if latest_transfer:
+            lt_date = str(latest_transfer[0].posting_date)
+            lt_time = str(latest_transfer[0].posting_time)
+            if str(posting_d) < lt_date:
+                posting_d = lt_date
+                posting_t = lt_time
+            elif str(posting_d) == lt_date and str(posting_t) < lt_time:
+                posting_t = lt_time
+
+        stock_entry.posting_date = posting_d
+        stock_entry.posting_time = posting_t
         stock_entry.set_posting_time = 1
 
         if scrap_items:

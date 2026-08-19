@@ -5803,47 +5803,77 @@ function App() {
                     </p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '20px', borderLeft: '2px solid var(--border-color)', margin: '8px 0 8px 10px' }}>
-                      {remarksList.map((log, index) => (
-                        <div key={index} style={{ position: 'relative' }}>
-                          <div style={{
-                            position: 'absolute',
-                            left: '-26px',
-                            top: '2px',
-                            width: '10px',
-                            height: '10px',
-                            borderRadius: '50%',
-                            backgroundColor: 'var(--accent)',
-                            border: '2px solid white'
-                          }}></div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', fontWeight: '500', display: 'flex', alignItems: 'center' }}>
-                            ⏱️ {log.timestamp} • 👤 {log.operator}
-                            <button
-                              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px', marginLeft: '12px', textDecoration: 'underline', padding: '0' }}
-                              onClick={() => {
-                                setReplyingToIdx(replyingToIdx === index ? null : index);
-                                setReplyText('');
-                              }}
-                            >
-                              {replyingToIdx === index ? 'Cancel Reply' : 'Reply'}
-                            </button>
-                          </div>
-                          <div style={{
-                            fontSize: '13px',
-                            backgroundColor: '#f3f4f6',
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            color: 'var(--text-heading)',
-                            fontWeight: '500'
-                          }}>
-                            {log.text}
-                            {(log.actualStartTime || log.actualEndTime) && (
-                              <div style={{ fontSize: '10px', color: 'var(--accent)', marginTop: '4px', fontStyle: 'italic', fontWeight: '600' }}>
-                                {log.actualStartTime && `Start: ${log.actualStartTime.replace('T', ' ')}`}
-                                {log.actualStartTime && log.actualEndTime && ' | '}
-                                {log.actualEndTime && `End: ${log.actualEndTime.replace('T', ' ')}`}
-                              </div>
-                            )}
-                          </div>
+                      {remarksList.map((log, index) => {
+                        const isStarted = log.text?.includes('🟢 Started') || log.text?.startsWith('Started:');
+                        const isPaused = log.text?.includes('⏸ Paused') || log.text?.startsWith('Paused:');
+                        const isResumed = log.text?.includes('▶️ Resumed') || log.text?.startsWith('Resumed:');
+                        const isFinished = log.text?.includes('✅ Completed') || log.text?.startsWith('Finished:');
+
+                        let dotColor = 'var(--accent)';
+                        let cardBg = '#f3f4f6';
+                        let cardBorder = 'none';
+
+                        if (isStarted) {
+                          dotColor = '#10b981';
+                          cardBg = 'rgba(16, 185, 129, 0.08)';
+                          cardBorder = '1px solid rgba(16, 185, 129, 0.25)';
+                        } else if (isPaused) {
+                          dotColor = '#f59e0b';
+                          cardBg = 'rgba(245, 158, 11, 0.08)';
+                          cardBorder = '1px solid rgba(245, 158, 11, 0.25)';
+                        } else if (isResumed) {
+                          dotColor = '#3b82f6';
+                          cardBg = 'rgba(59, 130, 246, 0.08)';
+                          cardBorder = '1px solid rgba(59, 130, 246, 0.25)';
+                        } else if (isFinished) {
+                          dotColor = '#059669';
+                          cardBg = 'rgba(5, 150, 105, 0.1)';
+                          cardBorder = '1px solid rgba(5, 150, 105, 0.3)';
+                        }
+
+                        return (
+                          <div key={index} style={{ position: 'relative' }}>
+                            <div style={{
+                              position: 'absolute',
+                              left: '-26px',
+                              top: '2px',
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              backgroundColor: dotColor,
+                              border: '2px solid white',
+                              boxShadow: '0 0 2px rgba(0,0,0,0.2)'
+                            }}></div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', fontWeight: '500', display: 'flex', alignItems: 'center' }}>
+                              ⏱️ {log.timestamp} • 👤 {log.operator}
+                              <button
+                                style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px', marginLeft: '12px', textDecoration: 'underline', padding: '0' }}
+                                onClick={() => {
+                                  setReplyingToIdx(replyingToIdx === index ? null : index);
+                                  setReplyText('');
+                                }}
+                              >
+                                {replyingToIdx === index ? 'Cancel Reply' : 'Reply'}
+                              </button>
+                            </div>
+                            <div style={{
+                              fontSize: '13px',
+                              backgroundColor: cardBg,
+                              border: cardBorder,
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              color: 'var(--text-heading)',
+                              fontWeight: '500'
+                            }}>
+                              {log.text}
+                              {(log.actualStartTime || log.actualEndTime) && (
+                                <div style={{ fontSize: '10px', color: 'var(--accent)', marginTop: '4px', fontStyle: 'italic', fontWeight: '600' }}>
+                                  {log.actualStartTime && `Start: ${log.actualStartTime.replace('T', ' ')}`}
+                                  {log.actualStartTime && log.actualEndTime && ' | '}
+                                  {log.actualEndTime && `End: ${log.actualEndTime.replace('T', ' ')}`}
+                                </div>
+                              )}
+                            </div>
 
                           {/* Nested Replies display */}
                           {log.replies && log.replies.length > 0 && (
@@ -5898,7 +5928,8 @@ function App() {
                             </div>
                           )}
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   )}
                 </div>
@@ -6909,107 +6940,141 @@ function App() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="input-label" style={{ fontWeight: '600' }}>Extra Qty</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      placeholder="e.g. 10"
-                      className="form-input"
-                      value={finishWoModal.extraQty}
-                      onChange={(e) => {
-                        const newExtra = e.target.value;
-                        const eq = Number(newExtra || 0);
-                        const uomObj = (finishWoModal.uomsList || []).find(u => u.uom === finishWoModal.extraUom);
-                        const factor = Number(uomObj?.conversion_factor || 1.0);
-                        const extraBase = eq * factor;
-                        const target = Number(finishWoModal.targetQty || 0);
-                        const calculatedLoss = Math.max(0, Number((target - (Number(finishWoModal.qty || 0) + extraBase)).toFixed(6)));
-                        setFinishWoModal(prev => ({ ...prev, extraQty: newExtra, processLossQty: calculatedLoss }));
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="input-label" style={{ fontWeight: '600' }}>Extra UOM</label>
-                    <select
-                      className="form-input"
-                      value={finishWoModal.extraUom}
-                      disabled={finishWoModal.disableUomSelect}
-                      onChange={(e) => {
-                        const newUom = e.target.value;
-                        const uomObj = (finishWoModal.uomsList || []).find(u => u.uom === newUom);
-                        const factor = Number(uomObj?.conversion_factor || 1.0);
-                        const eq = Number(finishWoModal.extraQty || 0);
-                        const extraBase = eq * factor;
-                        const target = Number(finishWoModal.targetQty || 0);
-                        const calculatedLoss = Math.max(0, Number((target - (Number(finishWoModal.qty || 0) + extraBase)).toFixed(6)));
-                        setFinishWoModal(prev => ({ ...prev, extraUom: newUom, processLossQty: calculatedLoss }));
-                      }}
-                      style={finishWoModal.disableUomSelect ? { opacity: 0.8, backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
-                    >
-                      {finishWoModal.uomsList && finishWoModal.uomsList.length > 0 ? (
-                        finishWoModal.uomsList.map(u => (
-                          <option key={u.uom} value={u.uom}>
-                            {u.uom} ({Number(u.conversion_factor || 0).toFixed(4)})
-                          </option>
-                        ))
-                      ) : (
-                        <option value="Nos">Nos</option>
-                      )}
-                    </select>
-                  </div>
-                </div>
+                {(() => {
+                  const target = Number(finishWoModal.targetQty || 0);
+                  const fgQty = Number(finishWoModal.qty || 0);
+                  const eq = Number(finishWoModal.extraQty || 0);
+                  const uomObj = (finishWoModal.uomsList || []).find(u => u.uom === finishWoModal.extraUom);
+                  const factor = Number(uomObj?.conversion_factor || 1.0);
+                  const extraBase = eq * factor;
+                  const remainingForExtra = Math.max(0, target - fgQty);
+                  const maxAllowedExtraInUom = factor > 0 ? (remainingForExtra / factor) : remainingForExtra;
+                  const isExtraExceeded = eq > 0 && extraBase > (remainingForExtra + 1e-5);
 
-                <div>
-                  <label className="input-label" style={{ fontWeight: '600' }}>Company *</label>
-                  <select
-                    className="form-input"
-                    value={finishWoModal.company}
-                    onChange={(e) => setFinishWoModal(prev => ({ ...prev, company: e.target.value }))}
-                    required
-                  >
-                    {companyList.map((comp) => (
-                      <option key={comp.name} value={comp.name}>
-                        {comp.company_name || comp.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  return (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            Extra Qty {remainingForExtra > 0 && (
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+                                (Max: {maxAllowedExtraInUom % 1 === 0 ? maxAllowedExtraInUom : maxAllowedExtraInUom.toFixed(2)} {finishWoModal.extraUom})
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            placeholder="e.g. 10"
+                            className={`form-input ${isExtraExceeded ? 'input-error' : ''}`}
+                            style={isExtraExceeded ? { borderColor: '#ef4444', backgroundColor: '#fef2f2' } : {}}
+                            value={finishWoModal.extraQty}
+                            onChange={(e) => {
+                              const newExtra = e.target.value;
+                              const newEq = Number(newExtra || 0);
+                              const newExtraBase = newEq * factor;
+                              const calculatedLoss = Math.max(0, Number((target - (fgQty + newExtraBase)).toFixed(6)));
+                              setFinishWoModal(prev => ({ ...prev, extraQty: newExtra, processLossQty: calculatedLoss }));
+                            }}
+                          />
+                          {isExtraExceeded && (
+                            <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', fontWeight: '600' }}>
+                              ⚠️ Cannot exceed remaining quantity (Max: {maxAllowedExtraInUom % 1 === 0 ? maxAllowedExtraInUom : maxAllowedExtraInUom.toFixed(2)} {finishWoModal.extraUom}). Process loss cannot be negative.
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <label className="input-label" style={{ fontWeight: '600' }}>Extra UOM</label>
+                          <select
+                            className="form-input"
+                            value={finishWoModal.extraUom}
+                            disabled={finishWoModal.disableUomSelect}
+                            onChange={(e) => {
+                              const newUom = e.target.value;
+                              const newUomObj = (finishWoModal.uomsList || []).find(u => u.uom === newUom);
+                              const newFactor = Number(newUomObj?.conversion_factor || 1.0);
+                              const newExtraBase = eq * newFactor;
+                              const calculatedLoss = Math.max(0, Number((target - (fgQty + newExtraBase)).toFixed(6)));
+                              setFinishWoModal(prev => ({ ...prev, extraUom: newUom, processLossQty: calculatedLoss }));
+                            }}
+                            style={finishWoModal.disableUomSelect ? { opacity: 0.8, backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                          >
+                            {finishWoModal.uomsList && finishWoModal.uomsList.length > 0 ? (
+                              finishWoModal.uomsList.map(u => (
+                                <option key={u.uom} value={u.uom}>
+                                  {u.uom} ({Number(u.conversion_factor || 0).toFixed(4)})
+                                </option>
+                              ))
+                            ) : (
+                              <option value="Nos">Nos</option>
+                            )}
+                          </select>
+                        </div>
+                      </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="input-label" style={{ fontWeight: '600' }}>Posting Date *</label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      min={currentFijiDateTime.date}
-                      value={currentFijiDateTime.date}
-                      readOnly
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="input-label" style={{ fontWeight: '600' }}>Posting Time *</label>
-                    <input
-                      type="time"
-                      step="1"
-                      className="form-input"
-                      value={currentFijiDateTime.time}
-                      readOnly
-                      required
-                    />
-                  </div>
-                </div>
+                      <div>
+                        <label className="input-label" style={{ fontWeight: '600' }}>Company *</label>
+                        <select
+                          className="form-input"
+                          value={finishWoModal.company}
+                          onChange={(e) => setFinishWoModal(prev => ({ ...prev, company: e.target.value }))}
+                          required
+                        >
+                          {companyList.map((comp) => (
+                            <option key={comp.name} value={comp.name}>
+                              {comp.company_name || comp.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label className="input-label" style={{ fontWeight: '600' }}>Posting Date *</label>
+                          <input
+                            type="date"
+                            className="form-input"
+                            min={currentFijiDateTime.date}
+                            value={currentFijiDateTime.date}
+                            readOnly
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="input-label" style={{ fontWeight: '600' }}>Posting Time *</label>
+                          <input
+                            type="time"
+                            step="1"
+                            className="form-input"
+                            value={currentFijiDateTime.time}
+                            readOnly
+                            required
+                          />
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="modal-footer">
                 <button type="button" className="secondary-btn" onClick={() => setFinishWoModal(null)}>Cancel</button>
-                <button type="submit" className="primary-btn" disabled={woActionLoading}>
-                  {woActionLoading ? 'Submitting...' : 'Finish & Manufacture'}
-                </button>
+                {(() => {
+                  const target = Number(finishWoModal.targetQty || 0);
+                  const fgQty = Number(finishWoModal.qty || 0);
+                  const eq = Number(finishWoModal.extraQty || 0);
+                  const uomObj = (finishWoModal.uomsList || []).find(u => u.uom === finishWoModal.extraUom);
+                  const factor = Number(uomObj?.conversion_factor || 1.0);
+                  const extraBase = eq * factor;
+                  const remainingForExtra = Math.max(0, target - fgQty);
+                  const isExtraExceeded = eq > 0 && extraBase > (remainingForExtra + 1e-5);
+
+                  return (
+                    <button type="submit" className="primary-btn" disabled={woActionLoading || isExtraExceeded}>
+                      {woActionLoading ? 'Submitting...' : 'Finish & Manufacture'}
+                    </button>
+                  );
+                })()}
               </div>
             </form>
           </div>

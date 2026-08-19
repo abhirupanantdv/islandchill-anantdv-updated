@@ -1,6 +1,7 @@
-/* Layout & Sidebar Styling */
 .app-container {
   display: flex;
+  flex-direction: row;
+  flex: 1;
   width: 100%;
   min-height: 100vh;
   background-color: var(--bg-app);
@@ -1667,8 +1668,8 @@
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #ef4444;
   padding: 12px;
-  borderRadius: 12px;
-  fontSize: 13px;
+  border-radius: 12px;
+  font-size: 13px;
 }
 
 .qr-container {

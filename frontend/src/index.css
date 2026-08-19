@@ -23,16 +23,23 @@
   background-color: var(--bg-app);
 }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--bg-app);
   overflow-x: hidden;
 }
 
 #root {
+  width: 100%;
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
+  flex: 1;
   box-sizing: border-box;
+  background-color: var(--bg-app);
 }
 
 * {

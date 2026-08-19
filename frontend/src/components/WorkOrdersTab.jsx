@@ -373,7 +373,7 @@ export default function WorkOrdersTab({
                                         setActiveTimelineJC({ woId: wo.id, jcId: jc.id, operation: jc.operation });
                                       }}
                                     >
-                                      💬 Remarks
+                                      💬 Remarks {jc.remarksList && jc.remarksList.length > 0 ? `(${jc.remarksList.length})` : ''}
                                     </button>
                                   </div>
                                 </div>
