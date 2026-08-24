@@ -871,16 +871,16 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 <tbody>
                   {tasteRows.map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td><input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={row.sampleDate} onChange={e => handleTasteRowChange(idx, 'sampleDate', e.target.value)} /></td>
-                      <td><input type="text" className="form-input" style={{ height: '30px' }} value={row.sampleSize} onChange={e => handleTasteRowChange(idx, 'sampleSize', e.target.value)} /></td>
+                      <td><input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={row.sampleDate} onChange={e => handleTasteRowChange(idx, 'sampleDate', e.target.value)} /></td>
+                      <td><input type="text" className="form-input" value={row.sampleSize} onChange={e => handleTasteRowChange(idx, 'sampleSize', e.target.value)} /></td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.h4_taste} onChange={e => handleTasteRowChange(idx, 'h4_taste', e.target.value)}>
+                        <select className="form-input" value={row.h4_taste} onChange={e => handleTasteRowChange(idx, 'h4_taste', e.target.value)}>
                           <option value="Normal">Normal</option>
                           <option value="Off-taste">Off-taste</option>
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.h4_doneBy} onChange={e => handleTasteRowChange(idx, 'h4_doneBy', e.target.value)}>
+                        <select className="form-input" value={row.h4_doneBy} onChange={e => handleTasteRowChange(idx, 'h4_doneBy', e.target.value)}>
                           <option value="">Select...</option>
                           {(employeeList || []).map(emp => (
                             <option key={emp.name} value={emp.name}>
@@ -890,13 +890,13 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.h36_taste} onChange={e => handleTasteRowChange(idx, 'h36_taste', e.target.value)}>
+                        <select className="form-input" value={row.h36_taste} onChange={e => handleTasteRowChange(idx, 'h36_taste', e.target.value)}>
                           <option value="Normal">Normal</option>
                           <option value="Off-taste">Off-taste</option>
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.h36_doneBy} onChange={e => handleTasteRowChange(idx, 'h36_doneBy', e.target.value)}>
+                        <select className="form-input" value={row.h36_doneBy} onChange={e => handleTasteRowChange(idx, 'h36_doneBy', e.target.value)}>
                           <option value="">Select...</option>
                           {(employeeList || []).map(emp => (
                             <option key={emp.name} value={emp.name}>
@@ -906,13 +906,13 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.h72_taste} onChange={e => handleTasteRowChange(idx, 'h72_taste', e.target.value)}>
+                        <select className="form-input" value={row.h72_taste} onChange={e => handleTasteRowChange(idx, 'h72_taste', e.target.value)}>
                           <option value="Normal">Normal</option>
                           <option value="Off-taste">Off-taste</option>
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.h72_doneBy} onChange={e => handleTasteRowChange(idx, 'h72_doneBy', e.target.value)}>
+                        <select className="form-input" value={row.h72_doneBy} onChange={e => handleTasteRowChange(idx, 'h72_doneBy', e.target.value)}>
                           <option value="">Select...</option>
                           {(employeeList || []).map(emp => (
                             <option key={emp.name} value={emp.name}>
@@ -946,16 +946,16 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 <tbody>
                   {particleRows.map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td><input type="date" className="form-input" style={{ height: '30px' }} min={new Date().toISOString().split('T')[0]} value={row.sampleDate} onChange={e => handleParticleRowChange(idx, 'sampleDate', e.target.value)} /></td>
-                      <td><input type="text" className="form-input" style={{ height: '30px' }} value={row.sampleSize} onChange={e => handleParticleRowChange(idx, 'sampleSize', e.target.value)} /></td>
+                      <td><input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={row.sampleDate} onChange={e => handleParticleRowChange(idx, 'sampleDate', e.target.value)} /></td>
+                      <td><input type="text" className="form-input" value={row.sampleSize} onChange={e => handleParticleRowChange(idx, 'sampleSize', e.target.value)} /></td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.d5_particle} onChange={e => handleParticleRowChange(idx, 'd5_particle', e.target.value)}>
+                        <select className="form-input" value={row.d5_particle} onChange={e => handleParticleRowChange(idx, 'd5_particle', e.target.value)}>
                           <option value="Nil">Nil</option>
                           <option value="Present">Particles Present</option>
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.d5_doneBy} onChange={e => handleParticleRowChange(idx, 'd5_doneBy', e.target.value)}>
+                        <select className="form-input" value={row.d5_doneBy} onChange={e => handleParticleRowChange(idx, 'd5_doneBy', e.target.value)}>
                           <option value="">Select...</option>
                           {(employeeList || []).map(emp => (
                             <option key={emp.name} value={emp.name}>
@@ -965,13 +965,13 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.d10_particle} onChange={e => handleParticleRowChange(idx, 'd10_particle', e.target.value)}>
+                        <select className="form-input" value={row.d10_particle} onChange={e => handleParticleRowChange(idx, 'd10_particle', e.target.value)}>
                           <option value="Nil">Nil</option>
                           <option value="Present">Particles Present</option>
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.d10_doneBy} onChange={e => handleParticleRowChange(idx, 'd10_doneBy', e.target.value)}>
+                        <select className="form-input" value={row.d10_doneBy} onChange={e => handleParticleRowChange(idx, 'd10_doneBy', e.target.value)}>
                           <option value="">Select...</option>
                           {(employeeList || []).map(emp => (
                             <option key={emp.name} value={emp.name}>
@@ -981,13 +981,13 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.d30_particle} onChange={e => handleParticleRowChange(idx, 'd30_particle', e.target.value)}>
+                        <select className="form-input" value={row.d30_particle} onChange={e => handleParticleRowChange(idx, 'd30_particle', e.target.value)}>
                           <option value="Nil">Nil</option>
                           <option value="Present">Particles Present</option>
                         </select>
                       </td>
                       <td>
-                        <select className="form-input" style={{ height: '30px' }} value={row.d30_doneBy} onChange={e => handleParticleRowChange(idx, 'd30_doneBy', e.target.value)}>
+                        <select className="form-input" value={row.d30_doneBy} onChange={e => handleParticleRowChange(idx, 'd30_doneBy', e.target.value)}>
                           <option value="">Select...</option>
                           {(employeeList || []).map(emp => (
                             <option key={emp.name} value={emp.name}>

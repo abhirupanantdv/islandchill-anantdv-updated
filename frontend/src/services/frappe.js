@@ -2484,27 +2484,52 @@ class FrappeService {
   }
 
   // Fetch Equipment List records
-  async getEquipmentList() {
-    if (this.connection.isLive) {
-      try {
-        const res = await this.fetchERP('Equipment List', {
-          fields: ['name'],
-          limit: 100
-        });
-        return res || [];
-      } catch (e) {
-        console.error('Failed to fetch Equipment List from ERPNext:', e);
-        return [];
-      }
+  // Fetch Equipment List records
+async getEquipmentList(params = {}) {
+  if (this.connection.isLive) {
+    try {
+      const res = await this.fetchERP('Equipment List', {
+        fields: params.fields || ['name'],
+        filters: params.filters || {},
+        limit: params.limit || 100
+      });
+
+      return res || [];
+    } catch (e) {
+      console.error('Failed to fetch Equipment List from ERPNext:', e);
+      return [];
     }
-    return [
-      { name: 'Syrup Tank' },
-      { name: 'Filling Valves' },
-      { name: 'Capping Machine' },
-      { name: 'Pipes' },
-      { name: 'Bottle Conveyor' }
-    ];
   }
+
+  return [
+    { name: 'Syrup Tank', show_on_app: 1 },
+    { name: 'Filling Valves', show_on_app: 1 },
+    { name: 'Capping Machine', show_on_app: 0 },
+    { name: 'Pipes', show_on_app: 1 },
+    { name: 'Bottle Conveyor', show_on_app: 0 }
+  ];
+}
+  // async getEquipmentList() {
+  //   if (this.connection.isLive) {
+  //     try {
+  //       const res = await this.fetchERP('Equipment List', {
+  //         fields: ['name'],
+  //         limit: 100
+  //       });
+  //       return res || [];
+  //     } catch (e) {
+  //       console.error('Failed to fetch Equipment List from ERPNext:', e);
+  //       return [];
+  //     }
+  //   }
+  //   return [
+  //     { name: 'Syrup Tank' },
+  //     { name: 'Filling Valves' },
+  //     { name: 'Capping Machine' },
+  //     { name: 'Pipes' },
+  //     { name: 'Bottle Conveyor' }
+  //   ];
+  // }
 
   // Fetch Chemical Test records
   async getChemicalTests() {

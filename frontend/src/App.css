@@ -1359,18 +1359,110 @@
   text-transform: uppercase;
 }
 
-.form-input {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+.form-input,
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+select,
+textarea {
+  box-sizing: border-box;
+  font-family: var(--sans);
   font-size: 13px;
+  color: var(--text-heading);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   outline: none;
-  transition: all 0.2s;
+  padding: 8px 12px;
+  line-height: 1.4;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
-.form-input:focus {
+.form-input:hover,
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: #cbd5e1;
+}
+
+.form-input:focus,
+input:focus,
+select:focus,
+textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+  background-color: #ffffff;
+}
+
+/* Beautiful modern Select dropdown styling */
+select,
+select.form-input,
+.form-select,
+.chart-select {
+  display: inline-flex;
+  align-items: center;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 7px 32px 7px 12px;
+  line-height: 1.4;
+  height: 38px;
+  min-height: 38px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+select:disabled,
+select.form-input:disabled {
+  background-color: #f3f4f6;
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+/* Table inputs and select dropdowns (for Lab, Safety, Quality, Cleaning, etc.) */
+table .form-input,
+table select,
+table select.form-input,
+.custom-table select,
+.custom-table select.form-input,
+.custom-table input,
+.custom-table .form-input {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 5px 28px 5px 8px !important;
+  font-size: 12px !important;
+  line-height: normal !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+  vertical-align: middle;
+  background-position: right 7px center !important;
+  background-size: 12px 12px !important;
+}
+
+table input[type="text"],
+table input[type="number"],
+table input[type="date"],
+table input[type="time"],
+.custom-table input[type="text"],
+.custom-table input[type="number"],
+.custom-table input[type="date"],
+.custom-table input[type="time"] {
+  padding: 5px 8px !important;
+}
+
+table input[type="time"],
+.custom-table input[type="time"] {
+  padding: 5px 4px !important;
 }
 
 /* Modal Popup standard configuration */

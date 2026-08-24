@@ -134,20 +134,42 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
         } finally {
           setLoadingPurposes(false);
         }
-      } else if (templateId === 'sanitation') {
+               } else if (templateId === 'sanitation') {
         setLoadingPurposes(true);
         try {
-          const [eqs, chems] = await Promise.all([
-            frappe.getEquipmentList(),
-            frappe.getChemicalTests()
+          // Pass fields and filters so Frappe fetches 'equipments' and 'show_on_app'
+          const equipmentParams = {
+            fields: ['name', 'equipments', 'show_on_app'],
+            filters: { show_on_app: 1 }
+          };
+
+          const [rawEqs, chems] = await Promise.all([
+            frappe.getEquipmentList ? frappe.getEquipmentList(equipmentParams) : [],
+            frappe.getChemicalTests ? frappe.getChemicalTests() : []
           ]);
-          setEqList(eqs || []);
+
+          console.log("🔍 Equipment List API Response:", rawEqs);
+
+          // Filter on client-side as fallback in case server returns all records
+          let eqs = (rawEqs || []).filter(eq => {
+            // If show_on_app field is present, respect its value
+            if (eq.show_on_app !== undefined) {
+              return eq.show_on_app === 1 || eq.show_on_app === true || eq.show_on_app === '1';
+            }
+            return true;
+          });
+
+          console.log("✅ Final Equipment List to Display:", eqs);
+
+          setEqList(eqs);
           setChemTestsList(chems || []);
-          
-          const defaultEq = eqs && eqs.length > 0 ? eqs[0].name : 'Syrup Tank';
+
+          const defaultEq = eqs && eqs.length > 0 ? eqs[0].name : '';
           const defaultChem = chems && chems.length > 0 ? chems[0].name : '';
+
           setFormData(prev => ({
             ...prev,
+            equipmentline_cleaned: defaultEq,
             equipment_sanitized: defaultEq,
             chemical_used: defaultChem,
             concentration_ppm: 200,
@@ -160,6 +182,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
           setLoadingPurposes(false);
         }
       }
+
     }
     fetchPurposes();
   }, [templateId]);
@@ -889,26 +912,32 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
             )}
 
             {/* Sanitation */}
+                        {/* Sanitation */}
             {templateId === 'sanitation' && (
               <>
                 <div className="form-group">
-                  <label className="input-label">Equipment/Line Cleaned *</label>
-                  <select className="text-input" value={formData.equipment_sanitized || ''} onChange={e => handleInputChange('equipment_sanitized', e.target.value)}>
-                    {eqList.length > 0 ? (
-                      eqList.map(eq => (
-                        <option key={eq.name} value={eq.name}>{eq.name}</option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="Syrup Tank">Syrup Tank</option>
-                        <option value="Filling Valves">Filling Valves (CSD)</option>
-                        <option value="Capping Machine">Capping Machine</option>
-                        <option value="Pipes">Product Pipelines</option>
-                        <option value="Bottle Conveyor">Bottle Conveyor Track</option>
-                      </>
-                    )}
-                  </select>
-                </div>
+  <label className="input-label">Equipment/Line Cleaned *</label>
+  <select 
+    className="text-input" 
+    value={formData.equipmentline_cleaned || formData.equipment_sanitized || ''} 
+    onChange={e => {
+      const val = e.target.value;
+      handleInputChange('equipmentline_cleaned', val);
+      handleInputChange('equipment_sanitized', val);
+    }}
+  >
+    {eqList.length > 0 ? (
+      eqList.map(eq => (
+        <option key={eq.name} value={eq.name}>
+          {eq.equipments || eq.name}
+        </option>
+      ))
+    ) : (
+      <option value="">No equipment marked for app display</option>
+    )}
+  </select>
+</div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label className="input-label">Chemical/Method Used *</label>
@@ -948,6 +977,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
               </>
             )}
 
+
             {/* Overall observations / remarks */}
             <div className="form-group">
               <label className="input-label">Observations / Remarks</label>
@@ -965,15 +995,78 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
   );
 }
 
-// Modal for viewing submitted report details
+// Label map for friendly formatting inside Details object
+const DETAIL_LABEL_MAP = {
+  equipmentline_cleaned: 'EQUIPMENT / LINE CLEANED',
+  equipment_sanitized: 'EQUIPMENT / LINE CLEANED',
+  chemicalmethod_used: 'CHEMICAL / METHOD USED',
+  chemical_used: 'CHEMICAL / METHOD USED',
+  concentration_ppm: 'CONCENTRATION (PPM)',
+  contact_time_mins: 'CONTACT TIME (MINS)',
+  observations__remarks: 'OBSERVATIONS / REMARKS',
+  remarks: 'OBSERVATIONS / REMARKS'
+};
 
+const formatValue = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return 'N/A';
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'N/A';
+    return value
+      .map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return item.name || item.purpose || item.title || JSON.stringify(item);
+        }
+        return String(item);
+      })
+      .join(', ');
+  }
+
+  if (typeof value === 'object') {
+    // Helper to map keys flexibly regardless of exact field casing or underscore variations
+    const getDetailFieldLabel = (k) => {
+      const norm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (norm.includes('equipment') || norm.includes('line')) return 'EQUIPMENT / LINE CLEANED';
+      if (norm.includes('chemical') || norm.includes('method')) return 'CHEMICAL / METHOD USED';
+      if (norm.includes('concentration') || norm.includes('ppm')) return 'CONCENTRATION (PPM)';
+      if (norm.includes('contact') || norm.includes('mins')) return 'CONTACT TIME (MINS)';
+      if (norm.includes('remark') || norm.includes('obs') || norm.includes('note')) return 'OBSERVATIONS / REMARKS';
+      return null;
+    };
+
+    const entries = Object.entries(value)
+      .map(([k, v]) => ({ key: k, label: getDetailFieldLabel(k), val: v }))
+      .filter(item => item.label && item.val !== null && item.val !== undefined && item.val !== '');
+
+    if (entries.length === 0) return 'N/A';
+
+    return (
+      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', padding: '4px 0' }}>
+        {entries.map(({ key, label, val }) => (
+          <div key={key} style={{ fontSize: '11px', lineHeight: '1.4' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{label}: </span>
+            <span style={{ color: 'var(--text-heading, #1e293b)', fontWeight: '700' }}>{String(val)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return String(value);
+};
+
+
+
+
+// Modal for viewing submitted report details
 export function CleaningRecordDetailModal({ record, onClose }) {
   if (!record) return null;
   const tpl = CLEANING_TEMPLATES.find(t => t.doctype === record.type) || { name: record.type };
-
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }}>
-      <div className="modal-panel" style={{ width: '500px', maxWidth: '95%' }}>
+      <div className="modal-panel" style={{ width: '520px', maxWidth: '95%' }}>
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-heading)' }}>📄 QC Clean Record: {record.id}</h3>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
@@ -988,7 +1081,7 @@ export function CleaningRecordDetailModal({ record, onClose }) {
               <span style={{ color: 'var(--text-muted)' }}>
                 {record.type === 'Incubator Temperature Record' ? 'Recorded By:' :
                   record.type === 'Balance Check or Callibration' ? 'Checked By:' :
-                    record.type === 'Sanitation' ? 'Performed By:' : 'Cleaner Name:'}
+                    record.type === 'Sanitation' ? 'Performed By:' : 'Technician Name:'}
               </span><br />
               <strong>{record.cleaner || record.recorded_by || record.checked_by || record.performed_by || 'N/A'}</strong>
             </div>
@@ -996,20 +1089,44 @@ export function CleaningRecordDetailModal({ record, onClose }) {
               <div><span style={{ color: 'var(--text-muted)' }}>Verified By:</span><br /><strong>{record.supervisor}</strong></div>
             )}
           </div>
-
           <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
             <h4 style={{ margin: '0 0 10px 0', fontWeight: '700', fontSize: '13px', color: 'var(--text-heading)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>Parameters & Checklist</h4>
             <table className="custom-table" style={{ width: '100%', fontSize: '12px' }}>
               <tbody>
                 {Object.entries(record).map(([key, val]) => {
                   if (['id', 'type', 'timestamp', 'cleaner', 'recorded_by', 'checked_by', 'performed_by', 'supervisor', 'remarks'].includes(key)) return null;
-                  const cleanKey = key.replace(/_/g, ' ').toUpperCase();
-                  const isPass = val === 'YES' || val === 'Clean' || val === 'Pass' || val === 'Satisfactory' || val === 'Normal';
+                  // Custom label overrides
+                  let cleanKey;
+                  if (key === 'posting_date') {
+                    cleanKey = 'SANITATION DATE';
+                  } else if (key === 'posting_time') {
+                    cleanKey = 'SANITATION TIME';
+                  } else if (key === 'cleaner') {
+                    cleanKey = 'TECHNICIAN NAME';
+                  } else {
+                    cleanKey = key.replace(/_/g, ' ').toUpperCase();
+                  }
+                  const passValues = ['YES', 'Clean', 'Pass', 'Satisfactory', 'Normal'];
+                  const failValues = ['NO', 'Dirty', 'Fail', 'Unsatisfactory', 'Abnormal'];
+                  const isPass = passValues.includes(val);
+                  const isFail = failValues.includes(val);
                   return (
                     <tr key={key} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '6px 0', fontWeight: '600', color: 'var(--text-muted)' }}>{cleanKey}</td>
-                      <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: '700', color: isPass ? 'var(--success)' : 'var(--danger)' }}>
-                        {String(val)}
+                      <td style={{ padding: '6px 0', fontWeight: '600', color: 'var(--text-muted)', verticalAlign: 'top' }}>{cleanKey}</td>
+                      <td
+                        style={{
+                          padding: '6px 0',
+                          textAlign: 'right',
+                          fontWeight: '700',
+                          color: isPass
+                            ? 'var(--success)'
+                            : isFail
+                              ? 'var(--danger)'
+                              : 'var(--text-heading)',
+                          verticalAlign: 'top'
+                        }}
+                      >
+                        {formatValue(val)}
                       </td>
                     </tr>
                   );
@@ -1017,7 +1134,6 @@ export function CleaningRecordDetailModal({ record, onClose }) {
               </tbody>
             </table>
           </div>
-
           {record.remarks && (
             <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '10px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Observations / Remarks:</span>

@@ -72,6 +72,8 @@ def save_stock_entry_draft(work_order, company, posting_date, posting_time=None,
     if not work_order:
         frappe.throw(_("Work Order is required"))
 
+    _validate_work_order_not_future(work_order, "issue raw materials / create Stock Entry")
+
     if not company:
         frappe.throw(_("Company is required"))
 
@@ -207,6 +209,20 @@ def _clean_html_error(message):
     return ' '.join(message.split())
 
 
+def _validate_work_order_not_future(work_order, action_label="proceed with this action"):
+    if not work_order:
+        return
+    planned_date = frappe.db.get_value("Work Order", work_order, "planned_start_date")
+    if planned_date:
+        today_date = str(frappe.utils.nowdate())
+        planned_d_str = str(planned_date).split(" ")[0]
+        if planned_d_str > today_date:
+            frappe.throw(
+                _("Cannot {0} for Work Order {1} because its Planned Start Date ({2}) is scheduled for a future date.")
+                .format(action_label, work_order, planned_d_str)
+            )
+
+
 def _now_or(value):
     if value:
         return str(value).replace("T", " ")
@@ -321,6 +337,7 @@ def start_job_card(job_card, employee, remarks=None, actual_start_time=None):
         )
 
         if doc.work_order:
+            _validate_work_order_not_future(doc.work_order, "start Job Card")
             _force_work_order_in_progress(doc.work_order)
 
         frappe.db.commit()
@@ -553,31 +570,34 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
         target_run_qty = frappe.utils.flt(wo.qty - wo.produced_qty)
         e_qty = frappe.utils.flt(extra_qty)
         extra_qty_base = 0.0
+        conversion_factor = 1.0
 
         if e_qty > 0 and extra_uom:
+            item_stock_uom = frappe.db.get_value("Item", wo.production_item, "stock_uom") or "Box"
             conversion_factor = frappe.db.get_value(
                 "UOM Conversion Detail",
                 {"parent": wo.production_item, "uom": extra_uom},
                 "conversion_factor"
             ) or 1.0
-            if extra_uom == (wo.get("stock_uom") or "Box"):
+            if extra_uom == item_stock_uom:
                 conversion_factor = 1.0
             extra_qty_base = frappe.utils.flt(e_qty * conversion_factor)
 
         # Validation: Manufactured Qty + Extra Qty in base UOM cannot exceed remaining planned quantity
         if (qty_to_manufacture + extra_qty_base) > (target_run_qty + 1e-6):
             max_extra_allowed = max(0.0, target_run_qty - qty_to_manufacture)
-            conv_fac = conversion_factor if (e_qty > 0 and extra_uom and 'conversion_factor' in locals() and conversion_factor) else 1.0
+            conv_fac = conversion_factor if (e_qty > 0 and extra_uom and conversion_factor) else 1.0
             max_extra_in_uom = max_extra_allowed / conv_fac if conv_fac > 0 else max_extra_allowed
             frappe.throw(
-                _("Extra Quantity ({0} {1}) plus Finished Goods Quantity ({2} {3}) exceeds remaining Work Order planned quantity ({4} {3}). Maximum allowed extra quantity is {5} {1}. Process loss cannot be negative.")
-                .format(
+                _(
+                    "Extra Quantity ({0} {1}) plus Finished Goods Quantity ({2} {3}) exceeds remaining Work Order planned quantity ({4} {3}). Maximum allowed extra quantity is {5} {1}. Process loss cannot be negative."
+                ).format(
                     e_qty,
                     extra_uom or wo.stock_uom,
                     qty_to_manufacture,
                     wo.stock_uom,
                     target_run_qty,
-                    frappe.utils.flt(max_extra_in_uom, 4)
+                    frappe.utils.flt(max_extra_in_uom, 4),
                 )
             )
 
@@ -618,6 +638,7 @@ def finish_work_order(work_order, qty=None, process_loss_qty=None, scrap_items=N
             stock_entry.company = company
         if process_loss and stock_entry.meta.has_field("process_loss_qty"):
             stock_entry.process_loss_qty = process_loss
+        stock_entry.fg_completed_qty = frappe.utils.flt(qty_to_manufacture + extra_qty_base + process_loss)
 
         # Resolve posting date and time
         posting_d = posting_date or frappe.utils.nowdate()
@@ -1135,12 +1156,19 @@ def get_work_order_maintenance_checklists(work_order):
     total_count = len(masters)
     all_completed = (completed_count >= total_count)
 
+    planned_date = frappe.db.get_value("Work Order", work_order, "planned_start_date")
+    today_date = str(frappe.utils.nowdate())
+    planned_d_str = str(planned_date).split(" ")[0] if planned_date else ""
+    is_future_date = bool(planned_d_str and planned_d_str > today_date)
+
     return {
         "work_order": work_order,
         "all_completed": all_completed,
         "completed_count": completed_count,
         "total_count": total_count,
-        "checklists": checklist_status
+        "checklists": checklist_status,
+        "is_future_date": is_future_date,
+        "planned_start_date": planned_d_str
     }
 
 
@@ -1241,6 +1269,9 @@ def create_daily_pm_schedule(equipment, area, work_order, operator, supervisor,
     import json
     if isinstance(maintenance_details, str):
         maintenance_details = json.loads(maintenance_details)
+
+    if work_order:
+        _validate_work_order_not_future(work_order, "submit Maintenance Checklist")
 
     doc = frappe.new_doc("Daily Preventative Maintenance Schedule")
     doc.equipment = equipment

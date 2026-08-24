@@ -97,6 +97,7 @@ export default function WorkOrdersTab({
                     (wo.produced_qty && Number(wo.produced_qty) > 0) ||
                     wo.status === 'Completed'
                   );
+                  const isScheduledFuture = Boolean(wo.plannedStart && String(wo.plannedStart).substring(0, 10) > new Date().toISOString().substring(0, 10));
 
                   return (
                     <div key={wo.id} className="wo-card-container">
@@ -117,22 +118,31 @@ export default function WorkOrdersTab({
                             style={{
                               fontSize: '11px',
                               padding: '4px 8px',
-                              backgroundColor: wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                              color: wo.maintAllCompleted ? 'var(--success)' : 'var(--warning)',
-                              border: `1px solid ${wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                              backgroundColor: isScheduledFuture
+                                ? 'rgba(156, 163, 175, 0.15)'
+                                : (wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)'),
+                              color: isScheduledFuture
+                                ? 'var(--text-muted)'
+                                : (wo.maintAllCompleted ? 'var(--success)' : 'var(--warning)'),
+                              border: `1px solid ${isScheduledFuture ? 'rgba(156, 163, 175, 0.3)' : (wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)')}`,
                               fontWeight: 600,
-                              cursor: 'pointer'
+                              cursor: isScheduledFuture ? 'not-allowed' : 'pointer',
+                              opacity: isScheduledFuture ? 0.75 : 1
                             }}
                             onClick={() => {
+                              if (isScheduledFuture) {
+                                if (showAlert) showAlert(`Maintenance checklists cannot be performed yet because Work Order ${wo.id} is scheduled for a future date (${wo.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
+                                return;
+                              }
                               if (handleCheckWorkOrderMaintenance) {
                                 handleCheckWorkOrderMaintenance(wo.id);
                               } else {
                                 handleStartWorkOrder(wo.id);
                               }
                             }}
-                            title="Click to view & fill maintenance checklists for this Work Order"
+                            title={isScheduledFuture ? `Scheduled for future date (${wo.plannedStart?.substring(0, 10)}). Cannot perform maintenance before planned start date.` : "Click to view & fill maintenance checklists for this Work Order"}
                           >
-                            {wo.maintAllCompleted ? '✓ Maint: Completed' : `🛠️ Maint: ${wo.maintCompletedCount || 0}/10 Pending`}
+                            {isScheduledFuture ? `📅 Planned: ${wo.plannedStart?.substring(0, 10)}` : (wo.maintAllCompleted ? '✓ Maint: Completed' : `🛠️ Maint: ${wo.maintCompletedCount || 0}/10 Pending`)}
                           </span>
 
                           {!isRawMaterialsIssued ? (
@@ -141,12 +151,23 @@ export default function WorkOrdersTab({
                               style={{
                                 padding: '6px 12px',
                                 fontSize: '12px',
-                                opacity: wo.maintAllCompleted ? 1 : 0.6,
-                                backgroundColor: wo.maintAllCompleted ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
-                                borderColor: wo.maintAllCompleted ? 'var(--primary)' : 'var(--text-muted, #9ca3af)'
+                                opacity: (!isScheduledFuture && wo.maintAllCompleted) ? 1 : 0.6,
+                                backgroundColor: (!isScheduledFuture && wo.maintAllCompleted) ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
+                                borderColor: (!isScheduledFuture && wo.maintAllCompleted) ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
+                                cursor: isScheduledFuture ? 'not-allowed' : 'pointer'
                               }}
-                              onClick={() => handleStartWorkOrder(wo.id)}
-                              title={wo.maintAllCompleted ? "Issue Raw Materials for Manufacture (Stock Entry)" : "Maintenance checklists must be 100% completed first"}
+                              onClick={() => {
+                                if (isScheduledFuture) {
+                                  if (showAlert) showAlert(`Raw Materials cannot be issued yet because Work Order ${wo.id} is scheduled for a future date (${wo.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
+                                  return;
+                                }
+                                handleStartWorkOrder(wo.id);
+                              }}
+                              title={
+                                isScheduledFuture
+                                  ? `Scheduled for future date (${wo.plannedStart?.substring(0, 10)}). Cannot issue raw materials before planned start date.`
+                                  : (wo.maintAllCompleted ? "Issue Raw Materials for Manufacture (Stock Entry)" : "Maintenance checklists must be 100% completed first")
+                              }
                             >
                               📦 Issue Raw Materials
                             </button>
@@ -340,22 +361,14 @@ export default function WorkOrdersTab({
                                       </>
                                     )}
 
-                                    {/* Actions: Resume, Finish, Add Remarks */}
+                                    {/* Action: Resume */}
                                     {JOB_CARD_PAUSED_STATUSES.includes(jc.status) && (WORK_ORDER_ACTIVE_STATUSES.includes(wo.status) || wo.materialTransferred) && (
-                                      <>
-                                        <button
-                                          className="action-btn-small start"
-                                          onClick={() => openJobCardAction(wo, jc, 'resume')}
-                                        >
-                                          ▶ Resume
-                                        </button>
-                                        <button
-                                          className="action-btn-small complete"
-                                          onClick={() => openJobCardAction(wo, jc, 'finish')}
-                                        >
-                                          ✓ Finish
-                                        </button>
-                                      </>
+                                      <button
+                                        className="action-btn-small start"
+                                        onClick={() => openJobCardAction(wo, jc, 'resume')}
+                                      >
+                                        ▶ Resume
+                                      </button>
                                     )}
 
                                     {/* Done Indicator */}

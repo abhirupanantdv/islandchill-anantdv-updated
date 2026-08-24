@@ -2750,6 +2750,13 @@ function App() {
   const JOB_CARD_RUNNING_STATUSES = ['Work In Progress', 'In Process'];
   const JOB_CARD_PAUSED_STATUSES = ['On Hold', 'Paused'];
 
+  const isFuturePlannedDate = (dateStr) => {
+    if (!dateStr) return false;
+    const dStr = String(dateStr).substring(0, 10);
+    const todayStr = getFijiNowDateTime().date;
+    return dStr > todayStr;
+  };
+
   // Dashboard calculations
   const activeWOsCount = workOrders.filter(wo => WORK_ORDER_ACTIVE_STATUSES.includes(wo.status)).length;
   const pendingWOsCount = workOrders.filter(wo => wo.status === 'Pending').length;
@@ -3157,12 +3164,22 @@ function App() {
 
   // Open Pre-Start Maintenance Validation Modal for a Work Order
   const handleCheckWorkOrderMaintenance = async (woId) => {
+    const targetWO = workOrders.find(w => w.id === woId);
+    if (targetWO && isFuturePlannedDate(targetWO.plannedStart)) {
+      showAlert(`Maintenance checklists cannot be performed yet because Work Order ${woId} is scheduled for a future date (${targetWO.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
+      return;
+    }
+
     const conn = frappe.getConnectionSettings();
     if (conn.isLive) {
       setSyncStatusMsg('Verifying Maintenance Checklists for Work Order...');
       try {
         const checkRes = await frappe.getWorkOrderMaintenanceChecklists(woId);
         if (checkRes) {
+          if (checkRes.is_future_date) {
+            showAlert(`Maintenance checklists cannot be performed yet because Work Order ${woId} is scheduled for a future date (${checkRes.planned_start_date}).`, 'warning', 'Future Planned Date');
+            return;
+          }
           setMaintValidationModal({
             isOpen: true,
             woId: woId,
@@ -3187,6 +3204,11 @@ function App() {
     const conn = frappe.getConnectionSettings();
     const woToStart = workOrders.find(wo => wo.id === woId);
     if (!woToStart) return;
+
+    if (isFuturePlannedDate(woToStart.plannedStart)) {
+      showAlert(`Raw Materials cannot be issued yet because Work Order ${woToStart.id} is scheduled for a future date (${woToStart.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
+      return;
+    }
 
     if (conn.isLive && conn.connected) {
       setSyncStatusMsg('Verifying Maintenance Checklists for Work Order...');
@@ -3548,6 +3570,11 @@ function App() {
     const defaultNowDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
     if (action === 'start') {
+      if (isFuturePlannedDate(wo?.plannedStart)) {
+        showAlert(`Job Cards cannot be started yet because Work Order ${wo.id} is scheduled for a future date (${wo.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
+        return;
+      }
+
       const isRawMaterialsIssued = Boolean(
         wo?.stockEntrySubmitted ||
         (wo?.transferred_qty && Number(wo?.transferred_qty) > 0) ||
@@ -4187,7 +4214,7 @@ function App() {
     const bomNo = data.get('bomNo');
     const quantity = parseInt(data.get('quantity'), 10);
     const lineNo = data.get('lineNo');
-    const plannedStart = data.get('plannedStart');
+    const plannedStartDateVal = data.get('plannedStartDate') || data.get('plannedStart');
     const company = data.get('company') || woCreateCompany;
     const sourceWarehouse = data.get('sourceWarehouse');
     const fgWarehouse = data.get('fgWarehouse');
@@ -4227,17 +4254,25 @@ function App() {
       return;
     }
 
-    if (plannedStart) {
-      const selectedDate = new Date(plannedStart);
-      const now = new Date();
-      if (selectedDate < new Date(now.getTime() - 60000)) {
-        showAlert('Planned Start Time cannot be a past date or time.', 'warning', 'Invalid Start Time');
-        return;
-      }
+    const todayDateStr = getFijiNowDateTime().date;
+    const sysTime = getFijiNowDateTime().time;
+
+    if (!plannedStartDateVal) {
+      showAlert('Planned Start Date is mandatory.', 'warning', 'Missing Planned Start Date');
+      return;
     }
 
+    const plannedDateOnly = String(plannedStartDateVal).substring(0, 10);
+    if (plannedDateOnly < todayDateStr) {
+      showAlert('Planned Start Date cannot be in the past.', 'warning', 'Invalid Start Date');
+      return;
+    }
+
+    const plannedDateStr = (plannedDateOnly === todayDateStr)
+      ? `${plannedDateOnly} ${sysTime}`
+      : `${plannedDateOnly} 00:00:00`;
+
     setWoCreating(true);
-    const plannedDateStr = plannedStart ? plannedStart.replace('T', ' ') : new Date().toISOString().replace('T', ' ').substring(0, 19);
     const newWO = {
       product: product.code,
       quantity: quantity,
@@ -5484,18 +5519,27 @@ function App() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
 
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label>Source Warehouse * <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Raw Materials)</span></label>
-                    {warehousesLoading ? (
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading...</div>
-                    ) : (
-                      <select name="sourceWarehouse" className="form-input" required
-                        value={woSourceWarehouse} onChange={e => setWoSourceWarehouse(e.target.value)}>
-                        <option value="">-- Select Source Warehouse --</option>
-                        {availableWarehouses.map((wh) => (
-                          <option key={wh.name} value={wh.name}>{wh.warehouse_name || wh.name}</option>
-                        ))}
-                      </select>
-                    )}
+                    <label>Source Warehouse * <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Raw Materials - Read Only)</span></label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={woSourceWarehouse || 'Stores - CWFPL'}
+                      readOnly
+                      disabled
+                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed', color: 'var(--text-main)', fontWeight: '500' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label>Work-in-Progress Warehouse * <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Operations - Read Only)</span></label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={woWipWarehouse || 'Work In Progress - CWFPL'}
+                      readOnly
+                      disabled
+                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed', color: 'var(--text-main)', fontWeight: '500' }}
+                    />
                   </div>
 
                   <div className="form-group" style={{ margin: 0 }}>
@@ -5514,36 +5558,6 @@ function App() {
                   </div>
 
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label>Work-in-Progress Warehouse * <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Operations)</span></label>
-                    {warehousesLoading ? (
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading...</div>
-                    ) : (
-                      <select name="wipWarehouse" className="form-input" required
-                        value={woWipWarehouse} onChange={e => setWoWipWarehouse(e.target.value)}>
-                        <option value="">-- Select WIP Warehouse --</option>
-                        {availableWarehouses.map((wh) => (
-                          <option key={wh.name} value={wh.name}>{wh.warehouse_name || wh.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label>Scrap Warehouse <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Scraped Materials)</span></label>
-                    {warehousesLoading ? (
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading...</div>
-                    ) : (
-                      <select name="scrapWarehouse" className="form-input"
-                        value={woScrapWarehouse} onChange={e => setWoScrapWarehouse(e.target.value)}>
-                        <option value="">-- Select Scrap Warehouse --</option>
-                        {availableWarehouses.map((wh) => (
-                          <option key={wh.name} value={wh.name}>{wh.warehouse_name || wh.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
                     <label>Extra Goods Warehouse <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Extra Produced Products)</span></label>
                     {warehousesLoading ? (
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading...</div>
@@ -5570,15 +5584,18 @@ function App() {
               </div>
 
               <div className="form-group">
-                <label>Planned Start Time *</label>
+                <label>Planned Start Date *</label>
                 <input
-                  type="datetime-local"
-                  name="plannedStart"
+                  type="date"
+                  name="plannedStartDate"
                   className="form-input"
-                  defaultValue={getNowDateTimeLocal()}
-                  min={getNowDateTimeLocal()}
+                  defaultValue={getFijiNowDateTime().date}
+                  min={getFijiNowDateTime().date}
                   required
                 />
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                  Start time will be recorded automatically from system time upon execution.
+                </span>
               </div>
 
               <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
