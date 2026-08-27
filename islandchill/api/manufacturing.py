@@ -761,12 +761,33 @@ def get_all_cleaning_records():
         if frappe.db.exists("DocType", dt):
             records = frappe.get_all(dt, fields=["*"], order_by="creation desc", limit=200, ignore_permissions=True)
             for r in records:
+                status = r.get("sanitation_result") or r.get("status")
+                if not status and dt == "Balance Check or Callibration":
+                    comments_str = str(r.get("comments") or "")
+                    if "[Status: Fail]" in comments_str:
+                        status = "Fail"
+                    elif "[Status: Pass]" in comments_str:
+                        status = "Pass"
+                    else:
+                        try:
+                            w10 = float(r.get("weight_10g") or 0)
+                            w20 = float(r.get("weight_20g") or 0)
+                            w50 = float(r.get("weight_50g") or 0)
+                            pass10 = (w10 == 0) or (abs(w10 - 10.0) <= 0.2)
+                            pass20 = (w20 == 0) or (abs(w20 - 20.0) <= 0.4)
+                            pass50 = (w50 == 0) or (abs(w50 - 50.0) <= 1.0)
+                            status = "Pass" if (pass10 and pass20 and pass50) else "Fail"
+                        except (ValueError, TypeError):
+                            status = "Clean"
+                if not status:
+                    status = "Clean"
+
                 all_records.append({
                     "id": r.name,
                     "name": r.name,
                     "type": dt,
                     "timestamp": str(r.creation or r.modified or ""),
-                    "status": r.get("sanitation_result") or r.get("status") or "Clean",
+                    "status": status,
                     "cleaner": r.get("duties_performed_by") or r.get("performed_by_operator") or r.get("checked_by") or "Staff",
                     "supervisor": r.get("checked_by") or r.get("verified_by_supervisor") or r.get("verified_by") or "",
                     "posting_date": str(r.get("date") or (str(r.creation).split(" ")[0] if r.creation else "")),

@@ -1663,11 +1663,14 @@ table input[type="time"],
   left: 14px;
   color: var(--accent);
   pointer-events: none;
+  z-index: 2;
 }
 
+.input-wrapper .form-input-icon,
+input.form-input-icon,
 .form-input-icon {
   width: 100%;
-  padding: 10px 12px 10px 40px;
+  padding: 10px 12px 10px 42px !important;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   background: rgba(255, 255, 255, 0.7);

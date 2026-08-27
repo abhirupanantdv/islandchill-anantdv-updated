@@ -10,7 +10,6 @@ export const CLEANING_TEMPLATES = [
   { id: 'floor-purpose', name: 'Factory Floor Cleaning Purpose', doctype: 'Factory Floor Cleaning Purpose', description: 'Log factory floor cleaning standards.' },
   { id: 'lab-office-clean', name: 'Cleaning of Lab and Office', doctype: 'Cleaning of Lab and Office', description: 'Log daily laboratory & office cleaning logs.' },
   { id: 'lab-office-purpose', name: 'Lab and Office Cleaning Purpose', doctype: 'Lab and Office Cleaning Purpose', description: 'Log lab & office cleaning purpose details.' },
-  { id: 'incubator-temp', name: 'Incubator Temperature Record', doctype: 'Incubator Temperature Record', description: 'Record incubator daily temp & humidity logs.' },
   { id: 'balance-calib', name: 'Balance Check or Calibration', doctype: 'Balance Check or Callibration', description: 'Record balance check metrics & calibration variance.' },
   { id: 'sanitation', name: 'Equipment Sanitation & CIP', doctype: 'equipment sanitation and cip', description: 'Log chemical sanitation levels and contact times.' }
 ];
@@ -36,6 +35,33 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
   const [balanceCleanerId, setBalanceCleanerId] = useState('');
 
   const [formData, setFormData] = useState({});
+  const [formNumber, setFormNumber] = useState('');
+
+  useEffect(() => {
+    async function loadFormNumber() {
+      try {
+        const forms = await frappe.getCleaningAndSanitationForm();
+        if (forms && Array.isArray(forms) && template) {
+          const tName = (template.name || '').trim().toLowerCase();
+          const tDoc = (template.doctype || '').trim().toLowerCase();
+          const match = forms.find(f => {
+            const fName = (f.form_name || f.name || '').trim().toLowerCase();
+            const fDoc = (f.document_type || '').trim().toLowerCase();
+            return (
+              (fName && (fName === tName || fName === tDoc)) ||
+              (fDoc && (fDoc === tName || fDoc === tDoc))
+            );
+          });
+          if (match && match.form_number) {
+            setFormNumber(match.form_number);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load form number:", e);
+      }
+    }
+    loadFormNumber();
+  }, [templateId, template]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -134,7 +160,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
         } finally {
           setLoadingPurposes(false);
         }
-               } else if (templateId === 'sanitation') {
+      } else if (templateId === 'sanitation') {
         setLoadingPurposes(true);
         try {
           // Pass fields and filters so Frappe fetches 'equipments' and 'show_on_app'
@@ -145,7 +171,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
 
           const [rawEqs, chems] = await Promise.all([
             frappe.getEquipmentList ? frappe.getEquipmentList(equipmentParams) : [],
-            frappe.getChemicalTests ? frappe.getChemicalTests() : []
+            frappe.getCipChemicals ? frappe.getCipChemicals() : (frappe.getLinkOptions ? frappe.getLinkOptions('CIP Chemical') : [])
           ]);
 
           console.log("🔍 Equipment List API Response:", rawEqs);
@@ -165,7 +191,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
           setChemTestsList(chems || []);
 
           const defaultEq = eqs && eqs.length > 0 ? eqs[0].name : '';
-          const defaultChem = chems && chems.length > 0 ? chems[0].name : '';
+          const defaultChem = chems && chems.length > 0 ? (chems[0].name || chems[0].chemical_name || chems[0]) : '';
 
           setFormData(prev => ({
             ...prev,
@@ -289,7 +315,14 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
     <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown(false)}>
       <div className="modal-panel" style={{ width: '550px', maxWidth: '95%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3 style={{ fontSize: '16px', fontWeight: '700' }}>🧹 {template?.name}</h3>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>🧹 {template?.name}</h3>
+            {formNumber && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: '500' }}>
+                Form No: {formNumber}
+              </div>
+            )}
+          </div>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleFormSubmit}>
@@ -893,65 +926,71 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
                   )}
                 </div>
                 <div className="form-group">
-                  <label className="input-label">Calibration Verification Status</label>
-                  <div className="form-input" style={{
-                    backgroundColor: formData.status === 'Pass' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                    color: formData.status === 'Pass' ? 'var(--success)' : 'var(--danger)',
-                    fontWeight: '700',
-                    height: '36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 12px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-color)'
-                  }}>
-                    Status: {formData.status || 'Pass'}
-                  </div>
+                  <label className="input-label">Calibration Verification Status *</label>
+                  <select
+                    className="text-input"
+                    required
+                    value={formData.status || 'Pass'}
+                    onChange={e => handleInputChange('status', e.target.value)}
+                    style={{
+                      backgroundColor: (formData.status === 'Pass' || formData.status === 'Clean') ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      color: (formData.status === 'Pass' || formData.status === 'Clean') ? 'var(--success)' : 'var(--danger)',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Pass">Pass</option>
+                    <option value="Fail">Fail</option>
+                  </select>
                 </div>
               </>
             )}
 
             {/* Sanitation */}
-                        {/* Sanitation */}
+            {/* Sanitation */}
             {templateId === 'sanitation' && (
               <>
                 <div className="form-group">
-  <label className="input-label">Equipment/Line Cleaned *</label>
-  <select 
-    className="text-input" 
-    value={formData.equipmentline_cleaned || formData.equipment_sanitized || ''} 
-    onChange={e => {
-      const val = e.target.value;
-      handleInputChange('equipmentline_cleaned', val);
-      handleInputChange('equipment_sanitized', val);
-    }}
-  >
-    {eqList.length > 0 ? (
-      eqList.map(eq => (
-        <option key={eq.name} value={eq.name}>
-          {eq.equipments || eq.name}
-        </option>
-      ))
-    ) : (
-      <option value="">No equipment marked for app display</option>
-    )}
-  </select>
-</div>
+                  <label className="input-label">Equipment/Line Cleaned *</label>
+                  <select
+                    className="text-input"
+                    value={formData.equipmentline_cleaned || formData.equipment_sanitized || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      handleInputChange('equipmentline_cleaned', val);
+                      handleInputChange('equipment_sanitized', val);
+                    }}
+                  >
+                    {eqList.length > 0 ? (
+                      eqList.map(eq => (
+                        <option key={eq.name} value={eq.name}>
+                          {eq.equipments || eq.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">No equipment marked for app display</option>
+                    )}
+                  </select>
+                </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label className="input-label">Chemical/Method Used *</label>
                     <select className="text-input" value={formData.chemical_used || ''} onChange={e => handleInputChange('chemical_used', e.target.value)}>
                       {chemTestsList.length > 0 ? (
-                        chemTestsList.map(chem => (
-                          <option key={chem.name} value={chem.name}>{chem.name}</option>
-                        ))
+                        chemTestsList.map(chem => {
+                          const val = typeof chem === 'string' ? chem : (chem.name || chem.chemical_name || '');
+                          const label = typeof chem === 'string' ? chem : (chem.chemical_name || chem.name || '');
+                          return (
+                            <option key={val} value={val}>{label}</option>
+                          );
+                        })
                       ) : (
                         <>
-                          <option value="Chlorine">Chlorine Solution (XY-12)</option>
-                          <option value="Caustic Soda">Caustic Soda (Sodium Hydroxide)</option>
-                          <option value="Acid Sanitizer">Acid Sanitizer (Peracetic Acid)</option>
-                          <option value="Hot Water">Hot Water Flushing (CIP)</option>
+                          <option value="Chlorine Solution (XY-12)">Chlorine Solution (XY-12)</option>
+                          <option value="Caustic Soda (Sodium Hydroxide)">Caustic Soda (Sodium Hydroxide)</option>
+                          <option value="Acid Sanitizer (Peracetic Acid)">Acid Sanitizer (Peracetic Acid)</option>
+                          <option value="Hot Water Flushing (CIP)">Hot Water Flushing (CIP)</option>
                         </>
                       )}
                     </select>
@@ -985,9 +1024,14 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
             </div>
 
           </div>
-          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px' }}>
-            <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary-btn" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }}>Save Log Record</button>
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '12px 16px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>
+              Island Chill - Form no.{formNumber ? ` ${formNumber}` : ''}
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
+              <button type="submit" className="primary-btn" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }}>Save Log Record</button>
+            </div>
           </div>
         </form>
       </div>
@@ -995,19 +1039,40 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
   );
 }
 
-// Label map for friendly formatting inside Details object
-const DETAIL_LABEL_MAP = {
-  equipmentline_cleaned: 'EQUIPMENT / LINE CLEANED',
-  equipment_sanitized: 'EQUIPMENT / LINE CLEANED',
-  chemicalmethod_used: 'CHEMICAL / METHOD USED',
-  chemical_used: 'CHEMICAL / METHOD USED',
-  concentration_ppm: 'CONCENTRATION (PPM)',
-  contact_time_mins: 'CONTACT TIME (MINS)',
-  observations__remarks: 'OBSERVATIONS / REMARKS',
-  remarks: 'OBSERVATIONS / REMARKS'
+export const resolveEmployeeName = (val, employeeList = []) => {
+  if (!val) return 'N/A';
+  const strVal = String(val).trim();
+  if (!strVal || strVal === 'null' || strVal === 'undefined') return 'N/A';
+
+  const matchParen = strVal.match(/^(.+?)\s*\(([^)]+)\)$/);
+  if (matchParen) return matchParen[1];
+
+  const emp = (employeeList || []).find(e =>
+    (e.name && e.name.toLowerCase() === strVal.toLowerCase()) ||
+    (e.employee_name && e.employee_name.toLowerCase() === strVal.toLowerCase())
+  );
+  if (emp && emp.employee_name) {
+    return emp.employee_name;
+  }
+  return strVal;
 };
 
-const formatValue = (value) => {
+export const resolveChemicalName = (val, cipChemicals = []) => {
+  if (!val) return 'N/A';
+  const strVal = String(val).trim();
+  if (!strVal || strVal === 'null' || strVal === 'undefined') return 'N/A';
+
+  const chem = (cipChemicals || []).find(c =>
+    (c.name && c.name.toLowerCase() === strVal.toLowerCase()) ||
+    (c.chemical_name && c.chemical_name.toLowerCase() === strVal.toLowerCase())
+  );
+  if (chem) {
+    return chem.chemical_name || chem.name;
+  }
+  return strVal;
+};
+
+const formatValue = (value, employeeList = [], cipChemicals = []) => {
   if (value === null || value === undefined || value === '') {
     return 'N/A';
   }
@@ -1019,7 +1084,7 @@ const formatValue = (value) => {
         if (typeof item === 'object' && item !== null) {
           return item.name || item.purpose || item.title || JSON.stringify(item);
         }
-        return String(item);
+        return resolveEmployeeName(resolveChemicalName(String(item), cipChemicals), employeeList);
       })
       .join(', ');
   }
@@ -1044,32 +1109,93 @@ const formatValue = (value) => {
 
     return (
       <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', padding: '4px 0' }}>
-        {entries.map(({ key, label, val }) => (
-          <div key={key} style={{ fontSize: '11px', lineHeight: '1.4' }}>
-            <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{label}: </span>
-            <span style={{ color: 'var(--text-heading, #1e293b)', fontWeight: '700' }}>{String(val)}</span>
-          </div>
-        ))}
+        {entries.map(({ key, label, val }) => {
+          let displayVal = val;
+          const normKey = key.toLowerCase();
+          if (normKey.includes('chemical') || normKey.includes('method') || label.includes('CHEMICAL')) {
+            displayVal = resolveChemicalName(val, cipChemicals);
+          } else if (normKey.includes('employee') || normKey.includes('user') || normKey.includes('cleaner') || normKey.includes('by') || String(val).startsWith('HR-EMP-') || String(val).startsWith('EMP-')) {
+            displayVal = resolveEmployeeName(val, employeeList);
+          }
+          return (
+            <div key={key} style={{ fontSize: '11px', lineHeight: '1.4' }}>
+              <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>{label}: </span>
+              <span style={{ color: 'var(--text-heading, #1e293b)', fontWeight: '700' }}>{String(displayVal)}</span>
+            </div>
+          );
+        })}
       </div>
     );
   }
 
-  return String(value);
+  const str = String(value);
+  if (str.startsWith('HR-EMP-') || str.startsWith('EMP-')) {
+    return resolveEmployeeName(str, employeeList);
+  }
+  return resolveChemicalName(str, cipChemicals);
 };
 
 
 
 
 // Modal for viewing submitted report details
-export function CleaningRecordDetailModal({ record, onClose }) {
+export function CleaningRecordDetailModal({ record, onClose, employeeList = [] }) {
   if (!record) return null;
   const tpl = CLEANING_TEMPLATES.find(t => t.doctype === record.type) || { name: record.type };
+  const [formNumber, setFormNumber] = useState('');
+  const [cipChemicals, setCipChemicals] = useState([]);
+
+  useEffect(() => {
+    async function loadRecordMeta() {
+      try {
+        const [forms, chems] = await Promise.all([
+          frappe.getCleaningAndSanitationForm ? frappe.getCleaningAndSanitationForm() : [],
+          frappe.getCipChemicals ? frappe.getCipChemicals() : (frappe.getLinkOptions ? frappe.getLinkOptions('CIP Chemical') : [])
+        ]);
+        if (forms && Array.isArray(forms)) {
+          const tName = (tpl.name || '').trim().toLowerCase();
+          const tDoc = (tpl.doctype || record.type || '').trim().toLowerCase();
+          const match = forms.find(f => {
+            const fName = (f.form_name || f.name || '').trim().toLowerCase();
+            const fDoc = (f.document_type || '').trim().toLowerCase();
+            return (
+              (fName && (fName === tName || fName === tDoc)) ||
+              (fDoc && (fDoc === tName || fDoc === tDoc))
+            );
+          });
+          if (match && match.form_number) {
+            setFormNumber(match.form_number);
+          }
+        }
+        if (chems && Array.isArray(chems)) {
+          setCipChemicals(chems);
+        }
+      } catch (e) {
+        console.error("Failed to load form metadata for record detail:", e);
+      }
+    }
+    loadRecordMeta();
+  }, [record, tpl]);
+
+  const rawTech = record.operator_name || record.cleaner || record.recorded_by || record.checked_by || record.performed_by;
+  const technicianName = resolveEmployeeName(rawTech, employeeList);
+
+  const rawSupervisor = record.supervisor_name || record.supervisor || record.verified_by_supervisor;
+  const supervisorName = resolveEmployeeName(rawSupervisor, employeeList);
+
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }}>
-      <div className="modal-panel" style={{ width: '520px', maxWidth: '95%' }}>
+      <div className="modal-panel print-report-container" style={{ width: '720px', maxWidth: '95%' }}>
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-          <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-heading)' }}>📄 QC Clean Record: {record.id}</h3>
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-heading)', margin: 0 }}>📄 QC Clean Record: {record.id}</h3>
+            {formNumber && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: '500' }}>
+                Form No: {formNumber}
+              </div>
+            )}
+          </div>
+          <button className="no-print" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
         </div>
         <div className="modal-content" style={{ padding: '16px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
@@ -1081,12 +1207,12 @@ export function CleaningRecordDetailModal({ record, onClose }) {
               <span style={{ color: 'var(--text-muted)' }}>
                 {record.type === 'Incubator Temperature Record' ? 'Recorded By:' :
                   record.type === 'Balance Check or Callibration' ? 'Checked By:' :
-                    record.type === 'Sanitation' ? 'Performed By:' : 'Technician Name:'}
+                    record.type === 'Sanitation' || record.type === 'equipment sanitation and cip' ? 'Performed By (Operator):' : 'Technician Name:'}
               </span><br />
-              <strong>{record.cleaner || record.recorded_by || record.checked_by || record.performed_by || 'N/A'}</strong>
+              <strong>{technicianName}</strong>
             </div>
-            {record.supervisor && (
-              <div><span style={{ color: 'var(--text-muted)' }}>Verified By:</span><br /><strong>{record.supervisor}</strong></div>
+            {supervisorName !== 'N/A' && (
+              <div><span style={{ color: 'var(--text-muted)' }}>Verified By:</span><br /><strong>{supervisorName}</strong></div>
             )}
           </div>
           <div style={{ padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -1094,8 +1220,7 @@ export function CleaningRecordDetailModal({ record, onClose }) {
             <table className="custom-table" style={{ width: '100%', fontSize: '12px' }}>
               <tbody>
                 {Object.entries(record).map(([key, val]) => {
-                  if (['id', 'type', 'timestamp', 'cleaner', 'recorded_by', 'checked_by', 'performed_by', 'supervisor', 'remarks'].includes(key)) return null;
-                  // Custom label overrides
+                  if (['id', 'type', 'timestamp', 'cleaner', 'recorded_by', 'checked_by', 'performed_by', 'supervisor', 'operator_name', 'supervisor_name', 'remarks'].includes(key)) return null;
                   let cleanKey;
                   if (key === 'posting_date') {
                     cleanKey = 'SANITATION DATE';
@@ -1126,7 +1251,7 @@ export function CleaningRecordDetailModal({ record, onClose }) {
                           verticalAlign: 'top'
                         }}
                       >
-                        {formatValue(val)}
+                        {formatValue(val, employeeList, cipChemicals)}
                       </td>
                     </tr>
                   );
@@ -1140,9 +1265,55 @@ export function CleaningRecordDetailModal({ record, onClose }) {
               <p style={{ margin: '4px 0 0 0', fontStyle: 'italic', color: '#444' }}>{record.remarks}</p>
             </div>
           )}
+
+          {/* Report Footnote & Approval Section (Included in Print) */}
+          <div style={{
+            display: 'flex',
+            justify: 'space-between',
+            alignItems: 'center',
+            borderTop: '1px solid var(--border-color)',
+            paddingTop: '12px',
+            marginTop: '8px',
+            fontSize: '12px',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>
+              Island Chill - Form no.{formNumber ? ` ${formNumber}` : ''}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Approved By: </span>
+                <span style={{ fontWeight: '700', color: 'var(--text-heading)' }}>{supervisorName !== 'N/A' ? supervisorName : 'L. Chaudhry'}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Signature: </span>
+                <span style={{
+                  fontFamily: "cursive, 'Brush Script MT', sans-serif",
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  color: 'var(--accent)',
+                  borderBottom: '1px solid var(--border-color)',
+                  padding: '0 8px'
+                }}>
+                  {supervisorName !== 'N/A' ? supervisorName : 'L. Chaudhry'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-          <button className="primary-btn" onClick={onClose}>Close Report</button>
+
+        {/* Modal Footer Controls */}
+        <div className="modal-footer no-print" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '12px', gap: '10px' }}>
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={() => window.print()}
+            style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--accent)', whiteSpace: 'nowrap' }}
+          >
+            🖨️ Print Report
+          </button>
+          <button type="button" className="secondary-btn" onClick={onClose} style={{ whiteSpace: 'nowrap' }}>Close Report</button>
         </div>
       </div>
     </div>
@@ -1160,12 +1331,22 @@ export default function CleaningTab({
   setCleaningPage,
   setActiveCleaningForm,
   setViewingCleaningRecord,
-  onRefreshCleaningRecords
+  onRefreshCleaningRecords,
+  employeeList = []
 }) {
   useEffect(() => {
     if (onRefreshCleaningRecords) {
       onRefreshCleaningRecords();
     }
+
+    // Call API for "Cleaning and Sanitation Form" doctype and print response to console only
+    frappe.getCleaningAndSanitationForm()
+      .then(response => {
+        console.log('Cleaning and Sanitation Form response:', response);
+      })
+      .catch(error => {
+        console.error('Error fetching Cleaning and Sanitation Form:', error);
+      });
   }, []);
 
   const filtered = cleaningRecords.filter(rec => {
@@ -1198,168 +1379,204 @@ export default function CleaningTab({
         )}
       </div>
 
-              {/* Quick Metrics */}
-              <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>TOTAL LOGS SUBMITTED</span>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--text-heading)' }}>
-                    {cleaningRecords.length} Logs {cleaningFilterType !== 'All' || cleaningSearchQuery ? `(${filtered.length} Filtered)` : ''}
-                  </div>
-                </div>
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>COMPLIANCE STATUS</span>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--success)' }}>
-                    {cleaningRecords.length > 0 ? (
-                      `${Math.round((cleaningRecords.filter(r => r.status === 'Clean' || r.status === 'Pass' || r.status === 'Satisfactory' || r.status === 'Normal').length / cleaningRecords.length) * 100)}% Pass`
-                    ) : '100%'}
-                  </div>
-                </div>
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>HYGIENE LOGS TODAY</span>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--accent)' }}>
-                    {cleaningRecords.filter(r => r.timestamp?.startsWith(new Date().toISOString().substring(0, 10))).length} Logs
-                  </div>
-                </div>
+      {/* Quick Metrics */}
+      <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>TOTAL LOGS SUBMITTED</span>
+          <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--text-heading)' }}>
+            {cleaningRecords.length} Logs {cleaningFilterType !== 'All' || cleaningSearchQuery ? `(${filtered.length} Filtered)` : ''}
+          </div>
+        </div>
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>COMPLIANCE STATUS</span>
+          <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--success)' }}>
+            {cleaningRecords.length > 0 ? (
+              `${Math.round((cleaningRecords.filter(r => r.status === 'Clean' || r.status === 'Pass' || r.status === 'Satisfactory' || r.status === 'Normal').length / cleaningRecords.length) * 100)}% Pass`
+            ) : '100%'}
+          </div>
+        </div>
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>HYGIENE LOGS TODAY</span>
+          <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: 'var(--accent)' }}>
+            {cleaningRecords.filter(r => r.timestamp?.startsWith(new Date().toISOString().substring(0, 10))).length} Logs
+          </div>
+        </div>
+      </div>
+
+      {/* Template Card Grids */}
+      <div style={{ marginBottom: '24px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '12px', color: 'var(--text-heading)' }}>📋 Select Sanitation or Calibration Form</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+          {CLEANING_TEMPLATES.map(tpl => (
+            <div
+              key={tpl.id}
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '12px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '12px'
+              }}
+            >
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: '700', margin: '0 0 4px 0', color: 'var(--text-heading)' }}>🧹 {tpl.name}</h4>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>{tpl.description}</p>
               </div>
+              <button
+                className="primary-btn"
+                style={{ alignSelf: 'flex-start', fontSize: '11px', padding: '6px 12px' }}
+                onClick={() => setActiveCleaningForm(tpl.id)}
+              >
+                📝 Fill Form
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
-              {/* Template Card Grids */}
-              <div style={{ marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '12px', color: 'var(--text-heading)' }}>📋 Select Sanitation or Calibration Form</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-                  {CLEANING_TEMPLATES.map(tpl => (
-                    <div
-                      key={tpl.id}
-                      style={{
-                        backgroundColor: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        gap: '12px'
-                      }}
-                    >
-                      <div>
-                        <h4 style={{ fontSize: '13px', fontWeight: '700', margin: '0 0 4px 0', color: 'var(--text-heading)' }}>🧹 {tpl.name}</h4>
-                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>{tpl.description}</p>
-                      </div>
-                      <button
-                        className="primary-btn"
-                        style={{ alignSelf: 'flex-start', fontSize: '11px', padding: '6px 12px' }}
-                        onClick={() => setActiveCleaningForm(tpl.id)}
-                      >
-                        📝 Fill Form
-                      </button>
-                    </div>
-                  ))}
-                </div>
+      {/* History Table */}
+      <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '700', margin: 0, color: 'var(--text-heading)' }}>📋 Sanitation & QC Log History</h3>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Search */}
+            <input
+              type="text"
+              className="text-input"
+              style={{ width: '200px', padding: '6px 12px', fontSize: '11px' }}
+              placeholder="Search logs..."
+              value={cleaningSearchQuery}
+              onChange={e => setCleaningSearchQuery(e.target.value)}
+            />
+            {/* Filter Type */}
+            <select
+              className="text-input"
+              style={{ width: '180px', padding: '6px', fontSize: '11px' }}
+              value={cleaningFilterType}
+              onChange={e => setCleaningFilterType(e.target.value)}
+            >
+              <option value="All">All Form Types</option>
+              {CLEANING_TEMPLATES.map(t => (
+                <option key={t.id} value={t.doctype}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>No logs matched your criteria.</div>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <table className="custom-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--bg-card)' }}>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Log ID</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Form Template</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Performed By</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Status</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Submitted</th>
+                    <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.slice((cleaningPage - 1) * 20, cleaningPage * 20).map(rec => {
+                    const isPass = rec.status === 'Clean' || rec.status === 'Pass' || rec.status === 'Satisfactory' || rec.status === 'Normal';
+                    return (
+                      <tr key={rec.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ fontWeight: '700', padding: '10px' }}>{rec.id}</td>
+                        <td style={{ padding: '10px' }}>
+                          <strong>{rec.type}</strong>
+                        </td>
+                        <td style={{ padding: '10px' }}>👤 {resolveEmployeeName(rec.operator_name || rec.cleaner || rec.recorded_by || rec.checked_by || rec.performed_by, employeeList)}</td>
+                        <td style={{ padding: '10px' }}>
+                          <span className={`badge ${isPass ? 'badge-completed' : 'badge-failed'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                            {isPass ? '✓ Satisfactory' : '⚠️ Action Required'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{rec.timestamp}</td>
+                        <td style={{ padding: '10px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            style={{ padding: '4px 8px', fontSize: '11px' }}
+                            onClick={() => setViewingCleaningRecord(rec)}
+                          >
+                            👁️ View Details / Print
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={cleaningPage === 1}
+                onClick={() => setCleaningPage(prev => Math.max(1, prev - 1))}
+              >
+                ◀ Previous
+              </button>
+              <span style={{ fontSize: '12px', fontWeight: '600' }}>
+                Page {cleaningPage} of {Math.max(1, Math.ceil(filtered.length / 20))}
+              </span>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={cleaningPage === Math.max(1, Math.ceil(filtered.length / 20))}
+                onClick={() => setCleaningPage(prev => Math.min(Math.max(1, Math.ceil(filtered.length / 20)), prev + 1))}
+              >
+                Next ▶
+              </button>
+            </div>
+
+            {/* History Table Footnote & Approval Section */}
+            <div style={{
+              display: 'flex',
+              justify: 'space-between',
+              alignItems: 'center',
+              marginTop: '20px',
+              paddingTop: '14px',
+              borderTop: '1px solid var(--border-color)',
+              flexWrap: 'wrap',
+              gap: '16px',
+              fontSize: '12px'
+            }}>
+              <div style={{ fontWeight: '600', color: 'var(--text-muted)' }}>
+                Island Chill - Form no.
               </div>
-
-              {/* History Table */}
-              <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                  <h3 style={{ fontSize: '14px', fontWeight: '700', margin: 0, color: 'var(--text-heading)' }}>📋 Sanitation & QC Log History</h3>
-
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {/* Search */}
-                    <input
-                      type="text"
-                      className="text-input"
-                      style={{ width: '200px', padding: '6px 12px', fontSize: '11px' }}
-                      placeholder="Search logs..."
-                      value={cleaningSearchQuery}
-                      onChange={e => setCleaningSearchQuery(e.target.value)}
-                    />
-                    {/* Filter Type */}
-                    <select
-                      className="text-input"
-                      style={{ width: '180px', padding: '6px', fontSize: '11px' }}
-                      value={cleaningFilterType}
-                      onChange={e => setCleaningFilterType(e.target.value)}
-                    >
-                      <option value="All">All Form Types</option>
-                      {CLEANING_TEMPLATES.map(t => (
-                        <option key={t.id} value={t.doctype}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Approved By: </span>
+                  <span style={{ fontWeight: '700', color: 'var(--text-heading)' }}>L. Chaudhry (QA Manager)</span>
                 </div>
-
-                {filtered.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>No logs matched your criteria.</div>
-                ) : (
-                  <>
-                    <div className="table-responsive">
-                      <table className="custom-table" style={{ width: '100%' }}>
-                        <thead>
-                          <tr style={{ backgroundColor: 'var(--bg-card)' }}>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Log ID</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Form Template</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Performed By</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Status</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Submitted</th>
-                            <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filtered.slice((cleaningPage - 1) * 20, cleaningPage * 20).map(rec => {
-                            const isPass = rec.status === 'Clean' || rec.status === 'Pass' || rec.status === 'Satisfactory' || rec.status === 'Normal';
-                            return (
-                              <tr key={rec.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                <td style={{ fontWeight: '700', padding: '10px' }}>{rec.id}</td>
-                                <td style={{ padding: '10px' }}>
-                                  <strong>{rec.type}</strong>
-                                </td>
-                                <td style={{ padding: '10px' }}>👤 {rec.cleaner || rec.recorded_by || rec.checked_by || rec.performed_by}</td>
-                                <td style={{ padding: '10px' }}>
-                                  <span className={`badge ${isPass ? 'badge-completed' : 'badge-failed'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-                                    {isPass ? '✓ Satisfactory' : '⚠️ Action Required'}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{rec.timestamp}</td>
-                                <td style={{ padding: '10px', textAlign: 'center' }}>
-                                  <button
-                                    type="button"
-                                    className="secondary-btn"
-                                    style={{ padding: '4px 8px', fontSize: '11px' }}
-                                    onClick={() => setViewingCleaningRecord(rec)}
-                                  >
-                                    👁️ View Details
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Pagination */}
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        disabled={cleaningPage === 1}
-                        onClick={() => setCleaningPage(prev => Math.max(1, prev - 1))}
-                      >
-                        ◀ Previous
-                      </button>
-                      <span style={{ fontSize: '12px', fontWeight: '600' }}>
-                        Page {cleaningPage} of {Math.max(1, Math.ceil(filtered.length / 20))}
-                      </span>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        disabled={cleaningPage === Math.max(1, Math.ceil(filtered.length / 20))}
-                        onClick={() => setCleaningPage(prev => Math.min(Math.max(1, Math.ceil(filtered.length / 20)), prev + 1))}
-                      >
-                        Next ▶
-                      </button>
-                    </div>
-                  </>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Signature: </span>
+                  <span style={{
+                    fontFamily: "cursive, 'Brush Script MT', sans-serif",
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: 'var(--accent)',
+                    borderBottom: '1px solid var(--border-color)',
+                    padding: '0 10px 2px 10px'
+                  }}>
+                    L. Chaudhry
+                  </span>
+                </div>
               </div>
             </div>
-          );
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

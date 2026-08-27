@@ -95,13 +95,23 @@ export function LabForm1Modal({ onClose, onSubmit, saving, employeeList, handleS
                   className="form-input"
                   required
                   value={analyst}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labAnalyst')}
                   onChange={(e) => { setAnalyst(e.target.value); handleSearchEmployees(e.target.value, 'labAnalyst'); }}
                   placeholder="Search Analyst..."
                 />
                 {showEmployeeDropdown && activeSearchField === 'labAnalyst' && (
                   <div className="autocomplete-dropdown">
                     {employeeList.map(emp => (
-                      <div key={emp.name} className="dropdown-item" onClick={() => { setAnalyst(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setAnalyst(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => { setAnalyst(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                      >
                         👤 {emp.employee_name || emp.name} ({emp.designation || 'Analyst'})
                       </div>
                     ))}
@@ -115,13 +125,23 @@ export function LabForm1Modal({ onClose, onSubmit, saving, employeeList, handleS
                   className="form-input"
                   required
                   value={manager}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labManager')}
                   onChange={(e) => { setManager(e.target.value); handleSearchEmployees(e.target.value, 'labManager'); }}
                   placeholder="Search Manager..."
                 />
                 {showEmployeeDropdown && activeSearchField === 'labManager' && (
                   <div className="autocomplete-dropdown">
                     {employeeList.map(emp => (
-                      <div key={emp.name} className="dropdown-item" onClick={() => { setManager(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setManager(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => { setManager(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                      >
                         👤 {emp.employee_name || emp.name} ({emp.designation || 'Manager'})
                       </div>
                     ))}
@@ -139,10 +159,10 @@ export function LabForm1Modal({ onClose, onSubmit, saving, employeeList, handleS
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Closures Lot No. *</label>
                 <input type="text" className="form-input" required value={closuresLotNo} onChange={e => setClosuresLotNo(e.target.value)} placeholder="Lot number" />
               </div>
-              <div>
+              {/* <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>BIB Inner Bag *</label>
                 <input type="text" className="form-input" required value={bibInnerBag} onChange={e => setBibInnerBag(e.target.value)} placeholder="Lot number" />
-              </div>
+              </div> */}
             </div>
 
             <div>
@@ -233,15 +253,23 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
   const [alcoholCheck, setAlcoholCheck] = useState('0.0');
   const [brixCheck, setBrixCheck] = useState('0.0');
 
-  const [prodPh, setProdPh] = useState('7.2');
-  const [prodPhTime, setProdPhTime] = useState('10:00');
-  const [prodTds, setProdTds] = useState('120');
-  const [prodTdsTime, setProdTdsTime] = useState('10:00');
+  const [prodPh1, setProdPh1] = useState('7.2');
+  const [prodPhTime1, setProdPhTime1] = useState('10:00');
+  const [prodTds1, setProdTds1] = useState('120');
+  const [prodTdsTime1, setProdTdsTime1] = useState('10:00');
+  const [tasteCheck1, setTasteCheck1] = useState('Pass');
+  const [tasteTime1, setTasteTime1] = useState('10:00');
+  const [particleCheck1, setParticleCheck1] = useState('Pass');
+  const [particleTime1, setParticleTime1] = useState('10:00');
 
-  const [tasteCheck, setTasteCheck] = useState('Pass');
-  const [tasteTime, setTasteTime] = useState('10:00');
-  const [particleCheck, setParticleCheck] = useState('Pass');
-  const [particleTime, setParticleTime] = useState('10:00');
+  const [prodPh2, setProdPh2] = useState('7.2');
+  const [prodPhTime2, setProdPhTime2] = useState('14:00');
+  const [prodTds2, setProdTds2] = useState('120');
+  const [prodTdsTime2, setProdTdsTime2] = useState('14:00');
+  const [tasteCheck2, setTasteCheck2] = useState('Pass');
+  const [tasteTime2, setTasteTime2] = useState('14:00');
+  const [particleCheck2, setParticleCheck2] = useState('Pass');
+  const [particleTime2, setParticleTime2] = useState('14:00');
 
   const [buffer4, setBuffer4] = useState('4.00');
   const [buffer7, setBuffer7] = useState('7.00');
@@ -260,8 +288,10 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
       rawPh, rawPhTime, rawTds, rawTdsTime,
       cipPh, cipTime,
       alcoholCheck, brixCheck,
-      prodPh, prodPhTime, prodTds, prodTdsTime,
-      tasteCheck, tasteTime, particleCheck, particleTime,
+      prodPh: prodPh1, prodPhTime: prodPhTime1, prodTds: prodTds1, prodTdsTime: prodTdsTime1,
+      tasteCheck: tasteCheck1, tasteTime: tasteTime1, particleCheck: particleCheck1, particleTime: particleTime1,
+      prodPh1, prodPhTime1, prodTds1, prodTdsTime1, tasteCheck1, tasteTime1, particleCheck1, particleTime1,
+      prodPh2, prodPhTime2, prodTds2, prodTdsTime2, tasteCheck2, tasteTime2, particleCheck2, particleTime2,
       buffer4, buffer7, buffer10, cond1413, checkStandard,
       comments
     });
@@ -378,42 +408,73 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
               </div>
             </div>
 
-            {/* Section 2: Product Water PET / BIB */}
-            <div style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-              <h4 style={{ color: 'var(--accent)', fontSize: '12px', marginBottom: '8px' }}>3. Product Water PET / BIB (Spec Range: pH 6.5-8.5, TDS 50-500ppm)</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '10px' }}>pH Level / Time</label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <input type="number" step="0.01" className="form-input" style={{ height: '30px', borderColor: (Number(prodPh) < 6.5 || Number(prodPh) > 8.5) ? 'var(--danger)' : '' }} value={prodPh} onChange={e => setProdPh(e.target.value)} />
-                    <input type="time" className="form-input" style={{ height: '30px', padding: '2px' }} value={prodPhTime} onChange={e => setProdPhTime(e.target.value)} />
-                  </div>
+            {/* Section 2: Product Water PET / BIB (2 Rows) */}
+            <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', backgroundColor: '#ffffff' }}>
+              <h4 style={{ color: 'var(--accent)', fontSize: '12px', fontWeight: '700', marginBottom: '12px' }}>
+                3. Product Water PET / BIB (Spec Range: pH 6.5-8.5, TDS 50-500ppm)
+              </h4>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Column Headers */}
+                <div style={{ display: 'grid', gridTemplateColumns: '85px 1fr 1fr 1fr 1fr', gap: '10px', fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>
+                  <div>Type / Row</div>
+                  <div>pH Level / Time</div>
+                  <div>TDS Level (ppm) / Time</div>
+                  <div>Taste & Odour Check</div>
+                  <div>Visual Particle Check</div>
                 </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>TDS Level (ppm) / Time</label>
+
+                {/* Row 1: PET */}
+                <div style={{ display: 'grid', gridTemplateColumns: '85px 1fr 1fr 1fr 1fr', gap: '10px', alignItems: 'center' }}>
+                  <span style={{ fontWeight: '700', fontSize: '11px', color: 'var(--text-heading)' }}>Row 1 (PET)</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <input type="number" className="form-input" style={{ height: '30px', borderColor: (Number(prodTds) < 50 || Number(prodTds) > 500) ? 'var(--danger)' : '' }} value={prodTds} onChange={e => setProdTds(e.target.value)} />
-                    <input type="time" className="form-input" style={{ height: '30px', padding: '2px' }} value={prodTdsTime} onChange={e => setProdTdsTime(e.target.value)} />
+                    <input type="number" step="0.01" className="form-input" style={{ height: '30px', flex: 1, borderColor: (Number(prodPh1) < 6.5 || Number(prodPh1) > 8.5) ? 'var(--danger)' : '' }} value={prodPh1} onChange={e => setProdPh1(e.target.value)} placeholder="7.2" />
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={prodPhTime1} onChange={e => setProdPhTime1(e.target.value)} />
                   </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Taste & Odour Check</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <select className="form-input" style={{ height: '30px' }} value={tasteCheck} onChange={e => setTasteCheck(e.target.value)}>
+                    <input type="number" className="form-input" style={{ height: '30px', flex: 1, borderColor: (Number(prodTds1) < 50 || Number(prodTds1) > 500) ? 'var(--danger)' : '' }} value={prodTds1} onChange={e => setProdTds1(e.target.value)} placeholder="120" />
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={prodTdsTime1} onChange={e => setProdTdsTime1(e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <select className="form-input" style={{ height: '30px', flex: 1 }} value={tasteCheck1} onChange={e => setTasteCheck1(e.target.value)}>
                       <option value="Pass">Pass</option>
                       <option value="Fail">Fail</option>
                     </select>
-                    <input type="time" className="form-input" style={{ height: '30px', padding: '2px' }} value={tasteTime} onChange={e => setTasteTime(e.target.value)} />
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={tasteTime1} onChange={e => setTasteTime1(e.target.value)} />
                   </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Visual Particle Check</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <select className="form-input" style={{ height: '30px' }} value={particleCheck} onChange={e => setParticleCheck(e.target.value)}>
+                    <select className="form-input" style={{ height: '30px', flex: 1 }} value={particleCheck1} onChange={e => setParticleCheck1(e.target.value)}>
                       <option value="Pass">Pass</option>
                       <option value="Fail">Fail</option>
                     </select>
-                    <input type="time" className="form-input" style={{ height: '30px', padding: '2px' }} value={particleTime} onChange={e => setParticleTime(e.target.value)} />
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={particleTime1} onChange={e => setParticleTime1(e.target.value)} />
+                  </div>
+                </div>
+
+                {/* Row 2: BIB */}
+                <div style={{ display: 'grid', gridTemplateColumns: '85px 1fr 1fr 1fr 1fr', gap: '10px', alignItems: 'center' }}>
+                  <span style={{ fontWeight: '700', fontSize: '11px', color: 'var(--text-heading)' }}>Row 2 (BIB)</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input type="number" step="0.01" className="form-input" style={{ height: '30px', flex: 1, borderColor: (Number(prodPh2) < 6.5 || Number(prodPh2) > 8.5) ? 'var(--danger)' : '' }} value={prodPh2} onChange={e => setProdPh2(e.target.value)} placeholder="7.2" />
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={prodPhTime2} onChange={e => setProdPhTime2(e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input type="number" className="form-input" style={{ height: '30px', flex: 1, borderColor: (Number(prodTds2) < 50 || Number(prodTds2) > 500) ? 'var(--danger)' : '' }} value={prodTds2} onChange={e => setProdTds2(e.target.value)} placeholder="120" />
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={prodTdsTime2} onChange={e => setProdTdsTime2(e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <select className="form-input" style={{ height: '30px', flex: 1 }} value={tasteCheck2} onChange={e => setTasteCheck2(e.target.value)}>
+                      <option value="Pass">Pass</option>
+                      <option value="Fail">Fail</option>
+                    </select>
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={tasteTime2} onChange={e => setTasteTime2(e.target.value)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <select className="form-input" style={{ height: '30px', flex: 1 }} value={particleCheck2} onChange={e => setParticleCheck2(e.target.value)}>
+                      <option value="Pass">Pass</option>
+                      <option value="Fail">Fail</option>
+                    </select>
+                    <input type="time" className="form-input" style={{ height: '30px', width: '85px', padding: '2px' }} value={particleTime2} onChange={e => setParticleTime2(e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -476,7 +537,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
   const [compactDryEC, setCompactDryEC] = useState('CD-EC-901');
   const [pipetteLot, setPipetteLot] = useState('PL-9988');
   const [spcAgarDate, setSpcAgarDate] = useState(new Date().toISOString().slice(0, 10));
-  const [incubatorNo, setIncubatorNo] = useState('INC-03');
+  const [incubatorNo, setIncubatorNo] = useState('1');
   const [incubatorTestType, setIncubatorTestType] = useState('TCC');
 
   const [tccIncubationIn, setTccIncubationIn] = useState(new Date().toISOString().slice(0, 16));
@@ -619,15 +680,18 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Market Area</label>
-                <input type="text" className="form-input" value={market} onChange={e => setMarket(e.target.value)} placeholder="e.g. Export / Local" />
+                <select className="form-input" value={market} onChange={e => setMarket(e.target.value)}>
+                  <option value="Local">Local</option>
+                  <option value="Export">Export</option>
+                </select>
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Product Size</label>
                 <input type="text" className="form-input" value={productSize} onChange={e => setProductSize(e.target.value)} placeholder="e.g. 500mL / 1.5L" />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Vessel / Silo</label>
-                <input type="text" className="form-input" value={vessel} onChange={e => setVessel(e.target.value)} placeholder="Vessel Name" />
+                <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Vessel / Lot Number</label>
+                <input type="text" className="form-input" value={vessel} onChange={e => setVessel(e.target.value)} placeholder="Vessel / Lot No." />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Compact Dry EC Batch</label>
@@ -645,8 +709,12 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 <input type="date" className="form-input" min={new Date().toISOString().split('T')[0]} value={spcAgarDate} onChange={e => setSpcAgarDate(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incubator ID / Room</label>
-                <input type="text" className="form-input" value={incubatorNo} onChange={e => setIncubatorNo(e.target.value)} />
+                <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incubator No.</label>
+                <select className="form-input" value={incubatorNo} onChange={e => setIncubatorNo(e.target.value)}>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Incubator Test Type</label>
@@ -1108,13 +1176,34 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
               </div>
 
               <div>
-                <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Product Water PET / BIB</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                  <div><strong>pH Level:</strong> {record.prodPh} (at {record.prodPhTime})</div>
-                  <div><strong>TDS Level:</strong> {record.prodTds} ppm (at {record.prodTdsTime})</div>
-                  <div><strong>Taste Test:</strong> {record.tasteCheck} (at {record.tasteTime})</div>
-                  <div><strong>Visual Particle:</strong> {record.particleCheck} (at {record.particleTime})</div>
-                </div>
+                <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>3. Product Water PET / BIB</h4>
+                <table className="custom-table" style={{ width: '100%', fontSize: '11px', marginBottom: '8px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f3f4f6' }}>
+                      <th>Line / Row</th>
+                      <th>pH Level / Time</th>
+                      <th>TDS Level (ppm) / Time</th>
+                      <th>Taste & Odour Check</th>
+                      <th>Visual Particle Check</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td><strong>Row 1 (PET)</strong></td>
+                      <td>{record.prodPh1 || record.prodPh} (at {record.prodPhTime1 || record.prodPhTime})</td>
+                      <td>{record.prodTds1 || record.prodTds} ppm (at {record.prodTdsTime1 || record.prodTdsTime})</td>
+                      <td>{record.tasteCheck1 || record.tasteCheck} (at {record.tasteTime1 || record.tasteTime})</td>
+                      <td>{record.particleCheck1 || record.particleCheck} (at {record.particleTime1 || record.particleTime})</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td><strong>Row 2 (BIB)</strong></td>
+                      <td>{record.prodPh2 || record.prodPh || '-'} (at {record.prodPhTime2 || record.prodPhTime || '-'})</td>
+                      <td>{record.prodTds2 || record.prodTds || '-'} ppm (at {record.prodTdsTime2 || record.prodTdsTime || '-'})</td>
+                      <td>{record.tasteCheck2 || record.tasteCheck || '-'} (at {record.tasteTime2 || record.tasteTime || '-'})</td>
+                      <td>{record.particleCheck2 || record.particleCheck || '-'} (at {record.particleTime2 || record.particleTime || '-'})</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <div>
@@ -1341,64 +1430,122 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
             </div>
           )}
 
-          {/* Form 100 Production Record */}
-          {record.type === 'Form 100 (Production Log)' && (
+          {/* Form 35 Gold Stone Rum & Cola */}
+          {(record.type === 'Form 35: Gold Stone Rum & Cola' || record.type === 'Gold Stone Rum and Cola' || record.type?.includes('35')) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                <div><strong>Shift Date:</strong> {record.date}</div>
-                <div><strong>Time Start:</strong> {record.timeStart}</div>
-                <div><strong>Time Stop:</strong> {record.timeStop}</div>
-                <div><strong>Market Area:</strong> {record.market}</div>
-                <div><strong>Supervisor:</strong> {record.supervisor}</div>
-                <div><strong>Product:</strong> {record.productDesc}</div>
-                <div><strong>Size:</strong> {record.productSize}</div>
-                <div><strong>Packaging:</strong> {record.packingType}</div>
+                <div><strong>Log Date:</strong> {record.date}</div>
+                <div><strong>Tank No:</strong> {record.tankNo}</div>
+                <div><strong>Volume:</strong> {record.volume}</div>
+                <div><strong>Prepared By:</strong> {record.preparedBy}</div>
+                <div><strong>Verified By:</strong> {record.verifiedBy}</div>
+                <div><strong>Lab Alc %:</strong> {record.labAlc}% (Analysed: {record.analysedBy})</div>
+                <div><strong>Tank pH:</strong> {record.tankPh}</div>
+                <div><strong>Finished pH:</strong> {record.finishedPh}</div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                <div>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Warehouse Handover</h4>
-                  <div><strong>Total Cases Handover:</strong> {record.warehouseCases}</div>
-                  <div><strong>Endorsed By:</strong> {record.endorsedBy}</div>
-                  <div><strong>Received By (Warehouse):</strong> {record.receivedBy}</div>
-                  <div style={{ marginTop: '6px' }}><strong>Filler Counter:</strong> {record.fillerCounter}</div>
-                  <div><strong>Labeller Counter:</strong> {record.labellerCounter}</div>
-                </div>
-                <div>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Utility Meter Readings</h4>
-                  <div><strong>LPG Level (Start / Stop):</strong> {record.lpgStart} / {record.lpgStop}</div>
-                  <div><strong>EFL Level (Start / Stop):</strong> {record.eflStart} / {record.eflStop}</div>
-                  <div><strong>BOC Vessel level (Start / Stop):</strong> {record.bocStart} / {record.bocStop}</div>
-                </div>
-              </div>
+              <h4 style={{ color: 'var(--accent)', marginBottom: '4px' }}>Ingredients Checklist</h4>
+              <table className="custom-table" style={{ width: '100%', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6' }}>
+                    <th style={{ width: '40px' }}>No.</th>
+                    <th>Item</th>
+                    <th>Standard Qty</th>
+                    <th>UOM</th>
+                    <th>Lot/Batch No</th>
+                    <th>Added Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(record.ingredients || []).map((ing, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ textAlign: 'center', fontWeight: '600' }}>{idx + 1}</td>
+                      <td><strong>{ing.item}</strong></td>
+                      <td>{ing.standardQty}</td>
+                      <td>{ing.uom}</td>
+                      <td>{ing.lotBatchNo || '-'}</td>
+                      <td>{ing.addedQty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Production Crew</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                    <div>In-feed: {record.crewInfeed}</div>
-                    <div>Filler Operator: {record.crewFiller}</div>
-                    <div>Lab Chemist: {record.crewLab}</div>
-                    <div>Water System: {record.crewWater}</div>
-                    <div>Blowing Operator: {record.crewBlowing}</div>
-                    <div>Labeller: {record.crewLabeller}</div>
-                  </div>
-                </div>
-                <div>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Wastage Logs</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                    <div>Bottle/Cans: {record.wasteBottles}</div>
-                    <div>Cap/Lid Wastage: {record.wasteCaps}</div>
-                    <div>Preform waste: {record.wastePreform}</div>
-                    <div>LDPE film waste: {record.wasteLdpe}</div>
-                    <div>Cartons wasted: {record.wasteCartons}</div>
-                    <div>Lab Samples taken: {record.wasteSamples}</div>
-                  </div>
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                <div><strong>Sugar Required (Kg):</strong> {record.sugarRequired}</div>
+                <div><strong>Sugar Added (Kg):</strong> {record.sugarAdded}</div>
+                <div><strong>Brix % Mixer:</strong> {record.brixMixer}%</div>
               </div>
 
               {record.comments && (
-                <div><strong>Downtimes / Comments:</strong> {record.comments}</div>
+                <div><strong>Comments:</strong> {record.comments}</div>
+              )}
+            </div>
+          )}
+
+          {/* Form 86 Incubator Temperature Record */}
+          {(record.type === 'Form 86: Incubator Temperature Record' || record.type === 'Incubator Temperature Record' || record.type?.includes('86')) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div><strong>Log Date:</strong> {record.posting_date || record.date}</div>
+                <div><strong>Recorded By:</strong> {record.recordedBy || record.checked_by || record.cleaner || 'Analyst'}</div>
+                <div><strong>Verified By:</strong> {record.verifiedBy || record.supervisor || '-'}</div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '14px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--text-heading)' }}>🌡️ Incubator No. 1</h4>
+                  <div><strong>Check Time:</strong> {record.time || '12:00'}</div>
+                  <div><strong>Thermometer Reading:</strong> {record.incubator_1 || '-'} °C</div>
+                </div>
+                <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '16px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--text-heading)' }}>🌡️ Incubator No. 2</h4>
+                  <div><strong>Check Time:</strong> {record.time_2 || '12:00'}</div>
+                  <div><strong>Thermometer Reading:</strong> {record.incubator_2 || '-'} °C</div>
+                </div>
+              </div>
+
+              {record.remarks && (
+                <div><strong>Observations / Remarks:</strong> {record.remarks}</div>
+              )}
+            </div>
+          )}
+
+          {/* Form 88 Weight Check Checklist */}
+          {(record.type === 'Form 88: Weight Check Checklist' || record.type === 'Standard Form 88: Weight Check' || record.type?.includes('88') || record.type?.includes('Weight Check')) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderLeft: '4px solid var(--accent)', color: 'var(--text-heading)' }}>
+                <strong>Weight Check frequency:</strong> Weight Check frequency is twice per Day.
+              </div>
+
+              <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6' }}>
+                    <th style={{ width: '50px' }}>Slot</th>
+                    <th style={{ width: '110px' }}>Date</th>
+                    <th>Checked By</th>
+                    <th>Verified By</th>
+                    <th>Product Description</th>
+                    <th style={{ width: '80px' }}>Weight 1</th>
+                    <th style={{ width: '80px' }}>Weight 2</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(record.rows || []).map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ textAlign: 'center', fontWeight: '600' }}>#{idx + 1}</td>
+                      <td>{row.date}</td>
+                      <td>{row.checkedBy || '-'}</td>
+                      <td>{row.verifiedBy || '-'}</td>
+                      <td><strong>{row.productDesc}</strong></td>
+                      <td>{row.weight1}</td>
+                      <td>{row.weight2}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {record.overallComments && (
+                <div><strong>Overall Comments / Remarks:</strong> {record.overallComments}</div>
               )}
             </div>
           )}
@@ -1528,7 +1675,11 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600' }}>Tank Number</label>
-                <input type="text" className="form-input" value={tankNo} onChange={e => setTankNo(e.target.value)} />
+                <select className="form-input" value={tankNo} onChange={e => setTankNo(e.target.value)}>
+                  {Array.from({ length: 10 }, (_, i) => `Tank ${i + 1}`).map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600' }}>Volume</label>
@@ -1544,13 +1695,26 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   className="form-input"
                   required
                   value={preparedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labPreparedBy')}
                   onChange={(e) => { setPreparedBy(e.target.value); handleSearchEmployees(e.target.value, 'labPreparedBy'); }}
                   placeholder="Search Employee..."
                 />
                 {showEmployeeDropdown && activeSearchField === 'labPreparedBy' && (
                   <div className="autocomplete-dropdown">
                     {employeeList.map(emp => (
-                      <div key={emp.name} className="dropdown-item" onClick={() => { setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
                         👤 {emp.employee_name || emp.name}
                       </div>
                     ))}
@@ -1564,13 +1728,26 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   className="form-input"
                   required
                   value={verifiedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labVerifiedBy')}
                   onChange={(e) => { setVerifiedBy(e.target.value); handleSearchEmployees(e.target.value, 'labVerifiedBy'); }}
                   placeholder="Search Verifier..."
                 />
                 {showEmployeeDropdown && activeSearchField === 'labVerifiedBy' && (
                   <div className="autocomplete-dropdown">
                     {employeeList.map(emp => (
-                      <div key={emp.name} className="dropdown-item" onClick={() => { setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
                         👤 {emp.employee_name || emp.name}
                       </div>
                     ))}
@@ -1584,13 +1761,26 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   className="form-input"
                   required
                   value={analysedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labAnalyst')}
                   onChange={(e) => { setAnalysedBy(e.target.value); handleSearchEmployees(e.target.value, 'labAnalyst'); }}
                   placeholder="Search Analyst..."
                 />
                 {showEmployeeDropdown && activeSearchField === 'labAnalyst' && (
                   <div className="autocomplete-dropdown">
                     {employeeList.map(emp => (
-                      <div key={emp.name} className="dropdown-item" onClick={() => { setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
                         👤 {emp.employee_name || emp.name}
                       </div>
                     ))}
@@ -1709,55 +1899,62 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-
-export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
+export function LabForm35Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [timeStart, setTimeStart] = useState('08:00');
-  const [timeStop, setTimeStop] = useState('16:30');
-  const [market, setMarket] = useState('Local');
-  const [supervisor, setSupervisor] = useState('');
-  const [productDesc, setProductDesc] = useState('Island Chill Water');
-  const [productSize, setProductSize] = useState('600ml PET');
-  const [packingType, setPackingType] = useState('Cartons');
+  const [tankNo, setTankNo] = useState('Tank 1');
+  const [volume, setVolume] = useState('2000L');
+  const [preparedBy, setPreparedBy] = useState('');
+  const [verifiedBy, setVerifiedBy] = useState('');
+  const [analysedBy, setAnalysedBy] = useState('');
+  const [labAlc, setLabAlc] = useState('5.0');
+  const [tankPh, setTankPh] = useState('3.8');
+  const [finishedPh, setFinishedPh] = useState('3.8');
 
-  const [warehouseCases, setWarehouseCases] = useState('1450');
-  const [endorsedBy, setEndorsedBy] = useState('');
-  const [receivedBy, setReceivedBy] = useState('');
-  const [fillerCounter, setFillerCounter] = useState('34890');
-  const [labellerCounter, setLabellerCounter] = useState('34882');
+  const [ingredients, setIngredients] = useState([
+    { item: 'ETHANOL', standardQty: '0.00000000', uom: 'L', lotBatchNo: '', addedQty: '0.00000000' },
+    { item: 'RUM FLAVOUR', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' },
+    { item: 'LEMON FLAVOUR', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' },
+    { item: 'COLA FLAVOUR', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' },
+    { item: 'COLA ACIDULANT', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' },
+    { item: 'AGED FLAVOUR', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' },
+    { item: 'SODIUM BENZOATE', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' }
+  ]);
 
-  const [lpgStart, setLpgStart] = useState('45%');
-  const [lpgStop, setLpgStop] = useState('40%');
-  const [eflStart, setEflStart] = useState('10200');
-  const [eflStop, setEflStop] = useState('10950');
-  const [bocStart, setBocStart] = useState('80%');
-  const [bocStop, setBocStop] = useState('75%');
-
-  const [crewInfeed, setCrewInfeed] = useState('');
-  const [crewFiller, setCrewFiller] = useState('');
-  const [crewLab, setCrewLab] = useState('');
-  const [crewWater, setCrewWater] = useState('');
-  const [crewBlowing, setCrewBlowing] = useState('');
-  const [crewLabeller, setCrewLabeller] = useState('');
-
-  const [wasteBottles, setWasteBottles] = useState('12');
-  const [wasteCaps, setWasteCaps] = useState('15');
-  const [wastePreform, setWastePreform] = useState('8');
-  const [wasteLdpe, setWasteLdpe] = useState('2kg');
-  const [wasteCartons, setWasteCartons] = useState('3');
-  const [wasteSamples, setWasteSamples] = useState('10');
+  const [sugarRequired, setSugarRequired] = useState('150.00');
+  const [sugarAdded, setSugarAdded] = useState('150.00');
+  const [brixMixer, setBrixMixer] = useState('11.2');
+  const [brixMixerBy, setBrixMixerBy] = useState('');
+  const [brixProduct, setBrixProduct] = useState('11.4');
+  const [gasLevel, setGasLevel] = useState('2.8');
+  const [brixProductBy, setBrixProductBy] = useState('');
+  const [approvedBy, setApprovedBy] = useState('');
   const [comments, setComments] = useState('');
+
+  const handleIngredientChange = (index, field, value) => {
+    setIngredients(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleAddIngredientRow = () => {
+    setIngredients(prev => [
+      ...prev,
+      { item: '', standardQty: '0.00000000', uom: 'Kg', lotBatchNo: '', addedQty: '0.00000000' }
+    ]);
+  };
+
+  const handleRemoveIngredientRow = (index) => {
+    setIngredients(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmitForm = (e) => {
     e.preventDefault();
     onSubmit({
-      date, timeStart, timeStop, market, supervisor, productDesc, productSize, packingType,
-      warehouseCases, endorsedBy, receivedBy, fillerCounter, labellerCounter,
-      lpgStart, lpgStop, eflStart, eflStop, bocStart, bocStop,
-      crewInfeed, crewFiller, crewLab, crewWater, crewBlowing, crewLabeller,
-      wasteBottles, wasteCaps, wastePreform, wasteLdpe, wasteCartons, wasteSamples,
-      comments,
-      analyst: supervisor
+      date, tankNo, volume, preparedBy, verifiedBy, analysedBy, labAlc, tankPh, finishedPh,
+      ingredients, sugarRequired, sugarAdded, brixMixer, brixMixerBy, brixProduct, gasLevel, brixProductBy, approvedBy, comments,
+      analyst: preparedBy
     });
   };
 
@@ -1767,40 +1964,126 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
         <div className="modal-header">
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Standard Form 100: Daily Production & Handover Record</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Standard Form 35: Gold Stone Rum and Cola Batch Record</span>
           </div>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Shift Date</label>
-                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Date *</label>
+                <input type="date" className="form-input" required value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Time Start</label>
-                <input type="time" className="form-input" value={timeStart} onChange={e => setTimeStart(e.target.value)} />
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Tank No</label>
+                <select className="form-input" value={tankNo} onChange={e => setTankNo(e.target.value)}>
+                  {Array.from({ length: 10 }, (_, i) => `Tank ${i + 1}`).map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Time Stop</label>
-                <input type="time" className="form-input" value={timeStop} onChange={e => setTimeStop(e.target.value)} />
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Volume</label>
+                <input type="text" className="form-input" value={volume} onChange={e => setVolume(e.target.value)} />
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               <div style={{ position: 'relative' }}>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Production Supervisor *</label>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Prepared By *</label>
                 <input
                   type="text"
                   className="form-input"
                   required
-                  value={supervisor}
-                  onChange={(e) => { setSupervisor(e.target.value); handleSearchEmployees(e.target.value, 'labProdSupervisor'); }}
-                  placeholder="Search Supervisor..."
+                  value={preparedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labPreparedBy')}
+                  onChange={(e) => { setPreparedBy(e.target.value); handleSearchEmployees(e.target.value, 'labPreparedBy'); }}
+                  placeholder="Search Employee..."
                 />
-                {showEmployeeDropdown && activeSearchField === 'labProdSupervisor' && (
+                {showEmployeeDropdown && activeSearchField === 'labPreparedBy' && (
                   <div className="autocomplete-dropdown">
                     {employeeList.map(emp => (
-                      <div key={emp.name} className="dropdown-item" onClick={() => { setSupervisor(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Verified By *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  value={verifiedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labVerifiedBy')}
+                  onChange={(e) => { setVerifiedBy(e.target.value); handleSearchEmployees(e.target.value, 'labVerifiedBy'); }}
+                  placeholder="Search Verifier..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labVerifiedBy' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Analysed By *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  value={analysedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labAnalyst')}
+                  onChange={(e) => { setAnalysedBy(e.target.value); handleSearchEmployees(e.target.value, 'labAnalyst'); }}
+                  placeholder="Search Analyst..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labAnalyst' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
                         👤 {emp.employee_name || emp.name}
                       </div>
                     ))}
@@ -1809,188 +2092,576 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Product Description</label>
-                <input type="text" className="form-input" value={productDesc} onChange={e => setProductDesc(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Size</label>
-                <input type="text" className="form-input" value={productSize} onChange={e => setProductSize(e.target.value)} />
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Lab Report Alcohol %</label>
+                <input type="number" step="0.01" className="form-input" value={labAlc} onChange={e => setLabAlc(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Market</label>
-                <input type="text" className="form-input" value={market} onChange={e => setMarket(e.target.value)} />
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Tank PH</label>
+                <input type="number" step="0.1" className="form-input" value={tankPh} onChange={e => setTankPh(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Packing Type</label>
-                <input type="text" className="form-input" value={packingType} onChange={e => setPackingType(e.target.value)} placeholder="Cartons / LDPE Wrap" />
-              </div>
-            </div>
-
-            {/* Warehouse Handover */}
-            <div style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-              <h4 style={{ color: 'var(--accent)', fontSize: '12px', marginBottom: '8px' }}>1. Warehouse Handover Details</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Cases Handed Over</label>
-                  <input type="text" className="form-input" value={warehouseCases} onChange={e => setWarehouseCases(e.target.value)} />
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <label style={{ fontSize: '10px' }}>Endorsed By *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required
-                    value={endorsedBy}
-                    onChange={(e) => { setEndorsedBy(e.target.value); handleSearchEmployees(e.target.value, 'labEndorsedBy'); }}
-                  />
-                  {showEmployeeDropdown && activeSearchField === 'labEndorsedBy' && (
-                    <div className="autocomplete-dropdown">
-                      {employeeList.map(emp => (
-                        <div key={emp.name} className="dropdown-item" onClick={() => { setEndorsedBy(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
-                          👤 {emp.employee_name || emp.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <label style={{ fontSize: '10px' }}>Received By Warehouse *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required
-                    value={receivedBy}
-                    onChange={(e) => { setReceivedBy(e.target.value); handleSearchEmployees(e.target.value, 'labReceivedBy'); }}
-                  />
-                  {showEmployeeDropdown && activeSearchField === 'labReceivedBy' && (
-                    <div className="autocomplete-dropdown">
-                      {employeeList.map(emp => (
-                        <div key={emp.name} className="dropdown-item" onClick={() => { setReceivedBy(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
-                          👤 {emp.employee_name || emp.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Filler Counter</label>
-                  <input type="number" className="form-input" value={fillerCounter} onChange={e => setFillerCounter(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Labeller Counter</label>
-                  <input type="number" className="form-input" value={labellerCounter} onChange={e => setLabellerCounter(e.target.value)} />
-                </div>
-              </div>
-            </div>
-
-            {/* Meter readings & Crew */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', fontSize: '12px', marginBottom: '8px' }}>2. Utilities Meter readings</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>LPG (Start / Stop)</label>
-                    <div style={{ display: 'flex', gap: '2px' }}>
-                      <input type="text" className="form-input" style={{ height: '30px' }} value={lpgStart} onChange={e => setLpgStart(e.target.value)} />
-                      <input type="text" className="form-input" style={{ height: '30px' }} value={lpgStop} onChange={e => setLpgStop(e.target.value)} />
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>EFL (Start / Stop)</label>
-                    <div style={{ display: 'flex', gap: '2px' }}>
-                      <input type="text" className="form-input" style={{ height: '30px' }} value={eflStart} onChange={e => setEflStart(e.target.value)} />
-                      <input type="text" className="form-input" style={{ height: '30px' }} value={eflStop} onChange={e => setEflStop(e.target.value)} />
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>BOC Vessel (Start / Stop)</label>
-                    <div style={{ display: 'flex', gap: '2px' }}>
-                      <input type="text" className="form-input" style={{ height: '30px' }} value={bocStart} onChange={e => setBocStart(e.target.value)} />
-                      <input type="text" className="form-input" style={{ height: '30px' }} value={bocStop} onChange={e => setBocStop(e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', fontSize: '12px', marginBottom: '8px' }}>3. Production Crew List</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>Infeed / Palletizer</label>
-                    <input type="text" className="form-input" style={{ height: '30px' }} value={crewInfeed} onChange={e => setCrewInfeed(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>Filler Operator</label>
-                    <input type="text" className="form-input" style={{ height: '30px' }} value={crewFiller} onChange={e => setCrewFiller(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>Lab Chemist</label>
-                    <input type="text" className="form-input" style={{ height: '30px' }} value={crewLab} onChange={e => setCrewLab(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>Water System</label>
-                    <input type="text" className="form-input" style={{ height: '30px' }} value={crewWater} onChange={e => setCrewWater(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>Blowing Operator</label>
-                    <input type="text" className="form-input" style={{ height: '30px' }} value={crewBlowing} onChange={e => setCrewBlowing(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '10px' }}>Labeller Operator</label>
-                    <input type="text" className="form-input" style={{ height: '30px' }} value={crewLabeller} onChange={e => setCrewLabeller(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Wastage Logs */}
-            <div style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-              <h4 style={{ color: 'var(--accent)', fontSize: '12px', marginBottom: '8px' }}>4. Caps & Material Wastage count</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px' }}>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Bottle / Cans</label>
-                  <input type="text" className="form-input" style={{ height: '30px' }} value={wasteBottles} onChange={e => setWasteBottles(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Cap / Lid waste</label>
-                  <input type="text" className="form-input" style={{ height: '30px' }} value={wasteCaps} onChange={e => setWasteCaps(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Preform waste</label>
-                  <input type="text" className="form-input" style={{ height: '30px' }} value={wastePreform} onChange={e => setWastePreform(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>LDPE Wrap waste</label>
-                  <input type="text" className="form-input" style={{ height: '30px' }} value={wasteLdpe} onChange={e => setWasteLdpe(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Cartons wasted</label>
-                  <input type="text" className="form-input" style={{ height: '30px' }} value={wasteCartons} onChange={e => setWasteCartons(e.target.value)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px' }}>Lab Samples</label>
-                  <input type="text" className="form-input" style={{ height: '30px' }} value={wasteSamples} onChange={e => setWasteSamples(e.target.value)} />
-                </div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Finished Product PH</label>
+                <input type="number" step="0.1" className="form-input" value={finishedPh} onChange={e => setFinishedPh(e.target.value)} />
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', fontWeight: '600' }}>Downtimes & Comments</label>
-              <textarea className="form-input" style={{ minHeight: '60px', padding: '6px' }} value={comments} onChange={e => setComments(e.target.value)} placeholder="Log dountime reasons and duration..." />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: 0, fontWeight: '700' }}>Ingredients</h4>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ padding: '2px 8px', fontSize: '11px' }}
+                  onClick={handleAddIngredientRow}
+                >
+                  + Add row
+                </button>
+              </div>
+              <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6' }}>
+                    <th style={{ width: '40px' }}>No.</th>
+                    <th>Item</th>
+                    <th>Standard Qty</th>
+                    <th>UOM</th>
+                    <th>Lot/Batch No</th>
+                    <th>Added Qty</th>
+                    <th style={{ width: '40px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ingredients.map((ing, idx) => (
+                    <tr key={idx}>
+                      <td style={{ textAlign: 'center', fontWeight: '600' }}>{idx + 1}</td>
+                      <td>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ height: '28px' }}
+                          value={ing.item}
+                          onChange={e => handleIngredientChange(idx, 'item', e.target.value)}
+                          placeholder="Item Name"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ height: '28px' }}
+                          value={ing.standardQty}
+                          onChange={e => handleIngredientChange(idx, 'standardQty', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ height: '28px', width: '60px' }}
+                          value={ing.uom}
+                          onChange={e => handleIngredientChange(idx, 'uom', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ height: '28px' }}
+                          value={ing.lotBatchNo}
+                          onChange={e => handleIngredientChange(idx, 'lotBatchNo', e.target.value)}
+                          placeholder="Lot/Batch No"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ height: '28px' }}
+                          value={ing.addedQty}
+                          onChange={e => handleIngredientChange(idx, 'addedQty', e.target.value)}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {ingredients.length > 1 && (
+                          <button
+                            type="button"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}
+                            onClick={() => handleRemoveIngredientRow(idx)}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Sugar & Brix Row 1 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Sugar Required (Kg)</label>
+                <input type="number" step="0.01" className="form-input" value={sugarRequired} onChange={e => setSugarRequired(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Sugar Added (Kg)</label>
+                <input type="number" step="0.01" className="form-input" value={sugarAdded} onChange={e => setSugarAdded(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Brix Mixer (%)</label>
+                <input type="number" step="0.1" className="form-input" value={brixMixer} onChange={e => setBrixMixer(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Mixer Taken By, Brix Product (%), Gas Level Row 2 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Mixer Taken By</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={brixMixerBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labMixerTakenBy')}
+                  onChange={(e) => { setBrixMixerBy(e.target.value); handleSearchEmployees(e.target.value, 'labMixerTakenBy'); }}
+                  placeholder="Search Employee..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labMixerTakenBy' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setBrixMixerBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setBrixMixerBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Brix Product (%)</label>
+                <input type="number" step="0.1" className="form-input" value={brixProduct} onChange={e => setBrixProduct(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Gas Level</label>
+                <input type="number" step="0.1" className="form-input" value={gasLevel} onChange={e => setGasLevel(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Product Taken By & Approved by Row 3 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Product Taken By</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={brixProductBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labProductTakenBy')}
+                  onChange={(e) => { setBrixProductBy(e.target.value); handleSearchEmployees(e.target.value, 'labProductTakenBy'); }}
+                  placeholder="Search Employee..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labProductTakenBy' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setBrixProductBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setBrixProductBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Approved by</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={approvedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labApprovedBy')}
+                  onChange={(e) => { setApprovedBy(e.target.value); handleSearchEmployees(e.target.value, 'labApprovedBy'); }}
+                  placeholder="Search Approver..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labApprovedBy' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setApprovedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setApprovedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div></div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: '600' }}>Comments / Remarks</label>
+              <textarea className="form-input" style={{ minHeight: '50px', padding: '6px' }} value={comments} onChange={e => setComments(e.target.value)} placeholder="Remarks..." />
             </div>
 
           </div>
-          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary-btn">Save Production Record</button>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>Island Chill - Form no. 35</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
+              <button type="submit" className="primary-btn">Submit Gold Stone Rum & Cola Record</button>
+            </div>
           </div>
         </form>
       </div>
     </div>
   );
 }
+
+export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [postingDate, setPostingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [recordedBy, setRecordedBy] = useState('');
+  const [verifiedBy, setVerifiedBy] = useState('');
+  const [time1, setTime1] = useState(new Date().toTimeString().slice(0, 5));
+  const [incubator1, setIncubator1] = useState('37.0');
+  const [time2, setTime2] = useState(new Date().toTimeString().slice(0, 5));
+  const [incubator2, setIncubator2] = useState('37.0');
+  const [remarks, setRemarks] = useState('');
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      posting_date: postingDate,
+      date: postingDate,
+      recordedBy,
+      analyst: recordedBy,
+      verifiedBy,
+      time: time1,
+      incubator_1: incubator1,
+      time_2: time2,
+      incubator_2: incubator2,
+      remarks
+    });
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '680px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Standard Form 86: Incubator Temperature Record</span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Date *</label>
+                <input type="date" className="form-input" required value={postingDate} onChange={e => setPostingDate(e.target.value)} />
+              </div>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Recorded By (Chemist/Analyst) *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  value={recordedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labForm86RecordedBy')}
+                  onChange={(e) => { setRecordedBy(e.target.value); handleSearchEmployees(e.target.value, 'labForm86RecordedBy'); }}
+                  placeholder="Search Analyst..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labForm86RecordedBy' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setRecordedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setRecordedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600' }}>Verified By (Supervisor)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={verifiedBy}
+                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labForm86VerifiedBy')}
+                  onChange={(e) => { setVerifiedBy(e.target.value); handleSearchEmployees(e.target.value, 'labForm86VerifiedBy'); }}
+                  placeholder="Search Verifier..."
+                />
+                {showEmployeeDropdown && activeSearchField === 'labForm86VerifiedBy' && (
+                  <div className="autocomplete-dropdown">
+                    {employeeList.map(emp => (
+                      <div
+                        key={emp.name}
+                        className="dropdown-item employee-dropdown-item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                        onClick={() => {
+                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
+                          setShowEmployeeDropdown(false);
+                        }}
+                      >
+                        👤 {emp.employee_name || emp.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '14px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <span style={{ fontWeight: '700', color: 'var(--text-heading)', fontSize: '13px' }}>🌡️ Incubator No. 1</span>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Check Time *</label>
+                  <input type="time" className="form-input" required value={time1} onChange={e => setTime1(e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Thermometer Reading (°C) *</label>
+                  <input type="number" step="0.1" className="form-input" required value={incubator1} onChange={e => setIncubator1(e.target.value)} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderLeft: '1px solid var(--border-color)', paddingLeft: '16px' }}>
+                <span style={{ fontWeight: '700', color: 'var(--text-heading)', fontSize: '13px' }}>🌡️ Incubator No. 2</span>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Check Time *</label>
+                  <input type="time" className="form-input" required value={time2} onChange={e => setTime2(e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Thermometer Reading (°C) *</label>
+                  <input type="number" step="0.1" className="form-input" required value={incubator2} onChange={e => setIncubator2(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: '600' }}>Observations / Remarks</label>
+              <textarea className="form-input" style={{ minHeight: '50px', padding: '6px' }} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Enter observations..." />
+            </div>
+
+          </div>
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>Island Chill - Form no. 86</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
+              <button type="submit" className="primary-btn" disabled={saving}>{saving ? 'Saving...' : 'Submit Incubator Record'}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm88Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [rows, setRows] = useState(Array.from({ length: 8 }, () => ({
+    date: new Date().toISOString().slice(0, 10),
+    checkedBy: '',
+    verifiedBy: '',
+    productDesc: 'Island Chill Artesian Water',
+    weight1: '602',
+    weight2: '601'
+  })));
+
+  const [overallComments, setOverallComments] = useState('');
+
+  const handleRowChange = (idx, key, val) => {
+    setRows(prev => prev.map((r, rIdx) => rIdx === idx ? { ...r, [key]: val } : r));
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (e.target.closest && !e.target.closest('td') && !e.target.closest('.autocomplete-dropdown') && !e.target.closest('.dropdown-item')) {
+        setShowEmployeeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [setShowEmployeeDropdown]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit({
+      rows,
+      checkedBy: rows[0]?.checkedBy || 'Chemist',
+      verifiedBy: rows[0]?.verifiedBy || 'QC SV',
+      overallComments,
+      date: rows[0]?.date || new Date().toISOString().slice(0, 10)
+    });
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '920px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Island Chill / Crush / US Cola</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Standard Form 88: For Weight Check Checklist</span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-content" style={{ maxHeight: '70vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+            <div style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderLeft: '4px solid var(--accent)', color: 'var(--text-heading)' }}>
+              <strong>Weight Check frequency:</strong> Weight Check frequency is twice per Day.
+            </div>
+
+            <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f3f4f6' }}>
+                  <th style={{ width: '50px' }}>Slot</th>
+                  <th style={{ width: '110px' }}>Date</th>
+                  <th style={{ width: '160px' }}>Checked By *</th>
+                  <th style={{ width: '160px' }}>Verified By *</th>
+                  <th>Product Description</th>
+                  <th style={{ width: '80px' }}>Weight 1</th>
+                  <th style={{ width: '80px' }}>Weight 2</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={idx}>
+                    <td style={{ textAlign: 'center' }}><strong>#{idx + 1}</strong></td>
+                    <td>
+                      <input type="date" className="form-input" style={{ height: '28px' }} required min={new Date().toISOString().split('T')[0]} value={row.date} onChange={e => handleRowChange(idx, 'date', e.target.value)} />
+                    </td>
+                    <td style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ height: '28px' }}
+                        required
+                        placeholder="Search Checked By..."
+                        value={row.checkedBy}
+                        onChange={(e) => { handleRowChange(idx, 'checkedBy', e.target.value); handleSearchEmployees(e.target.value, `weightCheckedBy-${idx}`); }}
+                      />
+                      {showEmployeeDropdown && activeSearchField === `weightCheckedBy-${idx}` && (
+                        <div className="autocomplete-dropdown">
+                          {employeeList.map(emp => (
+                            <div key={emp.name} className="dropdown-item" onClick={() => { handleRowChange(idx, 'checkedBy', `${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                              👤 {emp.employee_name || emp.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ height: '28px' }}
+                        required
+                        placeholder="Search Verified By..."
+                        value={row.verifiedBy}
+                        onChange={(e) => { handleRowChange(idx, 'verifiedBy', e.target.value); handleSearchEmployees(e.target.value, `weightVerifiedBy-${idx}`); }}
+                      />
+                      {showEmployeeDropdown && activeSearchField === `weightVerifiedBy-${idx}` && (
+                        <div className="autocomplete-dropdown">
+                          {employeeList.map(emp => (
+                            <div key={emp.name} className="dropdown-item" onClick={() => { handleRowChange(idx, 'verifiedBy', `${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}>
+                              👤 {emp.employee_name || emp.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <input type="text" className="form-input" style={{ height: '28px' }} value={row.productDesc} onChange={e => handleRowChange(idx, 'productDesc', e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="number" className="form-input" style={{ height: '28px' }} value={row.weight1} onChange={e => handleRowChange(idx, 'weight1', e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="number" className="form-input" style={{ height: '28px' }} value={row.weight2} onChange={e => handleRowChange(idx, 'weight2', e.target.value)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="form-group" style={{ marginTop: '12px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600' }}>Overall Comments / Remarks</label>
+              <textarea
+                className="form-input"
+                style={{ minHeight: '50px', padding: '6px' }}
+                value={overallComments}
+                onChange={e => setOverallComments(e.target.value)}
+                placeholder="Enter any additional observations, non-conformance notes, or adjustments made..."
+              />
+            </div>
+          </div>
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>Island Chill - Form no. 88</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
+              <button type="submit" className="primary-btn" disabled={saving}>
+                {saving ? 'Saving...' : 'Submit Weight Checks'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export { LabForm88Modal as MaintWeightCheckModal };
+
+
 
 
 export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
@@ -2320,295 +2991,297 @@ export default function LaboratoryTab({
   setActiveLabForm,
   setViewingLabRecord
 }) {
-            const getLabTotalTests = () => laboratoryRecords.length;
+  const getLabTotalTests = () => laboratoryRecords.length;
 
-          const getLabMicroCompliance = () => {
-            const microRecords = laboratoryRecords.filter(r => r.type.includes('Micro'));
-            if (microRecords.length === 0) return 100;
-            let passed = 0;
-            microRecords.forEach(r => {
-              if (r.type === 'Form 1 (Micro raw)') {
-                const allAbsent = r.sampleRows?.every(row =>
-                  String(row.tcc).toLowerCase().includes('absent') || String(row.tcc).toLowerCase().includes('neg') ||
-                  String(row.ecoli).toLowerCase().includes('absent') || String(row.ecoli).toLowerCase().includes('neg')
-                );
-                if (allAbsent) passed++;
-              } else if (r.type === 'Form 11 (Micro water)') {
-                const allAbsent = r.sampleRows?.every(row => {
-                  const tccPassed = !row.tcc || String(row.tcc).toLowerCase().includes('absent') || String(row.tcc).toLowerCase().includes('neg') || String(row.tcc) === '';
-                  const ecoliPassed = !row.ecoli || String(row.ecoli).toLowerCase().includes('absent') || String(row.ecoli).toLowerCase().includes('neg') || String(row.ecoli) === '';
-                  const hpcPassed = Number(row.hpc1 || 0) < 100 && Number(row.hpc2 || 0) < 100;
-                  return tccPassed && ecoliPassed && hpcPassed;
-                });
-                if (allAbsent) passed++;
-              }
-            });
-            return Math.round((passed / microRecords.length) * 100);
-          };
+  const getLabMicroCompliance = () => {
+    const microRecords = laboratoryRecords.filter(r => r.type.includes('Micro'));
+    if (microRecords.length === 0) return 100;
+    let passed = 0;
+    microRecords.forEach(r => {
+      if (r.type === 'Form 1 (Micro raw)') {
+        const allAbsent = r.sampleRows?.every(row =>
+          String(row.tcc).toLowerCase().includes('absent') || String(row.tcc).toLowerCase().includes('neg') ||
+          String(row.ecoli).toLowerCase().includes('absent') || String(row.ecoli).toLowerCase().includes('neg')
+        );
+        if (allAbsent) passed++;
+      } else if (r.type === 'Form 11 (Micro water)') {
+        const allAbsent = r.sampleRows?.every(row => {
+          const tccPassed = !row.tcc || String(row.tcc).toLowerCase().includes('absent') || String(row.tcc).toLowerCase().includes('neg') || String(row.tcc) === '';
+          const ecoliPassed = !row.ecoli || String(row.ecoli).toLowerCase().includes('absent') || String(row.ecoli).toLowerCase().includes('neg') || String(row.ecoli) === '';
+          const hpcPassed = Number(row.hpc1 || 0) < 100 && Number(row.hpc2 || 0) < 100;
+          return tccPassed && ecoliPassed && hpcPassed;
+        });
+        if (allAbsent) passed++;
+      }
+    });
+    return Math.round((passed / microRecords.length) * 100);
+  };
 
-          const getLabChemCompliance = () => {
-            const chemRecords = laboratoryRecords.filter(r => r.type === 'Form 9 (Chemical)');
-            if (chemRecords.length === 0) return 100;
-            let passed = 0;
-            chemRecords.forEach(r => {
-              const rawPhVal = Number(r.rawPh || 7.0);
-              const rawTdsVal = Number(r.rawTds || 100);
-              const prodPhVal = Number(r.prodPh || 7.2);
-              const prodTdsVal = Number(r.prodTds || 120);
+  const getLabChemCompliance = () => {
+    const chemRecords = laboratoryRecords.filter(r => r.type === 'Form 9 (Chemical)');
+    if (chemRecords.length === 0) return 100;
+    let passed = 0;
+    chemRecords.forEach(r => {
+      const rawPhVal = Number(r.rawPh || 7.0);
+      const rawTdsVal = Number(r.rawTds || 100);
+      const prodPhVal = Number(r.prodPh || 7.2);
+      const prodTdsVal = Number(r.prodTds || 120);
 
-              const rawPassed = rawPhVal >= 6.5 && rawPhVal <= 8.5 && rawTdsVal >= 50 && rawTdsVal <= 500;
-              const prodPassed = prodPhVal >= 6.5 && prodPhVal <= 8.5 && prodTdsVal >= 50 && prodTdsVal <= 500;
-              if (rawPassed && prodPassed) passed++;
-            });
-            return Math.round((passed / chemRecords.length) * 100);
-          };
+      const rawPassed = rawPhVal >= 6.5 && rawPhVal <= 8.5 && rawTdsVal >= 50 && rawTdsVal <= 500;
+      const prodPassed = prodPhVal >= 6.5 && prodPhVal <= 8.5 && prodTdsVal >= 50 && prodTdsVal <= 500;
+      if (rawPassed && prodPassed) passed++;
+    });
+    return Math.round((passed / chemRecords.length) * 100);
+  };
 
-          const microCompliance = getLabMicroCompliance();
-          const chemCompliance = getLabChemCompliance();
+  const microCompliance = getLabMicroCompliance();
+  const chemCompliance = getLabChemCompliance();
+
+  return (
+    <div className="maintenance-tab-container">
+      <div className="tab-title-desc">
+        <h2>Laboratory & Quality Control</h2>
+        <p>Log and review raw materials microbiological status, chemical properties, water micro-compliance, and visual taste inspections.</p>
+      </div>
+
+      {/* Lab Dashboard metrics */}
+      <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL QUALITY TESTS</span>
+            <span style={{ fontSize: '20px' }}>🧪</span>
+          </div>
+          <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0' }}>{getLabTotalTests()}</div>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Logged across all parameters</span>
+        </div>
+
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>MICRO COMPLIANCE</span>
+            <span style={{ fontSize: '20px' }}>🧫</span>
+          </div>
+          <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: microCompliance < 90 ? 'var(--danger)' : 'var(--success)' }}>
+            {microCompliance}%
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Target: 100% Absent E-Coli</span>
+        </div>
+
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>CHEMICAL COMPLIANCE</span>
+            <span style={{ fontSize: '20px' }}>📉</span>
+          </div>
+          <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: chemCompliance < 90 ? 'var(--danger)' : 'var(--success)' }}>
+            {chemCompliance}%
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>pH (6.5-8.5) & TDS spec</span>
+        </div>
+
+        <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>LAST TEST LOGGED</span>
+            <span style={{ fontSize: '20px' }}>🔬</span>
+          </div>
+          <div className="metric-value" style={{ fontSize: '13px', fontWeight: '800', margin: '14px 0 10px 0', color: 'var(--accent)' }}>
+            {laboratoryRecords[0] ? laboratoryRecords[0].timestamp.split(' ')[1] || laboratoryRecords[0].timestamp : 'No entries'}
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Date: {laboratoryRecords[0] ? laboratoryRecords[0].timestamp.split(' ')[0] : 'N/A'}</span>
+        </div>
+      </div>
+
+      {/* Lab Forms action sheets grid */}
+      <div>
+        {(() => {
+          const LAB_TEMPLATES = [
+            { id: 'form1', icon: '📄', name: 'Form 1: Raw Materials Micro', desc: 'Microbiological analysis of primary packaging raw materials (Preforms, Closures, BIB bags).' },
+            { id: 'form9', icon: '📊', name: 'Form 9: Chemical Test', desc: 'pH, TDS levels check for Raw/Product Water, post-CIP levels, and conductivity calibration.' },
+            { id: 'form11', icon: '🧫', name: 'Form 11: Water Micro', desc: 'Cultivate SPC Agar incubation, TCC and E-Coli counts for Silver Ion, BH, and 0.45um Filter.' },
+            { id: 'form21', icon: '👅', name: 'Form 21: Taste & Visual', desc: 'Log 4h/36h/72h taste properties and 5d/10d/30d visual particle shelf-life checks.' },
+            { id: 'form35', icon: '🍹', name: 'Form 35: Gold Stone Rum & Cola', desc: 'Tank batch records, ingredients checklist (Ethanol, Rum/Lemon/Cola flavours), Brix mixer %, alcohol test, and pH levels.' },
+            { id: 'form36', icon: '🥃', name: 'Form 36: Bourbon Whiskey & Cola', desc: 'Tank batch records, ingredients checklist, Brix % checks, alcohol test, and gas pressure.' },
+            { id: 'form86', icon: '🌡️', name: 'Form 86: Incubator Temperature Record', desc: 'Record incubator daily temp & check times for Incubator No. 1 and Incubator No. 2.' },
+            { id: 'form88', icon: '⚖️', name: 'Form 88: Weight Check Checklist', desc: 'Execute and log weight checks for finished products (twice daily frequency).' },
+            { id: 'form103', icon: '📡', name: 'Form 103: Silver Photometer Log', desc: 'Daily photometer readings for Silver Ion (spec >10ppb) and standard calibration tests.' }
+          ];
 
           return (
-            <div className="maintenance-tab-container">
-              <div className="tab-title-desc">
-                <h2>Laboratory & Quality Control</h2>
-                <p>Log and review raw materials microbiological status, chemical properties, water micro-compliance, and visual taste inspections.</p>
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', marginTop: '8px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>Available Daily Quality Checklists</h3>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '600' }}
+                  onClick={() => setLabViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+                >
+                  {labViewMode === 'grid' ? '📋 List View' : '🎚️ Grid View'}
+                </button>
               </div>
 
-              {/* Lab Dashboard metrics */}
-              <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL QUALITY TESTS</span>
-                    <span style={{ fontSize: '20px' }}>🧪</span>
-                  </div>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0' }}>{getLabTotalTests()}</div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Logged across all parameters</span>
-                </div>
-
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>MICRO COMPLIANCE</span>
-                    <span style={{ fontSize: '20px' }}>🧫</span>
-                  </div>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: microCompliance < 90 ? 'var(--danger)' : 'var(--success)' }}>
-                    {microCompliance}%
-                  </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Target: 100% Absent E-Coli</span>
-                </div>
-
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>CHEMICAL COMPLIANCE</span>
-                    <span style={{ fontSize: '20px' }}>📉</span>
-                  </div>
-                  <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0', color: chemCompliance < 90 ? 'var(--danger)' : 'var(--success)' }}>
-                    {chemCompliance}%
-                  </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>pH (6.5-8.5) & TDS spec</span>
-                </div>
-
-                <div className="metric-card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="metric-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>LAST TEST LOGGED</span>
-                    <span style={{ fontSize: '20px' }}>🔬</span>
-                  </div>
-                  <div className="metric-value" style={{ fontSize: '13px', fontWeight: '800', margin: '14px 0 10px 0', color: 'var(--accent)' }}>
-                    {laboratoryRecords[0] ? laboratoryRecords[0].timestamp.split(' ')[1] || laboratoryRecords[0].timestamp : 'No entries'}
-                  </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Date: {laboratoryRecords[0] ? laboratoryRecords[0].timestamp.split(' ')[0] : 'N/A'}</span>
-                </div>
-              </div>
-
-              {/* Lab Forms action sheets grid */}
-              <div>
-                {(() => {
-                  const LAB_TEMPLATES = [
-                    { id: 'form1', icon: '📄', name: 'Form 1: Raw Materials Micro', desc: 'Microbiological analysis of primary packaging raw materials (Preforms, Closures, BIB bags).' },
-                    { id: 'form9', icon: '📊', name: 'Form 9: Chemical Test', desc: 'pH, TDS levels check for Raw/Product Water, post-CIP levels, and conductivity calibration.' },
-                    { id: 'form11', icon: '🧫', name: 'Form 11: Water Micro', desc: 'Cultivate SPC Agar incubation, TCC and E-Coli counts for Silver Ion, BH, and 0.45um Filter.' },
-                    { id: 'form21', icon: '👅', name: 'Form 21: Taste & Visual', desc: 'Log 4h/36h/72h taste properties and 5d/10d/30d visual particle shelf-life checks.' },
-                    { id: 'form36', icon: '🥃', name: 'Form 36: Bourbon Whiskey & Cola', desc: 'Tank batch records, ingredients checklist, Brix % checks, alcohol test, and gas pressure.' },
-                    { id: 'form100', icon: '🏭', name: 'Form 100: Production Record', desc: 'Production shift logs, cases handover to warehouse, LPG/EFL meter, wastage log, and downtime remarks.' },
-                    { id: 'form103', icon: '📡', name: 'Form 103: Silver Photometer Log', desc: 'Daily photometer readings for Silver Ion (spec >10ppb) and standard calibration tests.' }
-                  ];
-
-                  return (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', marginTop: '8px' }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>Available Daily Quality Checklists</h3>
-                        <button
-                          type="button"
-                          className="secondary-btn"
-                          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '600' }}
-                          onClick={() => setLabViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
-                        >
-                          {labViewMode === 'grid' ? '📋 List View' : '🎚️ Grid View'}
-                        </button>
+              {labViewMode === 'grid' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+                  {LAB_TEMPLATES.map(tpl => (
+                    <div key={tpl.id} className="template-card" style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '24px' }}>{tpl.icon}</span>
+                        <strong style={{ fontSize: '13px' }}>{tpl.name}</strong>
                       </div>
-
-                      {labViewMode === 'grid' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                          {LAB_TEMPLATES.map(tpl => (
-                            <div key={tpl.id} className="template-card" style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '24px' }}>{tpl.icon}</span>
-                                <strong style={{ fontSize: '13px' }}>{tpl.name}</strong>
-                              </div>
-                              <p style={{ fontSize: '11px', color: 'var(--text-muted)', flex: 1 }}>{tpl.desc}</p>
-                              <button className="primary-btn" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => setActiveLabForm(tpl.id)}>📝 Fill Form</button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                          <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                            <thead>
-                              <tr style={{ backgroundColor: 'var(--bg-card)' }}>
-                                <th style={{ padding: '8px', textAlign: 'center', width: '50px' }}>Icon</th>
-                                <th style={{ padding: '8px', textAlign: 'left', width: '240px' }}>Form Title / Template</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>Description</th>
-                                <th style={{ padding: '8px', textAlign: 'center', width: '120px' }}>Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {LAB_TEMPLATES.map(tpl => (
-                                <tr key={tpl.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                  <td style={{ padding: '8px', fontSize: '20px', textAlign: 'center' }}>{tpl.icon}</td>
-                                  <td style={{ padding: '8px', fontWeight: '700' }}>{tpl.name}</td>
-                                  <td style={{ padding: '8px', color: 'var(--text-muted)' }}>{tpl.desc}</td>
-                                  <td style={{ padding: '8px', textAlign: 'center' }}>
-                                    <button className="primary-btn" style={{ fontSize: '11px', padding: '4px 10px' }} onClick={() => setActiveLabForm(tpl.id)}>📝 Fill Form</button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* Lab Logs register list */}
-              <div style={{ marginTop: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>Laboratory Quality Control Register</h3>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ width: '220px', height: '32px', fontSize: '12px' }}
-                      placeholder="🔍 Search log by Analyst/ID..."
-                      value={labSearchQuery}
-                      onChange={(e) => setLabSearchQuery(e.target.value)}
-                    />
-                    <select
-                      className="form-input"
-                      style={{ width: '180px', height: '32px', fontSize: '12px' }}
-                      value={labFilterType}
-                      onChange={(e) => setLabFilterType(e.target.value)}
-                    >
-                      <option value="All">All Form Types</option>
-                      <option value="Form 1 (Micro raw)">Form 1 (Micro raw)</option>
-                      <option value="Form 9 (Chemical)">Form 9 (Chemical)</option>
-                      <option value="Form 11 (Micro water)">Form 11 (Micro water)</option>
-                      <option value="Form 21 (Taste/Visual)">Form 21 (Taste/Visual)</option>
-                    </select>
-                  </div>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', flex: 1 }}>{tpl.desc}</p>
+                      <button className="primary-btn" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => setActiveLabForm(tpl.id)}>📝 Fill Form</button>
+                    </div>
+                  ))}
                 </div>
-
-                {filteredLabRecords.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', border: '1px dashed var(--border-color)', borderRadius: '12px', color: 'var(--text-muted)' }}>
-                    No quality control checks found. Select a form card above to submit a new test log.
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                      <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                        <thead>
-                          <tr style={{ backgroundColor: 'var(--bg-card)' }}>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Log ID</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Form Template</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Analyst</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Verification Status</th>
-                            <th style={{ padding: '10px', textAlign: 'left' }}>Submitted</th>
-                            <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredLabRecords.slice((labPage - 1) * 20, labPage * 20).map((rec) => {
-                            let compliancePass = true;
-                            if (rec.type === 'Form 1 (Micro raw)') {
-                              compliancePass = rec.sampleRows?.every(row =>
-                                String(row.tcc).toLowerCase().includes('absent') && String(row.ecoli).toLowerCase().includes('absent')
-                              );
-                            } else if (rec.type === 'Form 11 (Micro water)') {
-                              compliancePass = rec.sampleRows?.every(row =>
-                                (!row.tcc || String(row.tcc).toLowerCase().includes('absent')) &&
-                                (!row.ecoli || String(row.ecoli).toLowerCase().includes('absent')) &&
-                                Number(row.hpc1 || 0) < 100
-                              );
-                            } else if (rec.type === 'Form 9 (Chemical)') {
-                              const rPh = Number(rec.rawPh || 7.0);
-                              const pPh = Number(rec.prodPh || 7.2);
-                              compliancePass = rPh >= 6.5 && rPh <= 8.5 && pPh >= 6.5 && pPh <= 8.5;
-                            }
-
-                            return (
-                              <tr key={rec.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                <td style={{ fontWeight: '700', padding: '10px' }}>{rec.id}</td>
-                                <td style={{ padding: '10px' }}>
-                                  <strong>{rec.type}</strong>
-                                </td>
-                                <td style={{ padding: '10px' }}>👤 {rec.analyst}</td>
-                                <td style={{ padding: '10px' }}>
-                                  <span className={`badge ${compliancePass ? 'badge-completed' : 'badge-failed'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-                                    {compliancePass ? '✓ Within Specification' : '⚠️ Action Required'}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{rec.timestamp}</td>
-                                <td style={{ padding: '10px', textAlign: 'center' }}>
-                                  <button
-                                    type="button"
-                                    className="secondary-btn"
-                                    style={{ padding: '4px 8px', fontSize: '11px' }}
-                                    onClick={() => setViewingLabRecord(rec)}
-                                  >
-                                    👁️ View Report
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Pagination controls */}
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        disabled={labPage === 1}
-                        onClick={() => setLabPage(prev => Math.max(1, prev - 1))}
-                      >
-                        ◀ Previous
-                      </button>
-                      <span style={{ fontSize: '12px', fontWeight: '600' }}>
-                        Page {labPage} of {Math.max(1, Math.ceil(filteredLabRecords.length / 20))}
-                      </span>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        disabled={labPage === Math.max(1, Math.ceil(filteredLabRecords.length / 20))}
-                        onClick={() => setLabPage(prev => Math.min(Math.max(1, Math.ceil(filteredLabRecords.length / 20)), prev + 1))}
-                      >
-                        Next ▶
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+              ) : (
+                <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                  <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-card)' }}>
+                        <th style={{ padding: '8px', textAlign: 'center', width: '50px' }}>Icon</th>
+                        <th style={{ padding: '8px', textAlign: 'left', width: '240px' }}>Form Title / Template</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Description</th>
+                        <th style={{ padding: '8px', textAlign: 'center', width: '120px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {LAB_TEMPLATES.map(tpl => (
+                        <tr key={tpl.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '8px', fontSize: '20px', textAlign: 'center' }}>{tpl.icon}</td>
+                          <td style={{ padding: '8px', fontWeight: '700' }}>{tpl.name}</td>
+                          <td style={{ padding: '8px', color: 'var(--text-muted)' }}>{tpl.desc}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            <button className="primary-btn" style={{ fontSize: '11px', padding: '4px 10px' }} onClick={() => setActiveLabForm(tpl.id)}>📝 Fill Form</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           );
+        })()}
+      </div>
+
+      {/* Lab Logs register list */}
+      <div style={{ marginTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>Laboratory Quality Control Register</h3>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              className="form-input"
+              style={{ width: '220px', height: '32px', fontSize: '12px' }}
+              placeholder="🔍 Search log by Analyst/ID..."
+              value={labSearchQuery}
+              onChange={(e) => setLabSearchQuery(e.target.value)}
+            />
+            <select
+              className="form-input"
+              style={{ width: '180px', height: '32px', fontSize: '12px' }}
+              value={labFilterType}
+              onChange={(e) => setLabFilterType(e.target.value)}
+            >
+              <option value="All">All Form Types</option>
+              <option value="Form 1 (Micro raw)">Form 1 (Micro raw)</option>
+              <option value="Form 9 (Chemical)">Form 9 (Chemical)</option>
+              <option value="Form 11 (Micro water)">Form 11 (Micro water)</option>
+              <option value="Form 21 (Taste/Visual)">Form 21 (Taste/Visual)</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredLabRecords.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', border: '1px dashed var(--border-color)', borderRadius: '12px', color: 'var(--text-muted)' }}>
+            No quality control checks found. Select a form card above to submit a new test log.
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+              <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--bg-card)' }}>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Log ID</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Form Template</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Analyst</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Verification Status</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Submitted</th>
+                    <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLabRecords.slice((labPage - 1) * 20, labPage * 20).map((rec) => {
+                    let compliancePass = true;
+                    if (rec.type === 'Form 1 (Micro raw)') {
+                      compliancePass = rec.sampleRows?.every(row =>
+                        String(row.tcc).toLowerCase().includes('absent') && String(row.ecoli).toLowerCase().includes('absent')
+                      );
+                    } else if (rec.type === 'Form 11 (Micro water)') {
+                      compliancePass = rec.sampleRows?.every(row =>
+                        (!row.tcc || String(row.tcc).toLowerCase().includes('absent')) &&
+                        (!row.ecoli || String(row.ecoli).toLowerCase().includes('absent')) &&
+                        Number(row.hpc1 || 0) < 100
+                      );
+                    } else if (rec.type === 'Form 9 (Chemical)') {
+                      const rPh = Number(rec.rawPh || 7.0);
+                      const pPh = Number(rec.prodPh || 7.2);
+                      compliancePass = rPh >= 6.5 && rPh <= 8.5 && pPh >= 6.5 && pPh <= 8.5;
+                    }
+
+                    return (
+                      <tr key={rec.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ fontWeight: '700', padding: '10px' }}>{rec.id}</td>
+                        <td style={{ padding: '10px' }}>
+                          <strong>{rec.type}</strong>
+                        </td>
+                        <td style={{ padding: '10px' }}>👤 {rec.analyst}</td>
+                        <td style={{ padding: '10px' }}>
+                          <span className={`badge ${compliancePass ? 'badge-completed' : 'badge-failed'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                            {compliancePass ? '✓ Within Specification' : '⚠️ Action Required'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{rec.timestamp}</td>
+                        <td style={{ padding: '10px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            style={{ padding: '4px 8px', fontSize: '11px' }}
+                            onClick={() => setViewingLabRecord(rec)}
+                          >
+                            👁️ View Report
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination controls */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={labPage === 1}
+                onClick={() => setLabPage(prev => Math.max(1, prev - 1))}
+              >
+                ◀ Previous
+              </button>
+              <span style={{ fontSize: '12px', fontWeight: '600' }}>
+                Page {labPage} of {Math.max(1, Math.ceil(filteredLabRecords.length / 20))}
+              </span>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={labPage === Math.max(1, Math.ceil(filteredLabRecords.length / 20))}
+                onClick={() => setLabPage(prev => Math.min(Math.max(1, Math.ceil(filteredLabRecords.length / 20)), prev + 1))}
+              >
+                Next ▶
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

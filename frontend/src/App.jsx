@@ -20,7 +20,7 @@ import BOMTab from './components/BOMTab';
 import SalesTab, { SalesInvoiceFormModal, DeliveryNoteFormModal } from './components/SalesTab';
 import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal } from './components/MaintenanceTab';
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
-import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm36Modal, LabForm100Modal, LabForm103Modal } from './components/LaboratoryTab';
+import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
 import line1 from "../public/line1.png"
 import line2 from "../public/line2.png"
@@ -753,7 +753,9 @@ function App() {
         e.target.closest && (
           e.target.closest('.app-dropdown-container') ||
           e.target.closest('.app-dropdown-menu') ||
-          e.target.closest('.employee-dropdown-item')
+          e.target.closest('.employee-dropdown-item') ||
+          e.target.closest('.autocomplete-dropdown') ||
+          e.target.closest('.dropdown-item')
         )
       ) {
         return;
@@ -1283,7 +1285,7 @@ function App() {
               tolerance: data.tolerance || '(+/- 2%)',
               cleaning_of_the_balance_done_by: balance_cleaner,
               using: data.using || '',
-              comments: data.remarks || ''
+              comments: (data.remarks ? `${data.remarks}\n[Status: ${data.status || 'Pass'}]` : `[Status: ${data.status || 'Pass'}]`)
             };
             response = await frappe.createBalanceCheckRecord(erpPayload);
           } else if (doctype === 'Incubator Temperature Record') {
@@ -1349,6 +1351,8 @@ function App() {
               time: data.posting_time || '12:00:00',
               performed_by_operator: performed_by_emp,
               verified_by_supervisor: verified_by_emp,
+              operator_name: data.performed_by || performed_by_emp,
+              supervisor_name: data.supervisor || verified_by_emp,
               equipmentline_cleaned: data.equipment_sanitized,
               chemicalmethod_used: data.chemical_used,
               concentration_ppm__: data.concentration_ppm ? String(data.concentration_ppm) : '',
@@ -1715,6 +1719,177 @@ function App() {
       }
     }
 
+    if (type === 'Form 35: Gold Stone Rum & Cola' || type === 'Form 35 (Gold Stone Rum/Cola)') {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const resolveEmployeeId = (val, defaultVal) => {
+            const extracted = extractEmployeeId(val);
+            if (!extracted) return defaultVal;
+            const searchVal = extracted.toLowerCase().trim();
+            const found = (employeeList || []).find(emp => {
+              const empName = (emp.employee_name || emp.name || '').toLowerCase();
+              const empId = (emp.name || '').toLowerCase();
+              const initials = empName.split(' ').map(n => n[0]).join('');
+              return empName === searchVal || empId === searchVal || initials === searchVal;
+            });
+            return found ? found.name : defaultVal;
+          };
+
+          const ingredientsList = (data.ingredients || []).map((ing, idx) => ({
+            doctype: 'Gold Stone Rum and Cola Item',
+            idx: idx + 1,
+            item: ing.item,
+            standard_qty: parseFloat(ing.standardQty) || 0,
+            uom: ing.uom || 'Kg',
+            lot_batch_no: ing.lotBatchNo || '',
+            added_qty: parseFloat(ing.addedQty) || 0
+          }));
+
+          const erpPayload = {
+            date: data.date,
+            tank_no: data.tankNo,
+            volume: data.volume,
+            prepared_by: resolveEmployeeId(data.preparedBy, extractEmployeeId(data.preparedBy)),
+            verified_by: resolveEmployeeId(data.verifiedBy, extractEmployeeId(data.verifiedBy)),
+            analysed_by: resolveEmployeeId(data.analysedBy, extractEmployeeId(data.analysedBy)),
+            lab_report_alcohol__: parseFloat(data.labAlc) || 0.0,
+            lab_alc: parseFloat(data.labAlc) || 0.0,
+            tank_ph: parseFloat(data.tankPh) || 0.0,
+            finished_product_ph: parseFloat(data.finishedPh) || 0.0,
+            sugar_required_kg: parseFloat(data.sugarRequired) || 0.0,
+            sugar_added_kg: parseFloat(data.sugarAdded) || 0.0,
+            brix_mixer: parseFloat(data.brixMixer) || 0.0,
+            mixer_taken_by: resolveEmployeeId(data.brixMixerBy, extractEmployeeId(data.brixMixerBy)),
+            brix_product: parseFloat(data.brixProduct) || 0.0,
+            gas_level: parseFloat(data.gasLevel) || 0.0,
+            product_taken_by: resolveEmployeeId(data.brixProductBy, extractEmployeeId(data.brixProductBy)),
+            approved_by: resolveEmployeeId(data.approvedBy, extractEmployeeId(data.approvedBy)),
+            comments: data.comments || '',
+            ingredients: ingredientsList
+          };
+
+          const response = await frappe.createGoldStoneRumColaRecord(erpPayload);
+          if (response && response.name) {
+            newId = response.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Gold Stone Rum & Cola Record to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 86: Incubator Temperature Record' || type === 'Form 86' || type?.includes('86')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const resolveEmployeeId = (val, defaultVal) => {
+            const extracted = extractEmployeeId(val);
+            if (!extracted) return defaultVal;
+            const searchVal = extracted.toLowerCase().trim();
+            const found = (employeeList || []).find(emp => {
+              const empName = (emp.employee_name || emp.name || '').toLowerCase();
+              const empId = (emp.name || '').toLowerCase();
+              const initials = empName.split(' ').map(n => n[0]).join('');
+              return empName === searchVal || empId === searchVal || initials === searchVal;
+            });
+            return found ? found.name : defaultVal;
+          };
+
+          const checked_by_emp = resolveEmployeeId(data.recordedBy || data.analyst, extractEmployeeId(data.recordedBy || data.analyst));
+          const verified_by_emp = resolveEmployeeId(data.verifiedBy, extractEmployeeId(data.verifiedBy));
+
+          const erpPayload = {
+            date: data.posting_date || data.date,
+            checked_by: checked_by_emp,
+            verified_by: verified_by_emp,
+            table_wahj: [
+              {
+                doctype: 'Incubator Temperature Check',
+                time: data.time || '12:00',
+                incubator_1: String(data.incubator_1 || ''),
+                time_2: data.time_2 || '12:00',
+                incubator_2: String(data.incubator_2 || ''),
+                remarks: data.remarks || ''
+              }
+            ]
+          };
+
+          const response = await frappe.createIncubatorTemperatureRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Incubator Temperature Record to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 88: Weight Check Checklist' || type === 'Form 88' || type?.includes('88') || type === 'weight-check') {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const resolveEmployeeId = (val, defaultVal) => {
+            const extracted = extractEmployeeId(val);
+            if (!extracted) return defaultVal;
+            const searchVal = extracted.toLowerCase().trim();
+            const found = (employeeList || []).find(emp => {
+              const empName = (emp.employee_name || emp.name || '').toLowerCase();
+              const empId = (emp.name || '').toLowerCase();
+              const initials = empName.split(' ').map(n => n[0]).join('');
+              return empName === searchVal || empId === searchVal || initials === searchVal;
+            });
+            return found ? found.name : defaultVal;
+          };
+
+          const mappedRows = (data.rows || []).map(row => ({
+            doctype: 'Weight Check Table',
+            date: row.date,
+            checked_by: resolveEmployeeId(row.checkedBy, extractEmployeeId(row.checkedBy)),
+            verified_by: resolveEmployeeId(row.verifiedBy, extractEmployeeId(row.verifiedBy)),
+            product_desc: row.productDesc || '',
+            weight_1: parseFloat(row.weight1) || 0.0,
+            weight_2: parseFloat(row.weight2) || 0.0
+          }));
+
+          const erpPayload = {
+            checked_by: resolveEmployeeId(data.checkedBy, extractEmployeeId(data.checkedBy)),
+            verified_by: resolveEmployeeId(data.verifiedBy, extractEmployeeId(data.verifiedBy)),
+            overall_comments: data.overallComments || '',
+            weight_check_table: mappedRows
+          };
+
+          const response = await frappe.createWeightCheckRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync For Weight Check Checklist to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
     if (type === 'Form 36 (Bourbon/Cola)') {
       try {
         const conn = frappe.getConnectionSettings();
@@ -1754,6 +1929,9 @@ function App() {
           const erpPayload = {
             date: data.date,
             tank_no: data.tankNo,
+            tank_number: data.tankNo,
+            tank: data.tankNo,
+            tank_no_: data.tankNo,
             volume: data.volume,
             prepared_by: resolveEmployeeId(data.preparedBy, extractEmployeeId(data.preparedBy)),
             verified_by: resolveEmployeeId(data.verifiedBy, extractEmployeeId(data.verifiedBy)),
@@ -1781,74 +1959,7 @@ function App() {
       }
     }
 
-    if (type === 'Form 100 (Production Log)') {
-      try {
-        const conn = frappe.getConnectionSettings();
-        if (conn.isLive && conn.connected) {
-          const extractEmployeeId = (val) => {
-            if (!val) return '';
-            const match = val.match(/\(([^)]+)\)/);
-            return match ? match[1] : val;
-          };
 
-          const resolveEmployeeId = (val, defaultVal) => {
-            const extracted = extractEmployeeId(val);
-            if (!extracted) return defaultVal;
-            const searchVal = extracted.toLowerCase().trim();
-            const found = (employeeList || []).find(emp => {
-              const empName = (emp.employee_name || emp.name || '').toLowerCase();
-              const empId = (emp.name || '').toLowerCase();
-              const initials = empName.split(' ').map(n => n[0]).join('');
-              return empName === searchVal || empId === searchVal || initials === searchVal;
-            });
-            return found ? found.name : defaultVal;
-          };
-
-          const erpPayload = {
-            date: data.date,
-            time_start: data.timeStart ? data.timeStart + ':00' : null,
-            time_stop: data.timeStop ? data.timeStop + ':00' : null,
-            market: data.market,
-            supervisor: resolveEmployeeId(data.supervisor, extractEmployeeId(data.supervisor)),
-            product_desc: data.productDesc,
-            product_size: data.productSize,
-            packing_type: data.packingType,
-            warehouse_cases: parseInt(data.warehouseCases) || 0,
-            endorsed_by: resolveEmployeeId(data.endorsedBy, extractEmployeeId(data.endorsedBy)),
-            received_by: resolveEmployeeId(data.receivedBy, extractEmployeeId(data.receivedBy)),
-            filler_counter: data.fillerCounter || '',
-            labeller_counter: data.labellerCounter || '',
-            lpg_start: data.lpgStart || '',
-            lpg_stop: data.lpgStop || '',
-            efl_start: data.eflStart || '',
-            efl_stop: data.eflStop || '',
-            boc_start: data.bocStart || '',
-            boc_stop: data.bocStop || '',
-            crew_infeed: data.crewInfeed || '',
-            crew_filler: data.crewFiller || '',
-            crew_lab: data.crewLab || '',
-            crew_water: data.crewWater || '',
-            crew_blowing: data.crewBlowing || '',
-            crew_labeller: data.crewLabeller || '',
-            waste_bottles: parseInt(data.wasteBottles) || 0,
-            waste_caps: parseInt(data.wasteCaps) || 0,
-            waste_preform: parseInt(data.wastePreform) || 0,
-            waste_ldpe: data.wasteLdpe || '',
-            waste_cartons: parseInt(data.wasteCartons) || 0,
-            waste_samples: parseInt(data.wasteSamples) || 0,
-            comments: data.comments || ''
-          };
-
-          const response = await frappe.createHandoverRecord(erpPayload);
-          if (response && response.name) {
-            newId = response.name;
-          }
-        }
-      } catch (err) {
-        console.error('Failed to sync Daily Production & Handover Record to ERPNext:', err);
-        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
-      }
-    }
 
     const newRecord = {
       id: newId,
@@ -6715,6 +6826,7 @@ function App() {
         <CleaningRecordDetailModal
           record={viewingCleaningRecord}
           onClose={() => setViewingCleaningRecord(null)}
+          employeeList={employeeList}
         />
       )}
 
@@ -6850,6 +6962,19 @@ function App() {
         />
       )}
 
+      {/* Modal: Laboratory Form 35 */}
+      {activeLabForm === 'form35' && (
+        <LabForm35Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 35: Gold Stone Rum & Cola', data)}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
       {/* Modal: Laboratory Form 36 */}
       {activeLabForm === 'form36' && (
         <LabForm36Modal
@@ -6863,11 +6988,12 @@ function App() {
         />
       )}
 
-      {/* Modal: Laboratory Form 100 */}
-      {activeLabForm === 'form100' && (
-        <LabForm100Modal
+      {/* Modal: Laboratory Form 86 */}
+      {activeLabForm === 'form86' && (
+        <LabForm86Modal
           onClose={() => setActiveLabForm(null)}
-          onSubmit={(data) => handleSaveLaboratory('Form 100 (Production Log)', data)}
+          onSubmit={(data) => handleSaveLaboratory('Form 86: Incubator Temperature Record', data)}
+          saving={labSaving}
           employeeList={employeeList}
           handleSearchEmployees={handleSearchEmployees}
           showEmployeeDropdown={showEmployeeDropdown}
@@ -6875,6 +7001,21 @@ function App() {
           activeSearchField={activeSearchField}
         />
       )}
+
+      {/* Modal: Laboratory Form 88 */}
+      {activeLabForm === 'form88' && (
+        <LabForm88Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 88: Weight Check Checklist', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
       {/* Modal: Laboratory Form 103 */}
       {activeLabForm === 'form103' && (
         <LabForm103Modal

@@ -2303,6 +2303,29 @@ class FrappeService {
     return { success: true, name: `LAB-SF36-${Date.now().toString().slice(-6)}` };
   }
 
+  // Create Gold Stone Rum And Cola Record
+  async createGoldStoneRumColaRecord(data) {
+    if (this.connection.isLive) {
+      try {
+        const response = await this.makeRequest('POST', 'Gold Stone Rum and Cola', '', {
+          ...data,
+          docstatus: 1
+        });
+        return { success: true, name: response?.data?.name || response?.name || response?.id };
+      } catch (e) {
+        console.warn('Failed to create Gold Stone Rum and Cola on ERPNext with docstatus:1, retrying without docstatus:', e);
+        try {
+          const response2 = await this.makeRequest('POST', 'Gold Stone Rum and Cola', '', data);
+          return { success: true, name: response2?.data?.name || response2?.name || response2?.id };
+        } catch (e2) {
+          console.error('Failed to create Gold Stone Rum and Cola without docstatus:', e2);
+          throw e;
+        }
+      }
+    }
+    return { success: true, name: `LAB-SF35-${Date.now().toString().slice(-6)}` };
+  }
+
   // Create Daily Production And Handover Record
   async createHandoverRecord(data) {
     if (this.connection.isLive) {
@@ -2548,6 +2571,29 @@ async getEquipmentList(params = {}) {
     return [{ name: 'CHEM-00001' }];
   }
 
+  // Fetch CIP Chemical records
+  async getCipChemicals() {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.fetchERP('CIP Chemical', {
+          fields: ['name', 'chemical_name'],
+          limit: 100
+        });
+        return res || [];
+      } catch (e) {
+        console.error('Failed to fetch CIP Chemical from ERPNext:', e);
+        return [];
+      }
+    }
+    return [
+      { name: 'Chlorine Solution (XY-12)', chemical_name: 'Chlorine Solution (XY-12)' },
+      { name: 'Caustic Soda (Sodium Hydroxide)', chemical_name: 'Caustic Soda (Sodium Hydroxide)' },
+      { name: 'Acid Sanitizer (Peracetic Acid)', chemical_name: 'Acid Sanitizer (Peracetic Acid)' },
+      { name: 'Hot Water Flushing (CIP)', chemical_name: 'Hot Water Flushing (CIP)' }
+    ];
+  }
+
+
   // Create Balance Check or Callibration record
   async createBalanceCheckRecord(data) {
     return this.createCleaningSanitationRecord('Balance Check or Callibration', data);
@@ -2575,6 +2621,56 @@ async getEquipmentList(params = {}) {
       }
     }
     return null;
+  }
+
+  // Fetch Cleaning and Sanitation Form records
+  async getCleaningAndSanitationForm(limit = 50, start = 0) {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.fetchERP('Cleaning and Sanitation Form', {
+          fields: ['*'],
+          limit,
+          start,
+          order_by: 'creation desc'
+        });
+        return res || [];
+      } catch (e) {
+        console.error('Failed to fetch Cleaning and Sanitation Form from ERPNext:', e);
+        throw e;
+      }
+    }
+    return [];
+  }
+
+  // Fetch DocType meta field definitions
+  async getDocTypeMeta(doctype) {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.makeRequest('GET', 'DocType', doctype);
+        return res?.data || null;
+      } catch (e) {
+        console.error(`Failed to fetch DocType meta for ${doctype}:`, e);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  // Fetch link field options from target DocType
+  async getLinkOptions(targetDoctype, limit = 100) {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.fetchERP(targetDoctype, {
+          fields: ['name'],
+          limit
+        });
+        return res || [];
+      } catch (e) {
+        console.error(`Failed to fetch link options for ${targetDoctype}:`, e);
+        return [];
+      }
+    }
+    return [];
   }
 
   // Create custom Cleaning and Sanitation log record via RPC ignore_permissions
@@ -2662,14 +2758,35 @@ async getEquipmentList(params = {}) {
         const dt = doctypes[index];
         if (res.status === 'fulfilled' && Array.isArray(res.value)) {
           res.value.forEach(item => {
+            let status = item.sanitation_result || item.status;
+            if (!status && dt === 'Balance Check or Callibration') {
+              const commentsStr = String(item.comments || '');
+              if (commentsStr.includes('[Status: Fail]')) {
+                status = 'Fail';
+              } else if (commentsStr.includes('[Status: Pass]')) {
+                status = 'Pass';
+              } else {
+                const w10 = parseFloat(item.weight_10g) || 0;
+                const w20 = parseFloat(item.weight_20g) || 0;
+                const w50 = parseFloat(item.weight_50g) || 0;
+                const pass10 = (w10 === 0) || (Math.abs(w10 - 10.0) <= 0.2);
+                const pass20 = (w20 === 0) || (Math.abs(w20 - 20.0) <= 0.4);
+                const pass50 = (w50 === 0) || (Math.abs(w50 - 50.0) <= 1.0);
+                status = (pass10 && pass20 && pass50) ? 'Pass' : 'Fail';
+              }
+            }
+            if (!status) status = 'Clean';
+
             allRecords.push({
               id: item.name,
               name: item.name,
               type: dt,
               timestamp: item.creation || item.modified || new Date().toISOString(),
-              status: item.sanitation_result || item.status || 'Clean',
-              cleaner: item.duties_performed_by || item.performed_by_operator || item.checked_by || 'Staff',
-              supervisor: item.checked_by || item.verified_by_supervisor || item.verified_by || '',
+              status: status,
+              cleaner: item.operator_name || item.duties_performed_by || item.performed_by_operator || item.checked_by || 'Staff',
+              supervisor: item.supervisor_name || item.checked_by || item.verified_by_supervisor || item.verified_by || '',
+              operator_name: item.operator_name || item.duties_performed_by || item.performed_by_operator || item.checked_by || 'Staff',
+              supervisor_name: item.supervisor_name || item.checked_by || item.verified_by_supervisor || item.verified_by || '',
               posting_date: item.date || (item.creation ? item.creation.split(' ')[0] : ''),
               posting_time: item.time || (item.creation ? item.creation.split(' ')[1] : ''),
               details: item
