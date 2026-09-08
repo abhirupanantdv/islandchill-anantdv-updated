@@ -4327,11 +4327,11 @@ function App() {
     const lineNo = data.get('lineNo');
     const plannedStartDateVal = data.get('plannedStartDate') || data.get('plannedStart');
     const company = data.get('company') || woCreateCompany;
-    const sourceWarehouse = data.get('sourceWarehouse');
-    const fgWarehouse = data.get('fgWarehouse');
-    const wipWarehouse = data.get('wipWarehouse');
-    const scrapWarehouse = data.get('scrapWarehouse') || '';
-    const extraGoodsWarehouse = data.get('extraGoodsWarehouse') || '';
+    const sourceWarehouse = data.get('sourceWarehouse') || woSourceWarehouse || 'Stores - CWFPL';
+    const fgWarehouse = data.get('fgWarehouse') || woFgWarehouse;
+    const wipWarehouse = data.get('wipWarehouse') || woWipWarehouse || 'Work In Progress - CWFPL';
+    const scrapWarehouse = data.get('scrapWarehouse') || woScrapWarehouse || '';
+    const extraGoodsWarehouse = data.get('extraGoodsWarehouse') || woExtraGoodsWarehouse || '';
 
     const product = woProductsList.find(p => p.code === productCode) || PRODUCTS.find(p => p.code === productCode);
 
@@ -5633,10 +5633,10 @@ function App() {
                     <label>Source Warehouse * <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Raw Materials - Read Only)</span></label>
                     <input
                       type="text"
+                      name="sourceWarehouse"
                       className="form-input"
                       value={woSourceWarehouse || 'Stores - CWFPL'}
                       readOnly
-                      disabled
                       style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed', color: 'var(--text-main)', fontWeight: '500' }}
                     />
                   </div>
@@ -5645,10 +5645,10 @@ function App() {
                     <label>Work-in-Progress Warehouse * <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Operations - Read Only)</span></label>
                     <input
                       type="text"
+                      name="wipWarehouse"
                       className="form-input"
                       value={woWipWarehouse || 'Work In Progress - CWFPL'}
                       readOnly
-                      disabled
                       style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed', color: 'var(--text-main)', fontWeight: '500' }}
                     />
                   </div>
