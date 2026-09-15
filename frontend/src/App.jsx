@@ -4750,6 +4750,7 @@ function App() {
           const nextWO = {
             id: res.name,
             ...woPayload,
+            lineNo: res.production_line || woPayload.lineNo || 'Filling Line 1',
             item: prodObj.name,
             produced: 0,
             status: 'Pending',

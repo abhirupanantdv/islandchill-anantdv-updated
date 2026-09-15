@@ -29,7 +29,8 @@ export default function WorkOrdersTab({
   setOperatorName,
   currentUser,
   setOperatorRemarks,
-  setActiveTimelineJC
+  setActiveTimelineJC,
+  loadWorkOrders
 }) {
   const conn = frappe.getConnectionSettings();
   const isLiveMode = conn.isLive && conn.connected;

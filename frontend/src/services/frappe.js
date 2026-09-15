@@ -586,6 +586,26 @@ class FrappeService {
   async createWorkOrder(woData) {
     if (this.connection.isLive) {
       try {
+        const res = await this.callIslandChillMethod('create_islandchill_work_order', {
+          production_item: woData.product,
+          qty: woData.quantity,
+          planned_start_date: woData.plannedStart ? woData.plannedStart.replace(' ', 'T') : '',
+          bom_no: woData.bomNo,
+          company: woData.company || this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited',
+          source_warehouse: woData.sourceWarehouse || null,
+          wip_warehouse: woData.wipWarehouse || null,
+          fg_warehouse: woData.fgWarehouse || null,
+          scrap_warehouse: woData.scrapWarehouse || null,
+          custom_extra_goods_warehouse: woData.extraGoodsWarehouse || null,
+          production_line: woData.lineNo || 'Filling Line 1'
+        });
+
+        if (res && res.name) {
+          return { success: true, name: res.name, production_line: res.production_line };
+        }
+        return res || { success: true };
+      } catch (e) {
+        console.error('Failed to create Work Order on ERPNext via custom API, falling back:', e);
         let operations = [];
         try {
           const bomRes = await this.makeRequest('GET', 'BOM', woData.bomNo);
@@ -603,10 +623,9 @@ class FrappeService {
         const payload = {
           production_item: woData.product,
           qty: woData.quantity,
-          planned_start_date: woData.plannedStart.replace(' ', 'T'),
+          planned_start_date: woData.plannedStart ? woData.plannedStart.replace(' ', 'T') : '',
           bom_no: woData.bomNo,
           company: woData.company || this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited',
-          // Warehouses — all 5 must come from the user's selection (company-specific)
           source_warehouse: woData.sourceWarehouse || null,
           wip_warehouse: woData.wipWarehouse || null,
           fg_warehouse: woData.fgWarehouse || null,
@@ -616,16 +635,29 @@ class FrappeService {
           operations: operations,
           docstatus: 1
         };
-        // Remove null fields so ERPNext doesn't complain about invalid warehouse links
         Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
         const response = await this.makeRequest('POST', 'Work Order', '', payload);
         return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Work Order on ERPNext:', e);
-        throw e;
       }
     }
     return { success: true, name: `MFG-WO-2026-${Date.now().toString().slice(-5)}` };
+  }
+
+  // Update Work Order production line
+  async updateWorkOrderLine(workOrder, productionLine) {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.callIslandChillMethod('update_work_order_line', {
+          work_order: workOrder,
+          production_line: productionLine
+        });
+        return res || { success: true };
+      } catch (e) {
+        console.error('Failed to update Work Order line on ERPNext:', e);
+        throw e;
+      }
+    }
+    return { success: true, work_order: workOrder, production_line: productionLine };
   }
 
   // Check raw materials availability in source warehouse for a BOM and batch quantity

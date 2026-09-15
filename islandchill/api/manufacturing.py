@@ -1844,3 +1844,94 @@ def check_raw_materials_availability(bom_no, quantity=1, source_warehouse=None):
         "items": items_status
     }
 
+
+@frappe.whitelist()
+def update_work_order_line(work_order, production_line):
+    """Update custom_production_line on a Work Order."""
+    if not frappe.db.exists("Work Order", work_order):
+        frappe.throw(frappe._("Work Order {0} not found").format(work_order))
+
+    valid_lines = ["Filling Line 1", "Filling Line 2"]
+    if production_line not in valid_lines:
+        frappe.throw(frappe._("Invalid production line. Must be one of: {0}").format(", ".join(valid_lines)))
+
+    frappe.db.set_value("Work Order", work_order, "custom_production_line", production_line)
+    frappe.db.commit()
+    return {
+        "success": True,
+        "work_order": work_order,
+        "production_line": production_line
+    }
+
+
+@frappe.whitelist()
+def create_islandchill_work_order(
+    production_item,
+    qty,
+    planned_start_date,
+    bom_no,
+    company=None,
+    source_warehouse=None,
+    wip_warehouse=None,
+    fg_warehouse=None,
+    scrap_warehouse=None,
+    custom_extra_goods_warehouse=None,
+    production_line=None
+):
+    """Create and submit Work Order with guaranteed production line assignment."""
+    line = (production_line or "").strip()
+    if line not in ["Filling Line 1", "Filling Line 2"]:
+        # Infer based on item if not explicitly provided
+        item_str = (frappe.db.get_value("Item", production_item, "item_name") or production_item or "").lower()
+        if any(k in item_str for k in ['cola', 'rum', 'bourbon', 'whiskey', 'alcohol', 'can', 'rtd', 'csd', 'beer', 'cocktail', 'spirits', 'gin', 'vodka', 'lemonade', 'orange', 'strawberry', 'pineapple', 'raspberry', 'goldstone']):
+            line = "Filling Line 2"
+        else:
+            line = "Filling Line 1"
+
+    doc = frappe.new_doc("Work Order")
+    doc.production_item = production_item
+    doc.qty = frappe.utils.flt(qty)
+    doc.bom_no = bom_no
+    doc.company = company or "Carpenters Waters (Fiji) PTE Limited"
+    if planned_start_date:
+        doc.planned_start_date = planned_start_date.replace("T", " ")
+    if source_warehouse:
+        doc.source_warehouse = source_warehouse
+    if wip_warehouse:
+        doc.wip_warehouse = wip_warehouse
+    if fg_warehouse:
+        doc.fg_warehouse = fg_warehouse
+    if scrap_warehouse:
+        doc.scrap_warehouse = scrap_warehouse
+    if custom_extra_goods_warehouse:
+        doc.custom_extra_goods_warehouse = custom_extra_goods_warehouse
+
+    doc.custom_production_line = line
+
+    # Fetch BOM operations if available
+    try:
+        bom_doc = frappe.get_doc("BOM", bom_no)
+        for op in bom_doc.operations:
+            doc.append("operations", {
+                "operation": op.operation,
+                "workstation": op.workstation,
+                "time_in_mins": frappe.utils.flt(op.time_in_mins or 1.0)
+            })
+    except Exception as e:
+        frappe.log_error(f"Failed to copy BOM operations: {e}", "IslandChill Work Order")
+
+    doc.insert(ignore_permissions=True)
+    doc.submit()
+
+    # Verify custom_production_line in database
+    if frappe.db.get_value("Work Order", doc.name, "custom_production_line") != line:
+        frappe.db.set_value("Work Order", doc.name, "custom_production_line", line)
+        frappe.db.commit()
+
+    return {
+        "success": True,
+        "name": doc.name,
+        "production_line": line
+    }
+
+
