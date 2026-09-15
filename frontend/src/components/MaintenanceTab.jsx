@@ -1,6 +1,389 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
 
+export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    checked_by: '',
+    verified_by: '',
+    overall_comments: ''
+  });
+  const [meta, setMeta] = useState(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [childMetas, setChildMetas] = useState({});
+  const [tableData, setTableData] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[MaintForm88DynamicModal] Fetching DocType meta for "Weight Check"...');
+        let doctypeMeta = await frappe.getDocTypeMeta('Weight Check');
+        if (!doctypeMeta || !doctypeMeta.fields) {
+          doctypeMeta = await frappe.getDocTypeMeta('For Weight Check Checklist');
+        }
+        let fields = doctypeMeta?.fields;
+
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'checked_by', label: 'Checked By (Chemist)', fieldtype: 'Link', options: 'Employee' },
+            { idx: 3, fieldname: 'verified_by', label: 'Verified By (Supervisor)', fieldtype: 'Link', options: 'Employee' },
+            { idx: 4, fieldname: 'product_desc', label: 'Product Description', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'weight_1', label: 'Weight Check 1 (g)', fieldtype: 'Float' },
+            { idx: 6, fieldname: 'weight_2', label: 'Weight Check 2 (g)', fieldtype: 'Float' },
+            { idx: 7, fieldname: 'overall_comments', label: 'Overall Comments / Remarks', fieldtype: 'Small Text' },
+            { idx: 8, fieldname: 'weight_check_table', label: 'Weight Check Table', fieldtype: 'Table', options: 'Weight Check Table' }
+          ];
+        }
+
+        if (isMounted) {
+          console.log('📋 WEIGHT CHECK DYNAMIC META:', doctypeMeta);
+          setMeta({ ...(doctypeMeta || {}), fields });
+          const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+          const childMetasObj = {};
+          for (const tf of tableFieldsList) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta && childMeta.fields) {
+                childMetasObj[tf.options] = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[MaintForm88DynamicModal] Error fetching meta fields for Weight Check:', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const parseSelectOptions = (rawOptions) => {
+    if (!rawOptions) return [];
+    if (Array.isArray(rawOptions)) {
+      return rawOptions.map(opt => {
+        if (typeof opt === 'object' && opt !== null) {
+          return opt.value ?? opt.label ?? String(opt);
+        }
+        return String(opt).trim();
+      }).filter(Boolean);
+    }
+    if (typeof rawOptions === 'string') {
+      return rawOptions.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
+        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || []);
+    const newRow = {};
+    childFields.forEach(f => {
+      newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
+    });
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Weight Check',
+      ...formData,
+      ...tableData
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
+
+  return (
+    <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown && setShowEmployeeDropdown(false)}>
+      <div className="modal-panel" style={{ width: '680px', maxWidth: '95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>⚖️ Form 88: Weight Check</h3>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Weight check log sheet for finished products and line checks
+            </div>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px', fontSize: '12px' }}>
+            {loadingMeta ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: '600' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Weight Check"...
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                  {nonTableFields.map(field => {
+                    if (field.fieldtype === 'Select') {
+                      const opts = parseSelectOptions(field.options);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <select
+                            className="text-input"
+                            value={formData[field.fieldname] ?? opts[0] ?? ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          >
+                            <option value="">-- Select {field.label} --</option>
+                            {opts.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Check') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <input
+                            type="checkbox"
+                            id={`wc88_${field.fieldname}`}
+                            checked={!!formData[field.fieldname]}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
+                          />
+                          <label htmlFor={`wc88_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
+                            {field.label}
+                          </label>
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 2' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <textarea
+                            className="text-input"
+                            style={{ minHeight: '60px' }}
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Date') {
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="date"
+                            className="text-input"
+                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Time') {
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="time"
+                            className="text-input"
+                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
+                      const sKey = `maint_${field.fieldname}`;
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="text"
+                            className="text-input"
+                            placeholder="Type to search employee..."
+                            value={formData[field.fieldname] || ''}
+                            onFocus={(e) => {
+                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
+                            }}
+                            onChange={(e) => {
+                              handleFieldChange(field.fieldname, e.target.value);
+                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
+                            }}
+                          />
+                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                              {employeeList.map(emp => (
+                                <li
+                                  key={emp.name}
+                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
+                                  onClick={() => {
+                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
+                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                  }}
+                                >
+                                  {emp.employee_name} ({emp.name})
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={field.fieldname} className="form-group">
+                        <label className="input-label" style={{ fontWeight: '600' }}>
+                          {field.label} {field.reqd ? '*' : ''}
+                        </label>
+                        <input
+                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
+                          className="text-input"
+                          value={formData[field.fieldname] || ''}
+                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {tableFields.map(tf => {
+                  const childDoctype = tf.options;
+                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  const currentRows = tableData[tf.fieldname] || [];
+
+                  return (
+                    <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                          + Add Row
+                        </button>
+                      </div>
+
+                      {currentRows.length === 0 ? (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', textAlign: 'center' }}>
+                          No rows added yet. Click "+ Add Row" above.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                                {childFields.map(cf => (
+                                  <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                                ))}
+                                <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {currentRows.map((row, rIdx) => (
+                                <tr key={rIdx}>
+                                  {childFields.map(cf => (
+                                    <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                      {cf.fieldtype === 'Select' ? (
+                                        <select
+                                          className="text-input"
+                                          style={{ padding: '4px', fontSize: '11px' }}
+                                          value={row[cf.fieldname] || ''}
+                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                        >
+                                          <option value="">-- Select --</option>
+                                          {parseSelectOptions(cf.options).map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                          className="text-input"
+                                          style={{ padding: '4px', fontSize: '11px' }}
+                                          value={row[cf.fieldname] || ''}
+                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                        />
+                                      )}
+                                    </td>
+                                  ))}
+                                  <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                      🗑️
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Weight Check'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -1547,7 +1930,7 @@ export default function MaintenanceTab({
       )}
 
       {activeMaintSubTab === 'regular-breakdown' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
 
           {/* Machine Breakdown */}
           <div
@@ -1580,6 +1963,23 @@ export default function MaintenanceTab({
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
               <button type="button" className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setActiveMaintForm('form107')}>📝 Fill Form 107</button>
+            </div>
+          </div>
+
+          {/* Form 88: Weight Check */}
+          <div
+            className="inv-card"
+            style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', transition: 'all 0.2s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+          >
+            <div>
+              <span className="badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px' }}>QUALITY / WEIGHT</span>
+              <h4 style={{ fontSize: '14px', fontWeight: '700', marginTop: '12px', marginBottom: '4px', color: 'var(--text-heading)' }}>⚖️ Form 88: Weight Check</h4>
+              <p className="text-muted" style={{ fontSize: '11px', marginBottom: '12px' }}>Log finished product weight checks, slot samples, and verification logs.</p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <button type="button" className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => setActiveMaintForm('form88-dynamic')}>📝 Fill Form 88</button>
             </div>
           </div>
         </div>

@@ -18,7 +18,7 @@ import WorkOrdersTab from './components/WorkOrdersTab';
 import InventoryTab from './components/InventoryTab';
 import BOMTab from './components/BOMTab';
 import SalesTab, { SalesInvoiceFormModal, DeliveryNoteFormModal } from './components/SalesTab';
-import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal } from './components/MaintenanceTab';
+import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal, MaintForm88DynamicModal } from './components/MaintenanceTab';
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
 import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
@@ -2737,6 +2737,34 @@ function App() {
         }
       } catch (err) {
         console.error('Failed to sync Hourly Weight Check Form to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'form88-dynamic' || type === 'Weight Check' || type === 'For Weight Check Checklist' || type?.includes('88')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Weight Check',
+            checked_by: extractEmployeeId(data.checked_by || data.checkedBy),
+            verified_by: extractEmployeeId(data.verified_by || data.verifiedBy)
+          };
+
+          const response = await frappe.createWeightCheckDynamic(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Weight Check Form to ERPNext:', err);
         showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
       }
     }
@@ -6699,6 +6727,21 @@ function App() {
           <MaintForm107Modal
             onClose={() => setActiveMaintForm(null)}
             onSubmit={(data) => handleSaveMaintForm('form107', data)}
+            employeeList={employeeList}
+            handleSearchEmployees={handleSearchEmployees}
+            showEmployeeDropdown={showEmployeeDropdown}
+            setShowEmployeeDropdown={setShowEmployeeDropdown}
+            activeSearchField={activeSearchField}
+          />
+        );
+      })()}
+
+      {/* Modal: Log Form 88 Dynamic Weight Check */}
+      {activeMaintForm === 'form88-dynamic' && (() => {
+        return (
+          <MaintForm88DynamicModal
+            onClose={() => setActiveMaintForm(null)}
+            onSubmit={(data) => handleSaveMaintForm('form88-dynamic', data)}
             employeeList={employeeList}
             handleSearchEmployees={handleSearchEmployees}
             showEmployeeDropdown={showEmployeeDropdown}

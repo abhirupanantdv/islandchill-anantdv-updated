@@ -906,7 +906,8 @@ def create_cleaning_sanitation_log(doctype, payload=None):
         'Production Record',
         'Mock Product Recall',
         'Recall Review',
-        'Hourly Weight Check Form'
+        'Hourly Weight Check Form',
+        'Weight Check'
     }
 
     if doctype not in allowed_doctypes:

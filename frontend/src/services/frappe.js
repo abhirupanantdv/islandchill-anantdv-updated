@@ -2372,6 +2372,11 @@ class FrappeService {
     return this.saveDocRecord('Hourly Weight Check Form', data);
   }
 
+  // Create Weight Check record (Form 88 Dynamic)
+  async createWeightCheckDynamic(data) {
+    return this.saveDocRecord('Weight Check', data);
+  }
+
 
 
   // Create Machine Breakdown Record
