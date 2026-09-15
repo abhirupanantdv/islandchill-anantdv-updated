@@ -1,6 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
 
+const parseSelectOptions = (rawOptions) => {
+  if (!rawOptions) return [];
+  if (Array.isArray(rawOptions)) {
+    return rawOptions.map(opt => {
+      if (typeof opt === 'object' && opt !== null) {
+        return opt.value ?? opt.label ?? String(opt);
+      }
+      return String(opt).trim();
+    }).filter(Boolean);
+  }
+  if (typeof rawOptions === 'string') {
+    return rawOptions
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
 export const CLEANING_TEMPLATES = [
   { id: 'toilet-clean', name: 'Cleaning of Toilets', doctype: 'Cleaning of Toilets', description: 'Log daily toilet sanitation status.' },
   { id: 'toilet-purpose', name: 'Toilet Cleaning Purpose', doctype: 'Toilet Cleaning purpose', description: 'Log toilet cleaning purpose details.' },
@@ -11,7 +30,8 @@ export const CLEANING_TEMPLATES = [
   { id: 'lab-office-clean', name: 'Cleaning of Lab and Office', doctype: 'Cleaning of Lab and Office', description: 'Log daily laboratory & office cleaning logs.' },
   { id: 'lab-office-purpose', name: 'Lab and Office Cleaning Purpose', doctype: 'Lab and Office Cleaning Purpose', description: 'Log lab & office cleaning purpose details.' },
   { id: 'balance-calib', name: 'Balance Check or Calibration', doctype: 'Balance Check or Callibration', description: 'Record balance check metrics & calibration variance.' },
-  { id: 'sanitation', name: 'Equipment Sanitation & CIP', doctype: 'equipment sanitation and cip', description: 'Log chemical sanitation levels and contact times.' }
+  { id: 'sanitation', name: 'Equipment Sanitation & CIP', doctype: 'equipment sanitation and cip', description: 'Log chemical sanitation levels and contact times.' },
+  { id: 'perimeter-clean', name: 'Form 46: Outside Perimeter Cleaning', doctype: 'Outside Perimeter Cleaning', description: 'Log outside perimeter cleaning inspection and checklist.' }
 ];
 
 export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, setActiveSearchField }) {
@@ -36,6 +56,91 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
 
   const [formData, setFormData] = useState({});
   const [formNumber, setFormNumber] = useState('');
+
+  const [meta, setMeta] = useState(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [childMetas, setChildMetas] = useState({});
+  const [tableData, setTableData] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      if (templateId === 'perimeter-clean' || template?.doctype === 'Outside Perimeter Cleaning') {
+        setLoadingMeta(true);
+        try {
+          console.log('[CleaningFormModal] Fetching DocType meta for "Outside Perimeter Cleaning"...');
+          const doctypeMeta = await frappe.getDocTypeMeta('Outside Perimeter Cleaning');
+          let fields = doctypeMeta?.fields;
+          if (!fields || fields.length === 0) {
+            fields = [
+              { idx: 1, fieldname: 'posting_date', label: 'Posting Date', fieldtype: 'Date' },
+              { idx: 2, fieldname: 'posting_time', label: 'Posting Time', fieldtype: 'Time' },
+              { idx: 3, fieldname: 'cleaner', label: 'Cleaner / Performed By', fieldtype: 'Link', options: 'Employee' },
+              { idx: 4, fieldname: 'supervisor', label: 'Verified By (Supervisor)', fieldtype: 'Link', options: 'Employee' },
+              { idx: 5, fieldname: 'perimeter_area', label: 'Perimeter Area / Zone', fieldtype: 'Select', options: 'Main Gate & Entryway\nNorth Fence Line\nSouth Fence Line\nEast Yard & Loading Bay\nWest Boundary & Vegetation\nDrainage & Gutters' },
+              { idx: 6, fieldname: 'trash_and_litter_cleared', label: 'Trash and Litter Cleared', fieldtype: 'Select', options: 'YES\nNO\nN/A' },
+              { idx: 7, fieldname: 'grass_and_weeds_trimmed', label: 'Grass & Weeds Trimmed', fieldtype: 'Select', options: 'YES\nNO\nN/A' },
+              { idx: 8, fieldname: 'outside_drains_unblocked', label: 'Outside Drains Unblocked', fieldtype: 'Select', options: 'YES\nNO\nN/A' },
+              { idx: 9, fieldname: 'pest_harbourage_checked', label: 'Pest Harbourage Checked', fieldtype: 'Select', options: 'YES\nNO\nN/A' },
+              { idx: 10, fieldname: 'overall_condition', label: 'Overall Condition / Status', fieldtype: 'Select', options: 'Clean (Satisfactory)\nNeeds Attention\nRequires Maintenance' },
+              { idx: 11, fieldname: 'remarks', label: 'Observations / Remarks', fieldtype: 'Small Text' }
+            ];
+          }
+          if (isMounted) {
+            console.log('📋 OUTSIDE PERIMETER CLEANING DYNAMIC META:', doctypeMeta);
+            setMeta({ ...(doctypeMeta || {}), fields });
+            const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+            const childMetasObj = {};
+            for (const tf of tableFieldsList) {
+              try {
+                const childMeta = await frappe.getDocTypeMeta(tf.options);
+                if (childMeta && childMeta.fields) {
+                  childMetasObj[tf.options] = childMeta.fields;
+                }
+              } catch (e) {
+                console.error(`Error fetching child meta for ${tf.options}:`, e);
+              }
+            }
+            setChildMetas(childMetasObj);
+          }
+        } catch (e) {
+          console.error('[CleaningFormModal] Error fetching meta:', e);
+        } finally {
+          if (isMounted) setLoadingMeta(false);
+        }
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, [templateId, template]);
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
+        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || []);
+    const newRow = {};
+    childFields.forEach(f => {
+      newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
+    });
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
 
   useEffect(() => {
     async function loadFormNumber() {
@@ -269,7 +374,8 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
     const finalData = {
       posting_date: postingDate,
       posting_time: postingTime,
-      ...formData
+      ...formData,
+      ...tableData
     };
     if (templateId === 'incubator-temp') {
       if (!cleaner) { alert('Please select inspector name.'); return; }
@@ -449,7 +555,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
             </div>
 
             {/* Supervisor field (where applicable) */}
-            {['toilet-clean', 'dining-clean', 'floor-clean', 'lab-office-clean', 'sanitation'].includes(templateId) && (
+            {['toilet-clean', 'dining-clean', 'floor-clean', 'lab-office-clean', 'sanitation', 'perimeter-clean'].includes(templateId) && (
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="input-label" style={{ fontWeight: '600', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Verified By (Supervisor)</span>
@@ -1016,6 +1122,205 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
               </>
             )}
 
+
+            {/* Form 46: Outside Perimeter Cleaning Dynamic Fields */}
+            {templateId === 'perimeter-clean' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {loadingMeta ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: '600' }}>
+                    ⏳ Fetching dynamic meta fields from ERPNext DocType "Outside Perimeter Cleaning"...
+                  </div>
+                ) : (
+                  <>
+                    {(meta?.fields || []).filter(f =>
+                      f.fieldtype !== 'Table' &&
+                      f.fieldtype !== 'Section Break' &&
+                      f.fieldtype !== 'Column Break' &&
+                      f.fieldtype !== 'Fold' &&
+                      f.fieldname !== 'amended_from' &&
+                      f.fieldname !== 'work_order' &&
+                      f.fieldname !== 'posting_date' &&
+                      f.fieldname !== 'posting_time' &&
+                      f.fieldname !== 'cleaner' &&
+                      f.fieldname !== 'supervisor' &&
+                      f.hidden !== 1
+                    ).map(field => {
+                      if (field.fieldtype === 'Select') {
+                        const opts = parseSelectOptions(field.options);
+                        return (
+                          <div key={field.fieldname} className="form-group">
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <select
+                              className="text-input"
+                              value={formData[field.fieldname] ?? opts[0] ?? ''}
+                              onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            >
+                              <option value="">-- Select {field.label} --</option>
+                              {opts.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      if (field.fieldtype === 'Check') {
+                        return (
+                          <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input
+                              type="checkbox"
+                              id={field.fieldname}
+                              checked={!!formData[field.fieldname]}
+                              onChange={e => handleInputChange(field.fieldname, e.target.checked ? 1 : 0)}
+                            />
+                            <label htmlFor={field.fieldname} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
+                              {field.label}
+                            </label>
+                          </div>
+                        );
+                      }
+
+                      if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
+                        return (
+                          <div key={field.fieldname} className="form-group">
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <textarea
+                              className="text-input"
+                              style={{ minHeight: '60px' }}
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (field.fieldtype === 'Date') {
+                        return (
+                          <div key={field.fieldname} className="form-group">
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="date"
+                              className="text-input"
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (field.fieldtype === 'Time') {
+                        return (
+                          <div key={field.fieldname} className="form-group">
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="time"
+                              className="text-input"
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            />
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
+                            className="text-input"
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    })}
+
+                    {/* Dynamic Table Fields (Child Tables) */}
+                    {(meta?.fields || []).filter(f => f.fieldtype === 'Table').map(tf => {
+                      const childDoctype = tf.options;
+                      const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                      const currentRows = tableData[tf.fieldname] || [];
+
+                      return (
+                        <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
+                            <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                              + Add Row
+                            </button>
+                          </div>
+
+                          {currentRows.length === 0 ? (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', italic: 'true', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', textAlign: 'center' }}>
+                              No rows added yet. Click "+ Add Row" above.
+                            </div>
+                          ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                                    {childFields.map(cf => (
+                                      <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                                    ))}
+                                    <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {currentRows.map((row, rIdx) => (
+                                    <tr key={rIdx}>
+                                      {childFields.map(cf => (
+                                        <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                          {cf.fieldtype === 'Select' ? (
+                                            <select
+                                              className="text-input"
+                                              style={{ padding: '4px', fontSize: '11px' }}
+                                              value={row[cf.fieldname] || ''}
+                                              onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                            >
+                                              <option value="">-- Select --</option>
+                                              {parseSelectOptions(cf.options).map(opt => (
+                                                <option key={opt} value={opt}>{opt}</option>
+                                              ))}
+                                            </select>
+                                          ) : (
+                                            <input
+                                              type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                              className="text-input"
+                                              style={{ padding: '4px', fontSize: '11px' }}
+                                              value={row[cf.fieldname] || ''}
+                                              onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                            />
+                                          )}
+                                        </td>
+                                      ))}
+                                      <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                        <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                          ✕
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Overall observations / remarks */}
             <div className="form-group">

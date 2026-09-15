@@ -798,6 +798,74 @@ def get_all_cleaning_records():
     return all_records
 
 
+def _sanitize_employee_link_val(val):
+    if not val or not isinstance(val, str):
+        return val
+    val = val.strip()
+    import re
+    match = re.search(r'\((HR-EMP-\d+|EMP-\d+)\)', val, re.IGNORECASE)
+    if match:
+        emp_id = match.group(1).upper()
+        if frappe.db.exists("Employee", emp_id):
+            return emp_id
+    match2 = re.search(r'\b(HR-EMP-\d+|EMP-\d+)\b', val, re.IGNORECASE)
+    if match2:
+        emp_id = match2.group(1).upper()
+        if frappe.db.exists("Employee", emp_id):
+            return emp_id
+
+    if frappe.db.exists("Employee", val):
+        return val
+
+    emp = frappe.db.get_value("Employee", {"employee_name": val}, "name")
+    if emp:
+        return emp
+
+    emp_like = frappe.db.get_value("Employee", [["employee_name", "like", f"%{val}%"]], "name")
+    if emp_like:
+        return emp_like
+
+    return val
+
+def _clean_doc_payload_links(doctype, payload_dict):
+    if not isinstance(payload_dict, dict):
+        return payload_dict
+
+    try:
+        meta = frappe.get_meta(doctype)
+        link_fields = {df.fieldname: df.options for df in meta.fields if df.fieldtype == "Link"}
+    except Exception:
+        link_fields = {}
+
+    cleaned = {}
+    for k, v in payload_dict.items():
+        if k in link_fields and link_fields[k] == "Employee":
+            cleaned[k] = _sanitize_employee_link_val(v)
+        elif isinstance(v, list):
+            try:
+                table_field_df = meta.get_field(k) if 'meta' in locals() else None
+                child_dt = table_field_df.options if table_field_df and table_field_df.fieldtype == "Table" else None
+                child_meta = frappe.get_meta(child_dt) if child_dt and frappe.db.exists("DocType", child_dt) else None
+                child_emp_links = {df.fieldname for df in child_meta.fields if df.fieldtype == "Link" and df.options == "Employee"} if child_meta else set()
+            except Exception:
+                child_emp_links = set()
+
+            cleaned_rows = []
+            for row in v:
+                if isinstance(row, dict):
+                    row_copy = dict(row)
+                    for cf_name, cf_val in row_copy.items():
+                        if cf_name in child_emp_links or (isinstance(cf_val, str) and ("(HR-EMP-" in cf_val or "(EMP-" in cf_val)):
+                            row_copy[cf_name] = _sanitize_employee_link_val(cf_val)
+                    cleaned_rows.append(row_copy)
+                else:
+                    cleaned_rows.append(row)
+            cleaned[k] = cleaned_rows
+        else:
+            cleaned[k] = _sanitize_employee_link_val(v) if isinstance(v, str) and ("(HR-EMP-" in v or "(EMP-" in v) else v
+
+    return cleaned
+
 @frappe.whitelist()
 def create_cleaning_sanitation_log(doctype, payload=None):
     if isinstance(payload, str):
@@ -818,7 +886,27 @@ def create_cleaning_sanitation_log(doctype, payload=None):
         'Toilet Cleaning purpose',
         'Dining Room Cleaning Purpose',
         'Factory Floor Cleaning Purpose',
-        'Lab and Office Cleaning Purpose'
+        'Lab and Office Cleaning Purpose',
+        'Microbiological Analysis of Primary Raw Materials',
+        'Chemical Test',
+        'Microbiologiocal Analysis Raw and Product Water',
+        'Microbiological Analysis Raw and Product Water',
+        'Taste Test and Visual Inspection',
+        'Silver Photometer Log',
+        'Silver Photometer Log and Calibration',
+        'Bourbon Whiskey And Cola Product Tank Record',
+        'Gold Stone Rum and Cola',
+        'Daily Production And Handover Record',
+        'For Weight Check Checklist',
+        'Microbiological Analysis',
+        'Sanitation Record',
+        'Seam Checklist Form',
+        'Outside Perimeter Cleaning',
+        'Monitoring',
+        'Production Record',
+        'Mock Product Recall',
+        'Recall Review',
+        'Hourly Weight Check Form'
     }
 
     if doctype not in allowed_doctypes:
@@ -847,12 +935,24 @@ def create_cleaning_sanitation_log(doctype, payload=None):
                     except Exception as pe:
                         frappe.log_error(f"Auto-create purpose {p_name} failed: {str(pe)}")
 
+    if isinstance(payload, dict):
+        payload_copy = dict(payload)
+        payload_copy.pop("docstatus", None)
+        payload_copy.pop("name", None)
+        payload_copy = _clean_doc_payload_links(doctype, payload_copy)
+    else:
+        payload_copy = {}
+
     doc = frappe.new_doc(doctype)
-    doc.update(payload)
+    doc.update(payload_copy)
     doc.flags.ignore_permissions = True
     doc.insert(ignore_permissions=True)
-    doc.flags.ignore_permissions = True
-    doc.submit()
+    
+    meta = frappe.get_meta(doctype)
+    if meta.is_submittable:
+        doc.flags.ignore_permissions = True
+        doc.submit()
+        
     frappe.db.commit()
 
     return {"success": True, "name": doc.name, "doc": doc.as_dict()}
@@ -906,7 +1006,7 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             "qty", "produced_qty", "planned_start_date",
             "status", "bom_no", "company",
             "source_warehouse", "wip_warehouse", "fg_warehouse",
-            "scrap_warehouse", "custom_extra_goods_warehouse", "process_loss_qty",
+            "scrap_warehouse", "custom_extra_goods_warehouse", "custom_production_line", "process_loss_qty",
         ],
         order_by="creation desc",
         limit_page_length=limit,
@@ -953,6 +1053,25 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
 
     submitted_ste_wos = set(s.work_order for s in submitted_stes if s.get("work_order"))
 
+    # Pre-fetch equipment line mappings for all masters
+    all_eq_masters = frappe.get_all(
+        "Maintenance Checklist Master",
+        fields=["name", "equipment"],
+        ignore_permissions=True
+    )
+    from islandchill.api.maintenance_template import resolve_equipment_production_line
+
+    eq_line_map = {}
+    line_total_map = {}
+    for em in all_eq_masters:
+        eq_n = em.get("equipment") or em.get("name")
+        if eq_n:
+            p_line = resolve_equipment_production_line(eq_n)
+            eq_line_map[eq_n] = p_line
+            if p_line not in line_total_map:
+                line_total_map[p_line] = set()
+            line_total_map[p_line].add(eq_n)
+
     maint_by_wo = {}
     for s in maint_schedules:
         wo_n = s.get("work_order")
@@ -991,8 +1110,13 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
         if status == "Not Started":
             status = "Not Started"
 
-        completed_eqs = len(maint_by_wo.get(wo.name, set()))
-        maint_all_done = (completed_eqs >= 10)
+        wo_line = wo.custom_production_line or "Filling Line 1"
+        expected_eqs = line_total_map.get(wo_line, set())
+        total_eq_count = len(expected_eqs) if expected_eqs else (4 if wo_line == "Filling Line 1" else 6)
+
+        wo_completed_eqs = maint_by_wo.get(wo.name, set())
+        completed_eqs_for_line = len(wo_completed_eqs.intersection(expected_eqs)) if expected_eqs else len(wo_completed_eqs)
+        maint_all_done = (completed_eqs_for_line >= total_eq_count and total_eq_count > 0)
         is_ste_submitted = (wo.name in submitted_ste_wos) or (frappe.utils.flt(wo.get("material_transferred_for_manufacturing") or 0) > 0)
 
         data.append({
@@ -1005,7 +1129,7 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             "plannedStart": str(wo.planned_start_date or ""),
             "status": status,
             "bomNo": wo.bom_no or "",
-            "lineNo": "Filling Line 1",
+            "lineNo": wo_line,
             "company": wo.company or "",
             "sourceWarehouse": wo.source_warehouse or "",
             "wipWarehouse": wo.wip_warehouse or "",
@@ -1014,8 +1138,8 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
             "extraGoodsWarehouse": wo.custom_extra_goods_warehouse or "",
             "process_loss_qty": frappe.utils.flt(wo.process_loss_qty or 0),
             "jobCards": jc_by_wo.get(wo.name, []),
-            "maintCompletedCount": completed_eqs,
-            "maintTotalCount": 10,
+            "maintCompletedCount": completed_eqs_for_line,
+            "maintTotalCount": total_eq_count,
             "maintAllCompleted": maint_all_done,
             "stockEntrySubmitted": is_ste_submitted,
             "materialTransferred": is_ste_submitted,
@@ -1120,22 +1244,48 @@ def get_work_order_maintenance_checklists(work_order):
     if not work_order:
         frappe.throw(_("Work Order ID is required"))
 
-    # Fetch all equipment masters from Maintenance Checklist Master
-    masters = frappe.get_all("Maintenance Checklist Master", fields=["name", "equipment", "area"], order_by="name asc", ignore_permissions=True)
+    wo_line = (frappe.db.get_value("Work Order", work_order, "custom_production_line") or "").strip()
+    if not wo_line:
+        wo_line = "Filling Line 1"
+
+    from islandchill.api.maintenance_template import resolve_equipment_production_line
+
+    all_masters = frappe.get_all(
+        "Maintenance Checklist Master",
+        fields=["name", "equipment", "area"],
+        order_by="name asc",
+        ignore_permissions=True
+    )
+
+    masters = []
+    for m in all_masters:
+        eq_n = m.get("equipment") or m.get("name")
+        eq_line = resolve_equipment_production_line(eq_n)
+        if eq_line.lower() == wo_line.lower() or (wo_line.lower() in eq_line.lower()):
+            masters.append({
+                "name": m.get("name"),
+                "equipment": m.get("equipment"),
+                "area": m.get("area"),
+                "production_line": eq_line
+            })
 
     if not masters:
-        masters = [
-            {"equipment": "Air Compressor - 1", "area": "Utilities"},
-            {"equipment": "Boiler", "area": "Utilities"},
-            {"equipment": "Syrup and CIP Equipment", "area": "Utilities"},
-            {"equipment": "Glycol Chilling Plant & Grasso Refrigerator", "area": "Utilities"},
-            {"equipment": "Data Coder", "area": "CSD / RTD Line"},
-            {"equipment": "Conveyors", "area": "CSD / RTD Line"},
-            {"equipment": "CO2 Mixer", "area": "CSD / RTD Line"},
-            {"equipment": "Bottle / Can Washer", "area": "CSD / RTD Line"},
-            {"equipment": "De-Palletizer", "area": "RTD Line"},
-            {"equipment": "CSD / RTD Filler", "area": "Bottling Line"}
-        ]
+        if wo_line == "Filling Line 1":
+            masters = [
+                {"equipment": "Air Compressor", "area": "Utilities"},
+                {"equipment": "Boiler", "area": "Utilities"},
+                {"equipment": "Syrup and CIP Equipment", "area": "Utilities"},
+                {"equipment": "Glycol Chilling Plant & Grasso Refrigerator", "area": "Utilities"}
+            ]
+        else:
+            masters = [
+                {"equipment": "Data Coder", "area": "CSD / RTD Line"},
+                {"equipment": "Conveyors", "area": "CSD / RTD Line"},
+                {"equipment": "CO2 Mixer", "area": "CSD / RTD Line"},
+                {"equipment": "Bottle / Can Washer", "area": "CSD / RTD Line"},
+                {"equipment": "De-Palletizer", "area": "RTD Line"},
+                {"equipment": "CSD / RTD Filler", "area": "Bottling Line"}
+            ]
 
     # Query submitted Daily Preventative Maintenance Schedule records linked to this work order
     submitted_schedules = frappe.get_all(
@@ -1161,6 +1311,7 @@ def get_work_order_maintenance_checklists(work_order):
             checklist_status.append({
                 "equipment": eq,
                 "area": m.get("area"),
+                "production_line": m.get("production_line") or wo_line,
                 "completed": True,
                 "schedule_name": sub.get("name"),
                 "submitted_at": str(sub.get("creation"))
@@ -1169,13 +1320,14 @@ def get_work_order_maintenance_checklists(work_order):
             checklist_status.append({
                 "equipment": eq,
                 "area": m.get("area"),
+                "production_line": m.get("production_line") or wo_line,
                 "completed": False,
                 "schedule_name": None,
                 "submitted_at": None
             })
 
     total_count = len(masters)
-    all_completed = (completed_count >= total_count)
+    all_completed = (completed_count >= total_count and total_count > 0)
 
     planned_date = frappe.db.get_value("Work Order", work_order, "planned_start_date")
     today_date = str(frappe.utils.nowdate())
@@ -1184,6 +1336,7 @@ def get_work_order_maintenance_checklists(work_order):
 
     return {
         "work_order": work_order,
+        "production_line": wo_line,
         "all_completed": all_completed,
         "completed_count": completed_count,
         "total_count": total_count,
@@ -1193,8 +1346,9 @@ def get_work_order_maintenance_checklists(work_order):
     }
 
 
+
 @frappe.whitelist(allow_guest=True)
-def get_all_boms_list(limit=100, start=0):
+def get_all_boms_list(limit=100, start=0, fg_warehouse=None):
     limit = frappe.utils.cint(limit) or 100
     start = frappe.utils.cint(start) or 0
     boms = frappe.get_all(
@@ -1206,27 +1360,49 @@ def get_all_boms_list(limit=100, start=0):
         limit_start=start,
         ignore_permissions=True
     )
-    return [{
-        "id": b.name,
-        "name": b.name,
-        "productName": b.item_name or b.item,
-        "item": b.item,
-        "itemCode": b.item,
-        "active": b.is_active or 1,
-        "isDefault": bool(b.is_default),
-        "quantity": frappe.utils.flt(b.quantity or 1),
-        "unit": b.uom or "Nos",
-        "materials": []
-    } for b in boms]
+    from erpnext.stock.utils import get_stock_balance
+    fg_wh = (fg_warehouse or "").strip()
+
+    result = []
+    for b in boms:
+        fg_avail = 0.0
+        if fg_wh and b.item:
+            fg_avail = frappe.utils.flt(get_stock_balance(b.item, fg_wh) or 0.0)
+        result.append({
+            "id": b.name,
+            "name": b.name,
+            "productName": b.item_name or b.item,
+            "item": b.item,
+            "itemCode": b.item,
+            "active": b.is_active or 1,
+            "isDefault": bool(b.is_default),
+            "quantity": frappe.utils.flt(b.quantity or 1),
+            "unit": b.uom or "Nos",
+            "fg_available_qty": round(fg_avail, 4),
+            "fg_warehouse": fg_wh,
+            "materials": []
+        })
+    return result
 
 
 @frappe.whitelist(allow_guest=True)
-def get_bom_details_data(bom_id):
+def get_bom_details_data(bom_id, source_warehouse=None, fg_warehouse=None):
     if not bom_id:
         return []
     doc = frappe.get_doc("BOM", bom_id)
     items = []
+    from erpnext.stock.utils import get_stock_balance
+    src_wh = (source_warehouse or "").strip()
+    fg_wh = (fg_warehouse or "").strip()
+
+    fg_avail = 0.0
+    if fg_wh and doc.item:
+        fg_avail = frappe.utils.flt(get_stock_balance(doc.item, fg_wh) or 0.0)
+
     for item in doc.items:
+        avail_qty = 0.0
+        if src_wh:
+            avail_qty = frappe.utils.flt(get_stock_balance(item.item_code, src_wh) or 0.0)
         items.append({
             "item_code": item.item_code,
             "item_name": item.item_name or item.item_code,
@@ -1236,9 +1412,68 @@ def get_bom_details_data(bom_id):
             "uom": item.uom or "Qty",
             "unit": item.uom or "Qty",
             "rate": frappe.utils.flt(item.rate or 0),
-            "amount": frappe.utils.flt(item.amount or 0)
+            "amount": frappe.utils.flt(item.amount or 0),
+            "available_qty": round(avail_qty, 4),
+            "source_warehouse": src_wh,
+            "fg_item": doc.item,
+            "fg_item_name": doc.item_name or doc.item,
+            "fg_available_qty": round(fg_avail, 4),
+            "fg_warehouse": fg_wh,
+            "bom_quantity": frappe.utils.flt(doc.quantity or 1),
+            "bom_uom": doc.uom or "Nos"
         })
     return items
+
+
+@frappe.whitelist(allow_guest=True)
+def get_bom_recipe_full_details(bom_id, source_warehouse=None, fg_warehouse=None):
+    """Return full recipe structure with finished good info and raw material stock."""
+    if not bom_id or not frappe.db.exists("BOM", bom_id):
+        return {"success": False, "message": "BOM not found"}
+
+    doc = frappe.get_doc("BOM", bom_id)
+    from erpnext.stock.utils import get_stock_balance
+
+    src_wh = (source_warehouse or "").strip()
+    fg_wh = (fg_warehouse or "").strip()
+
+    fg_avail = 0.0
+    if fg_wh and doc.item:
+        fg_avail = frappe.utils.flt(get_stock_balance(doc.item, fg_wh) or 0.0)
+
+    materials = []
+    for item in doc.items:
+        avail_qty = 0.0
+        if src_wh:
+            avail_qty = frappe.utils.flt(get_stock_balance(item.item_code, src_wh) or 0.0)
+        materials.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name or item.item_code,
+            "qty": frappe.utils.flt(item.qty or 0),
+            "uom": item.uom or item.stock_uom or "Nos",
+            "rate": frappe.utils.flt(item.rate or 0),
+            "amount": frappe.utils.flt(item.amount or 0),
+            "available_qty": round(avail_qty, 4),
+            "source_warehouse": src_wh,
+            "is_available": avail_qty > 0
+        })
+
+    return {
+        "success": True,
+        "bom_id": doc.name,
+        "bom_name": doc.name,
+        "product_code": doc.item,
+        "product_name": doc.item_name or doc.item,
+        "batch_quantity": frappe.utils.flt(doc.quantity or 1),
+        "uom": doc.uom or "Nos",
+        "is_active": doc.is_active,
+        "is_default": bool(doc.is_default),
+        "fg_warehouse": fg_wh,
+        "fg_available_qty": round(fg_avail, 4),
+        "source_warehouse": src_wh,
+        "materials": materials
+    }
+
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1550,3 +1785,61 @@ def cancel_stock_entry(stock_entry):
         return {"success": True, "name": doc.name, "status": doc.status}
     finally:
         frappe.flags.ignore_permissions = False
+
+
+@frappe.whitelist(allow_guest=True)
+def check_raw_materials_availability(bom_no, quantity=1, source_warehouse=None):
+    """
+    Check if all raw materials defined in the given BOM are present with sufficient
+    quantities in the source warehouse for the requested batch quantity.
+    """
+    if not bom_no:
+        frappe.throw(_("BOM No is required"))
+
+    if not frappe.db.exists("BOM", bom_no):
+        frappe.throw(_("BOM {0} not found").format(bom_no))
+
+    bom_doc = frappe.get_doc("BOM", bom_no)
+    target_qty = frappe.utils.flt(quantity) or 1.0
+    bom_base_qty = frappe.utils.flt(bom_doc.quantity) or 1.0
+    multiplier = target_qty / bom_base_qty
+
+    wh = (source_warehouse or "").strip()
+    if not wh:
+        wh = "Stores - CWFPL"
+
+    from erpnext.stock.utils import get_stock_balance
+
+    items_status = []
+    has_shortage = False
+
+    for item in bom_doc.items:
+        required_qty = frappe.utils.flt(item.qty or 0) * multiplier
+        available_qty = frappe.utils.flt(get_stock_balance(item.item_code, wh) or 0.0)
+        shortage_qty = max(0.0, required_qty - available_qty)
+        is_sufficient = (available_qty >= required_qty)
+
+        if not is_sufficient:
+            has_shortage = True
+
+        items_status.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name or item.item_code,
+            "uom": item.uom or item.stock_uom or "Nos",
+            "required_qty": round(required_qty, 4),
+            "available_qty": round(available_qty, 4),
+            "shortage_qty": round(shortage_qty, 4),
+            "is_sufficient": is_sufficient
+        })
+
+    return {
+        "success": True,
+        "bom_no": bom_no,
+        "production_item": bom_doc.item,
+        "batch_quantity": target_qty,
+        "source_warehouse": wh,
+        "all_available": not has_shortage,
+        "has_shortage": has_shortage,
+        "items": items_status
+    }
+

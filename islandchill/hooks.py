@@ -258,3 +258,22 @@ app_license = "mit"
 
 
 website_route_rules = [{'from_route': '/islandchill/<path:app_path>', 'to_route': 'islandchill'},]
+
+# Fixtures
+# --------
+fixtures = [
+	{
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Work Order"]]
+		]
+	},
+	{
+		"dt": "Property Setter",
+		"filters": [
+			["doc_type", "in", ["Work Order"]]
+		]
+	},
+	"Equipment List",
+	"Maintenance Checklist Master"
+]

@@ -1,0 +1,132 @@
+[
+ {
+  "area": "CSD / RTD Line",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "CO2 Mixer",
+  "modified": "2026-09-15 19:25:42.546041",
+  "name": "CO2 Mixer",
+  "production_line": "Filling Line 2",
+  "show_on_app": 0
+ },
+ {
+  "area": null,
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "CSD Line",
+  "modified": "2026-09-15 19:25:42.521969",
+  "name": "CSD Line",
+  "production_line": "Filling Line 2",
+  "show_on_app": 1
+ },
+ {
+  "area": null,
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "RTD Line",
+  "modified": "2026-09-15 19:25:41.845491",
+  "name": "RTD Line",
+  "production_line": "Filling Line 2",
+  "show_on_app": 1
+ },
+ {
+  "area": null,
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Water Line",
+  "modified": "2026-09-15 19:25:41.836242",
+  "name": "Water Line",
+  "production_line": "Filling Line 2",
+  "show_on_app": 1
+ },
+ {
+  "area": "CSD / RTD Line",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Data Coder",
+  "modified": "2026-09-15 19:25:42.537134",
+  "name": "Data Coder",
+  "production_line": "Filling Line 2",
+  "show_on_app": 0
+ },
+ {
+  "area": "RTD Line",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "De-Palletizer",
+  "modified": "2026-09-15 19:25:42.560763",
+  "name": "De-Palletizer",
+  "production_line": "Filling Line 2",
+  "show_on_app": 0
+ },
+ {
+  "area": "Utilities",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Syrup and CIP Equipment",
+  "modified": "2026-09-15 19:24:22.765065",
+  "name": "Syrup and CIP Equipment",
+  "production_line": "Filling Line 1",
+  "show_on_app": 0
+ },
+ {
+  "area": "CSD / RTD Line",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Conveyors",
+  "modified": "2026-09-15 19:25:42.528751",
+  "name": "Conveyors",
+  "production_line": "Filling Line 2",
+  "show_on_app": 0
+ },
+ {
+  "area": "CSD / RTD Line",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Bottle / Can Washer",
+  "modified": "2026-09-15 19:25:42.553833",
+  "name": "Bottle / Can Washer",
+  "production_line": "Filling Line 2",
+  "show_on_app": 0
+ },
+ {
+  "area": "Utilities",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Boiler",
+  "modified": "2026-09-15 19:24:22.661094",
+  "name": "Boiler",
+  "production_line": "Filling Line 1",
+  "show_on_app": 0
+ },
+ {
+  "area": "Utilities",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Air Compressor",
+  "modified": "2026-09-15 19:24:22.626604",
+  "name": "Air Compressor",
+  "production_line": "Filling Line 1",
+  "show_on_app": 0
+ },
+ {
+  "area": "Utilities",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Glycol Chilling Plant & Grasso Refrigerator",
+  "modified": "2026-09-15 19:24:22.777868",
+  "name": "Glycol Chilling Plant & Grasso Refrigerator",
+  "production_line": "Filling Line 1",
+  "show_on_app": 0
+ },
+ {
+  "area": "Bottling Line",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "CSD / RTD Filler",
+  "modified": "2026-09-15 19:25:42.567380",
+  "name": "CSD / RTD Filler",
+  "production_line": "Filling Line 2",
+  "show_on_app": 0
+ }
+]

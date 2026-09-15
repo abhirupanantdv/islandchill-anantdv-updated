@@ -1,0 +1,418 @@
+[
+ {
+  "area": "Bottling Line",
+  "checklist_items": [
+   {
+    "description": "Check all the pneumatic pipe lines, Regulators & Pneumatic valves for leakage",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean the elevating magnetic conveyor belt free of all crowns dust and other foreign matter",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Grease the all centerlised grease points - Central lubrication as per the schedule",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the lift cylinder air pressure & Co2 counter pressure leakages",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the alignment of guide plates of Air conveyor",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the bottle movement at air conveyor & supporting guides",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Remove all the bottles pieces & clean with water jet",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the condition of snifts",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the condition of vent tubes, spreaders and bottle seals, replace if necessary",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Drain the condensate and fill the oiler if oil levels is low for smooth movement of pneu cylinders",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for any jumping movement in the discharge conveyor chain",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "CSD / RTD Filler",
+  "modified": "2026-05-28 23:48:04.541788",
+  "name": "CSD / RTD Filler"
+ },
+ {
+  "area": "RTD Line",
+  "checklist_items": [
+   {
+    "description": "Check the alignment of the belts",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for the tension of the belts and adjust if required",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean the can travelling track from glass and crowns",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check all gear boxes for sound and heating",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean the case conveyor from debris",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean all the sensor and proximities for proper functioning",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "De-Palletizer",
+  "modified": "2026-05-29 15:19:46.232168",
+  "name": "De-Palletizer"
+ },
+ {
+  "area": "CSD / RTD Line",
+  "checklist_items": [
+   {
+    "description": "Check the main line water pressure",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for the unusual sound from pumps",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Inspect the alignment of spray nozzle & jettings of all compartments",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Bottle / Can Washer",
+  "modified": "2026-05-29 15:22:28.860873",
+  "name": "Bottle / Can Washer"
+ },
+ {
+  "area": "CSD / RTD Line",
+  "checklist_items": [
+   {
+    "description": "Check the functioning of the pneumatic modulation valves",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for the level balance in Syrup reservoir tank",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the sight glass and pipe lines for leakage",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the leakages from mechanical seals of mixing pump and CIP booster pump vaccum pump",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean the all external surfaces of the equipment for vibration",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check all pumps for leakage from the unions and for vibration",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for any leakage of CO2 and air",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for the pressure and temperature indicators of the areas",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "CO2 Mixer",
+  "modified": "2026-05-29 15:34:09.597116",
+  "name": "CO2 Mixer"
+ },
+ {
+  "area": "CSD / RTD Line",
+  "checklist_items": [
+   {
+    "description": "Check for vibrations, sound and gear box heating of all conveyors",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Remove all foreign materials from conveyors",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the movement of the conveyors",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean the conveyor tracks, remove the cullet if found",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for the lubrication availability on the chain",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Inspect for adequacy of lubrication",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check wear strips of rails for damage, replace them if required",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the smooth movement of bottles through bottle inspection stations",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the oil level for conveyor motor if visible",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Conveyors",
+  "modified": "2026-05-29 15:39:05.272914",
+  "name": "Conveyors"
+ },
+ {
+  "area": "CSD / RTD Line",
+  "checklist_items": [
+   {
+    "description": "Check the Ink and Make up level",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check & ensure the encoder mounting",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check phocell for proper sensing of the bottles",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check and clean the Electrode plates",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the product sensor is sensing",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the product date and expiry date",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the printings properly done on the products",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Data Coder",
+  "modified": "2026-05-29 15:43:02.739719",
+  "name": "Data Coder"
+ },
+ {
+  "area": "Utilities",
+  "checklist_items": [
+   {
+    "description": "Check functioning of load / unload solenoid valves",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check functioning of float valve",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check oil leakages at compressor shaft seals",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check cold well & hot well levels",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check all the compressors are ON",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the temperature level on the screen",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for Glycol leakage in the system",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for abnormal sound in pumps & motors",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Glycol Chilling Plant & Grasso Refrigerator",
+  "modified": "2026-05-29 15:45:43.597856",
+  "name": "Glycol Chilling Plant & Grasso Refrigerator"
+ },
+ {
+  "area": "Utilities",
+  "checklist_items": [
+   {
+    "description": " Check sugar dissolving pumps for leakage",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check syrup transfer pumps for leakage",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check Butterfly Valves for leakage",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check Syrup transfer pumps for proper functioning",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check any unusual sound from propellers or motor",
+    "standard_time_mins": 0
+   },
+   {
+    "description": " Is there any unusual sound coming from machine",
+    "standard_time_mins": 0
+   },
+   {
+    "description": " Check the filter OK to run production",
+    "standard_time_mins": 0
+   },
+   {
+    "description": " Check the water flow meter working condition",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for the leakages from the valves and pump seals",
+    "standard_time_mins": 0
+   },
+   {
+    "description": " Check syrup transfer pump performance",
+    "standard_time_mins": 0
+   },
+   {
+    "description": " Check valves condition on syrup tranfer pumps",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Syrup and CIP Equipment",
+  "modified": "2026-05-29 15:56:17.732498",
+  "name": "Syrup and CIP Equipment"
+ },
+ {
+  "area": "Utilities",
+  "checklist_items": [
+   {
+    "description": "Check pressure/temp guages",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the TDS with the help of Lab chemist",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Clean flame sensors & viewing glass",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Carry out blow down based on TDS value",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check for any steam leakages",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Do external cleaning of the boiler",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the water level in the reservoir tank",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the reservoir tank float less valve functioning",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Boiler",
+  "modified": "2026-05-29 16:01:45.402835",
+  "name": "Boiler"
+ },
+ {
+  "area": "Utilities",
+  "checklist_items": [
+   {
+    "description": "Check the air intake vaccum indicator",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the Oil level",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check the condensate discharged from moisture separator during loading",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check unloading and loading pressure",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Check air drier functioning and on",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Drain out all the filter outlets to drain moisture & water",
+    "standard_time_mins": 0
+   },
+   {
+    "description": "Is there any unusual sound coming from machine",
+    "standard_time_mins": 0
+   },
+   {
+    "description": " Check the joint leaking",
+    "standard_time_mins": 0
+   }
+  ],
+  "docstatus": 0,
+  "doctype": "Maintenance Checklist Master",
+  "equipment": "Air Compressor",
+  "modified": "2026-05-29 16:04:25.719273",
+  "name": "Air Compressor - 1"
+ }
+]

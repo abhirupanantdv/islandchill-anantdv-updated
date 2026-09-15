@@ -18,9 +18,9 @@ import WorkOrdersTab from './components/WorkOrdersTab';
 import InventoryTab from './components/InventoryTab';
 import BOMTab from './components/BOMTab';
 import SalesTab, { SalesInvoiceFormModal, DeliveryNoteFormModal } from './components/SalesTab';
-import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal } from './components/MaintenanceTab';
+import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal } from './components/MaintenanceTab';
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
-import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal } from './components/LaboratoryTab';
+import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
 import line1 from "../public/line1.png"
 import line2 from "../public/line2.png"
@@ -46,6 +46,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Syrup & CIP Equipment)',
     equipment: 'Syrup and CIP Equipment',
     area: 'Utilities',
+    production_line: 'Filling Line 1',
     days: ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
     tasks: [
       { id: 1, desc: 'Check sugar dissolving pumps for leakage', std: '-' },
@@ -66,6 +67,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (SEM-FRM-01-00-02)',
     equipment: 'Glycol Chilling Plant & Grasso Refrigerator',
     area: 'Utilities',
+    production_line: 'Filling Line 1',
     days: ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
     tasks: [
       { id: 1, desc: 'Check functioning of load / Unload solenoid valves', std: '-' },
@@ -83,6 +85,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (De-Palletizer)',
     equipment: 'De-Palletizer',
     area: 'RTD Line',
+    production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check the alignment of the belts', std: '2 min' },
@@ -98,6 +101,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Date Coder)',
     equipment: 'Date Coder',
     area: 'CSD / RTD Line',
+    production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check the ink & make up levels', std: '3 min' },
@@ -114,6 +118,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (CSD / RTD Filler)',
     equipment: 'CSD / RTD Filler',
     area: 'Bottling Line',
+    production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check for any jumping movement in the discharge conveyor chain', std: '3 min' },
@@ -134,6 +139,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Conveyors)',
     equipment: 'Conveyors',
     area: 'CSD / RTD Line',
+    production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check for vibrations, sound and gear box heating of all conveyors', std: '5 min' },
@@ -152,6 +158,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Co2 Mixer)',
     equipment: 'Co2 Mixer',
     area: 'RTD / CSD Line',
+    production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check the functioning of the pneumatic modulation valves', std: '5 min' },
@@ -169,6 +176,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Bottle / Can Washer)',
     equipment: 'Bottle / Can Washer',
     area: 'CSD / RTD Line',
+    production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check the main line water pressure', std: '5 min' },
@@ -181,6 +189,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Boiler)',
     equipment: 'Boiler',
     area: 'Utilities',
+    production_line: 'Filling Line 1',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check pressure / temp guages', std: '-' },
@@ -198,6 +207,7 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Air Compressor)',
     equipment: 'Air Compressor',
     area: 'Utilities',
+    production_line: 'Filling Line 1',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
       { id: 1, desc: 'Check the Oil level', std: '-' },
@@ -550,6 +560,8 @@ function App() {
   const [activeBomMaterials, setActiveBomMaterials] = useState([]);
   const [bomPage, setBomPage] = useState(1);
   const [bomLoading, setBomLoading] = useState(false);
+  const [bomRawMaterialWarehouse, setBomRawMaterialWarehouse] = useState('');
+  const [bomFgWarehouse, setBomFgWarehouse] = useState('');
   const [maintPage, setMaintPage] = useState(1);
   const [woMonitorPage, setWoMonitorPage] = useState(1);
   const [erpItems, setErpItems] = useState([]);
@@ -561,7 +573,7 @@ function App() {
     if (conn.isLive) {
       try {
         const offset = (bomPage - 1) * 20;
-        const liveBOMs = await frappe.getBOMs(20, offset);
+        const liveBOMs = await frappe.getBOMs(20, offset, bomFgWarehouse || 'Finished Goods - CWFPL');
         if (liveBOMs && liveBOMs.length > 0) {
           setBomList(liveBOMs);
           if (!selectedBomId) setSelectedBomId(liveBOMs[0].id);
@@ -579,7 +591,9 @@ function App() {
         id: p.bomCode,
         name: p.bomCode,
         productName: p.name,
-        active: 1
+        active: 1,
+        fg_available_qty: 12000,
+        fg_warehouse: bomFgWarehouse || 'Finished Goods - CWFL'
       }));
       setBomList(mockBOMs);
       if (!selectedBomId) setSelectedBomId(mockBOMs[0].id);
@@ -589,14 +603,16 @@ function App() {
 
   useEffect(() => {
     loadBOMs();
-  }, [bomPage, isLoggedIn]);
+  }, [bomPage, bomFgWarehouse, isLoggedIn]);
 
   useEffect(() => {
     const fetchBOMDetails = async () => {
       const conn = frappe.getConnectionSettings();
       if (conn.isLive && selectedBomId) {
         try {
-          const details = await frappe.getBOMDetails(selectedBomId);
+          const rmWh = bomRawMaterialWarehouse || woSourceWarehouse || 'Stores - CWFPL';
+          const fgWh = bomFgWarehouse || woFgWarehouse || 'Finished Goods - CWFPL';
+          const details = await frappe.getBOMDetails(selectedBomId, rmWh, fgWh);
           if (details) {
             setActiveBomMaterials(details);
             return;
@@ -615,7 +631,7 @@ function App() {
       }
     };
     fetchBOMDetails();
-  }, [selectedBomId, isLoggedIn]);
+  }, [selectedBomId, bomRawMaterialWarehouse, bomFgWarehouse, isLoggedIn]);
 
 
 
@@ -677,10 +693,37 @@ function App() {
   const [woWipWarehouse, setWoWipWarehouse] = useState('');
   const [woScrapWarehouse, setWoScrapWarehouse] = useState('');
   const [woExtraGoodsWarehouse, setWoExtraGoodsWarehouse] = useState('');
+  const [selectedWoLine, setSelectedWoLine] = useState('Filling Line 1');
+  const [rawMaterialShortageModal, setRawMaterialShortageModal] = useState(null);
   const [woStatusFilter, setWoStatusFilter] = useState('All');
   const [availableWarehouses, setAvailableWarehouses] = useState([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [finishWoWarehouses, setFinishWoWarehouses] = useState([]);
+
+  // Auto-detect production line when selected product changes in Work Order drawer
+  useEffect(() => {
+    if (!selectedWoProduct) return;
+    const prod = (woProductsList || []).find(p => p.code === selectedWoProduct) || (PRODUCTS || []).find(p => p.code === selectedWoProduct);
+    const prodName = (prod?.name || prod?.item_name || selectedWoProduct || '').toLowerCase();
+    if (
+      prodName.includes('rum') ||
+      prodName.includes('cola') ||
+      prodName.includes('whiskey') ||
+      prodName.includes('alcohol') ||
+      prodName.includes('can') ||
+      prodName.includes('rtd') ||
+      prodName.includes('csd') ||
+      prodName.includes('beer') ||
+      prodName.includes('cocktail') ||
+      prodName.includes('spirits') ||
+      prodName.includes('gin') ||
+      prodName.includes('vodka')
+    ) {
+      setSelectedWoLine('Filling Line 2');
+    } else if (prodName.includes('water') || prodName.includes('island chill')) {
+      setSelectedWoLine('Filling Line 1');
+    }
+  }, [selectedWoProduct, woProductsList]);
 
   // Sales section states
   const [salesSubTab, setSalesSubTab] = useState('invoice'); // 'invoice' | 'delivery'
@@ -841,8 +884,14 @@ function App() {
     const wip = find('work in progress') || find('wip');
     const scrap = find('scrap');
     const extra = find('extra') || find('goods');
-    if (stores) setWoSourceWarehouse(prev => prev || stores.name);
-    if (fg) setWoFgWarehouse(prev => prev || fg.name);
+    if (stores) {
+      setWoSourceWarehouse(prev => prev || stores.name);
+      setBomRawMaterialWarehouse(prev => prev || stores.name);
+    }
+    if (fg) {
+      setWoFgWarehouse(prev => prev || fg.name);
+      setBomFgWarehouse(prev => prev || fg.name);
+    }
     if (wip) setWoWipWarehouse(prev => prev || wip.name);
     if (scrap) setWoScrapWarehouse(prev => prev || scrap.name);
     if (extra) setWoExtraGoodsWarehouse(prev => prev || extra.name);
@@ -1361,6 +1410,37 @@ function App() {
               observations__remarks: data.remarks || ''
             };
             response = await frappe.createEquipmentSanitationCIP(erpPayload);
+          } else if (doctype === 'Outside Perimeter Cleaning') {
+            const resolveEmpId = (providedId, valStr) => {
+              if (providedId && (providedId.startsWith('HR-EMP-') || providedId.startsWith('EMP-'))) return providedId;
+              if (valStr && (valStr.startsWith('HR-EMP-') || valStr.startsWith('EMP-'))) return valStr;
+              const match = (valStr || '').match(/\((HR-EMP-[^)]+|EMP-[^)]+)\)/i);
+              if (match) return match[1];
+              const searchVal = (valStr || '').toLowerCase().trim();
+              if (searchVal && employeeList && employeeList.length > 0) {
+                const found = employeeList.find(emp => {
+                  const empName = (emp.employee_name || emp.name || '').toLowerCase();
+                  const empId = (emp.name || '').toLowerCase();
+                  return empName === searchVal || empId === searchVal || searchVal.includes(empName) || empName.includes(searchVal);
+                });
+                if (found) return found.name;
+              }
+              return (employeeList && employeeList.length > 0) ? employeeList[0].name : 'HR-EMP-00015';
+            };
+
+            const cleaner_emp = resolveEmpId(data.cleanerId, data.cleaner || data.performed_by || data.operator);
+            const supervisor_emp = resolveEmpId(data.supervisorId, data.supervisor || data.verified_by || data.approved_by);
+
+            const erpPayload = {
+              ...data,
+              doctype: 'Outside Perimeter Cleaning',
+              posting_date: data.posting_date || data.date || new Date().toISOString().slice(0, 10),
+              posting_time: data.posting_time || data.time || new Date().toTimeString().slice(0, 5) + ':00',
+              cleaner: cleaner_emp,
+              supervisor: supervisor_emp,
+              comments: data.comments || data.remarks || ''
+            };
+            response = await frappe.createOutsidePerimeterCleaningRecord(erpPayload);
           } else {
             response = await frappe.createCleaningSanitationRecord(doctype, data);
           }
@@ -1431,15 +1511,17 @@ function App() {
           }));
 
           const erpPayload = {
-            date_of_analysis: data.date,
+            ...data,
+            doctype: 'Microbiological Analysis of Primary Raw Materials',
+            date_of_analysis: data.date_of_analysis || data.date || new Date().toISOString().slice(0, 10),
             analyst: extractEmployeeId(data.analyst),
-            preform_lot_no: data.preformLotNo,
-            closures_lot_no: data.closuresLotNo,
-            bib_inner_bag: data.bibInnerBag,
-            table_kzci: table_kzci,
-            table_gdru: table_gdru,
-            negative_or_absent_for_coliform_and_ecoli: data.specChecked ? 'Yes' : 'No',
-            date: data.date,
+            approved_by: extractEmployeeId(data.approved_by || data.manager || data.approvedBy),
+            preform_lot_no: data.preform_lot_no ?? data.preformLotNo ?? '',
+            closures_lot_no: data.closures_lot_no ?? data.closuresLotNo ?? '',
+            bib_inner_bag: data.bib_inner_bag ?? data.bibInnerBag ?? '',
+            table_kzci: (data.table_kzci && data.table_kzci.length > 0) ? data.table_kzci : table_kzci,
+            table_gdru: (data.table_gdru && data.table_gdru.length > 0) ? data.table_gdru : table_gdru,
+            negative_or_absent_for_coliform_and_ecoli: data.negative_or_absent_for_coliform_and_ecoli ?? (data.specChecked ? 'Yes' : 'No') ?? 'Yes',
             comments: data.comments || ''
           };
 
@@ -1465,55 +1547,57 @@ function App() {
           };
 
           // 1. Map to table_tncp (Product Water Table)
-          const table_tncp = [
+          const table_tncp = data.table_tncp || [
             {
               doctype: 'Product Water Table',
               test_for: 'pH',
-              time: data.prodPhTime ? data.prodPhTime + ':00' : '00:00:00',
-              result: data.prodPh || ''
+              time: (data.prodPhTime || data.raw_ph_time) ? (data.prodPhTime || data.raw_ph_time) + ':00' : '00:00:00',
+              result: String(data.prodPh || data.raw_ph || '')
             },
             {
               doctype: 'Product Water Table',
               test_for: 'TDS',
-              time: data.prodTdsTime ? data.prodTdsTime + ':00' : '00:00:00',
-              result: data.prodTds || ''
+              time: (data.prodTdsTime || data.raw_tds_time) ? (data.prodTdsTime || data.raw_tds_time) + ':00' : '00:00:00',
+              result: String(data.prodTds || data.raw_tds || '')
             }
           ];
 
           // 2. Map to taste_and_particle_check (Taste and Particle Table)
-          const taste_and_particle_check = [
+          const taste_and_particle_check = data.taste_and_particle_check || [
             {
               doctype: 'Taste and Particle Table',
               time: data.tasteTime ? data.tasteTime + ':00' : '00:00:00',
-              result: data.tasteCheck || ''
+              result: data.tasteCheck || 'Pass'
             },
             {
               doctype: 'Taste and Particle Table',
               time: data.particleTime ? data.particleTime + ':00' : '00:00:00',
-              result: data.particleCheck || ''
+              result: data.particleCheck || 'Pass'
             }
           ];
 
           const erpPayload = {
-            date: data.date,
+            ...data,
+            doctype: 'Chemical Test',
+            date: data.date || data.posting_date || new Date().toISOString().slice(0, 10),
             analyst: extractEmployeeId(data.analyst),
-            verified_by: extractEmployeeId(data.verifiedBy),
-            ph_level: parseFloat(data.rawPh) || 0.0,
-            time: data.rawPhTime ? data.rawPhTime + ':00' : '00:00:00',
-            tds_level: parseFloat(data.rawTds) || 0.0,
-            time_2: data.rawTdsTime ? data.rawTdsTime + ':00' : '00:00:00',
-            alocohol__check_after_change_from_rtd_to_csd: parseFloat(data.alcoholCheck) || 0.0,
-            brix_check_after_change_over_rtd_to_water: parseFloat(data.brixCheck) || 0.0,
-            type_of_water: data.typeOfWater || 'PET',
+            verified_by: extractEmployeeId(data.verified_by || data.verifiedBy),
+            ph_level: parseFloat(data.ph_level ?? data.raw_ph ?? data.rawPh) || 0.0,
+            time: (data.time || data.raw_ph_time || data.rawPhTime) ? String(data.time || data.raw_ph_time || data.rawPhTime).replace('T', ' ').slice(0, 5) + ':00' : '00:00:00',
+            tds_level: parseFloat(data.tds_level ?? data.raw_tds ?? data.rawTds) || 0.0,
+            time_2: (data.time_2 || data.raw_tds_time || data.rawTdsTime) ? String(data.time_2 || data.raw_tds_time || data.rawTdsTime).replace('T', ' ').slice(0, 5) + ':00' : '00:00:00',
+            alocohol__check_after_change_from_rtd_to_csd: parseFloat(data.alocohol__check_after_change_from_rtd_to_csd ?? data.alcohol_check ?? data.alcoholCheck) || 0.0,
+            brix_check_after_change_over_rtd_to_water: parseFloat(data.brix_check_after_change_over_rtd_to_water ?? data.brix_check ?? data.brixCheck) || 0.0,
+            type_of_water: data.type_of_water || data.typeOfWater || 'PET',
             table_tncp: table_tncp,
             taste_and_particle_check: taste_and_particle_check,
-            ph_check_for_buffer_no: 'pH 4.0',
-            ph_check_for_buffer_result: parseFloat(data.buffer4) || 4.0,
-            ph_check_for_buffer_no_2: 'pH 7.0',
-            ph_check_for_buffer_result_2: parseFloat(data.buffer7) || 7.0,
-            result_2: parseFloat(data.buffer10) || 10.0,
-            check_using: parseFloat(data.checkStandard) || 1413.0,
-            result: parseFloat(data.cond1413) || 1413.0,
+            ph_check_for_buffer_no: data.ph_check_for_buffer_no || 'pH 4.0',
+            ph_check_for_buffer_result: parseFloat(data.ph_check_for_buffer_result ?? data.buffer4) || 4.0,
+            ph_check_for_buffer_no_2: data.ph_check_for_buffer_no_2 || 'pH 7.0',
+            ph_check_for_buffer_result_2: parseFloat(data.ph_check_for_buffer_result_2 ?? data.buffer7) || 7.0,
+            result_2: parseFloat(data.result_2 ?? data.buffer10) || 10.0,
+            check_using: parseFloat(data.check_using ?? data.check_standard ?? data.checkStandard) || 1413.0,
+            result: parseFloat(data.result ?? data.cond1413) || 1413.0,
             comments: data.comments || ''
           };
 
@@ -1958,6 +2042,215 @@ function App() {
         showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
       }
     }
+
+    if (type === 'Form 83 (Microbiological Analysis)' || type?.includes('83') || type === 'Form 83') {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Microbiological Analysis',
+            date: data.posting_date || data.date || new Date().toISOString().slice(0, 10),
+            analyst: extractEmployeeId(data.analyst || data.analyst_name),
+            approved_by: extractEmployeeId(data.approved_by || data.approvedBy || data.manager),
+            comments: data.comments || data.remarks || ''
+          };
+
+          const response = await frappe.createMicrobiologicalAnalysisRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Microbiological Analysis to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 84 (Sanitation)' || type?.includes('84') || type === 'Form 84') {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Sanitation Record',
+            date: data.sanitation_date || data.date || new Date().toISOString().slice(0, 10),
+            operator: extractEmployeeId(data.operator || data.performed_by || data.analyst),
+            supervisor: extractEmployeeId(data.supervisor || data.verified_by || data.approved_by),
+            comments: data.comments || data.remarks || ''
+          };
+
+          const response = await frappe.createSanitationRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Sanitation Record to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 104 (Seam Checklist Form)' || type?.includes('104') || type === 'Form 104') {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Seam Checklist Form',
+            date: data.date || new Date().toISOString().slice(0, 10),
+            canner_no: data.canner_no || data.cannerNo || '',
+            operator_supervisor: extractEmployeeId(data.operator_supervisor || data.analyst || data.verifiedBy),
+            comments: data.remarks || data.comments || ''
+          };
+
+          const response = await frappe.createSeamChecklistRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Seam Checklist Form to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 34: Monitoring' || type === 'Monitoring' || type?.includes('34')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Monitoring',
+            date: data.date || data.posting_date || new Date().toISOString().slice(0, 10),
+            time: data.time || data.posting_time || new Date().toTimeString().slice(0, 5) + ':00',
+            analyst: extractEmployeeId(data.analyst || data.operator || data.performed_by),
+            verified_by: extractEmployeeId(data.verified_by || data.supervisor || data.approved_by),
+            comments: data.comments || data.remarks || ''
+          };
+
+          const response = await frappe.createMonitoringRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Monitoring Record to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 100: Production Record Form' || type === 'Production Record' || type?.includes('100')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Production Record',
+            date: data.date || data.posting_date || new Date().toISOString().slice(0, 10),
+            operator: extractEmployeeId(data.operator || data.analyst || data.performed_by),
+            supervisor: extractEmployeeId(data.supervisor || data.verified_by || data.approved_by),
+            comments: data.comments || data.remarks || ''
+          };
+
+          const response = await frappe.createProductionRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Production Record to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 69: Mock Product Recall' || type === 'Mock Product Recall' || type?.includes('69')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Mock Product Recall',
+            date: data.date || data.posting_date || new Date().toISOString().slice(0, 10),
+            performed_by: extractEmployeeId(data.performed_by || data.operator || data.analyst),
+            approved_by: extractEmployeeId(data.approved_by || data.supervisor || data.verified_by),
+            comments: data.comments || data.remarks || ''
+          };
+
+          const response = await frappe.createMockProductRecall(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Mock Product Recall to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 70: Recall Review' || type === 'Recall Review' || type?.includes('70')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Recall Review'
+          };
+
+          const response = await frappe.createRecallReview(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Recall Review to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+
 
 
 
@@ -2414,6 +2707,36 @@ function App() {
         }
       } catch (err) {
         console.error('Failed to sync Machine Breakdown record to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'form107' || type === 'Hourly Weight Check Form' || type?.includes('107')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const extractEmployeeId = (val) => {
+            if (!val) return '';
+            const match = val.match(/\(([^)]+)\)/);
+            return match ? match[1] : val;
+          };
+
+          const erpPayload = {
+            ...data,
+            doctype: 'Hourly Weight Check Form',
+            date: data.date || data.posting_date || new Date().toISOString().slice(0, 10),
+            operator: extractEmployeeId(data.operator || data.performed_by || data.analyst),
+            supervisor: extractEmployeeId(data.supervisor || data.verified_by || data.approved_by),
+            comments: data.comments || data.remarks || ''
+          };
+
+          const response = await frappe.createHourlyWeightCheck(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Hourly Weight Check Form to ERPNext:', err);
         showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
       }
     }
@@ -4324,7 +4647,7 @@ function App() {
     const productCode = data.get('productCode');
     const bomNo = data.get('bomNo');
     const quantity = parseInt(data.get('quantity'), 10);
-    const lineNo = data.get('lineNo');
+    const lineNo = selectedWoLine || data.get('lineNo') || 'Filling Line 1';
     const plannedStartDateVal = data.get('plannedStartDate') || data.get('plannedStart');
     const company = data.get('company') || woCreateCompany;
     const sourceWarehouse = data.get('sourceWarehouse') || woSourceWarehouse || 'Stores - CWFPL';
@@ -4383,13 +4706,48 @@ function App() {
       ? `${plannedDateOnly} ${sysTime}`
       : `${plannedDateOnly} 00:00:00`;
 
+    const executeWorkOrderCreation = async (woPayload, prodObj, selectedBom) => {
+      setWoCreating(true);
+      try {
+        const conn = frappe.getConnectionSettings();
+        setSyncStatusMsg('Creating Work Order on ERPNext...');
+        const res = await frappe.createWorkOrder(woPayload);
+        if (res.success) {
+          let jobCards = [];
+          const ops = await frappe.getBOMOperations(selectedBom);
+          if (ops && ops.length > 0) {
+            jobCards = ops;
+          }
+
+          const nextWO = {
+            id: res.name,
+            ...woPayload,
+            item: prodObj.name,
+            produced: 0,
+            status: 'Pending',
+            jobCards: jobCards
+          };
+          setWorkOrders(prev => [nextWO, ...prev]);
+          setSelectedWOId(res.name);
+          setShowNewWODrawer(false);
+          setRawMaterialShortageModal(null);
+          loadWorkOrders();
+        }
+      } catch (err) {
+        showAlert(`Error creating Work Order on ERPNext: ${err.message}`, 'error', 'ERPNext Error');
+      } finally {
+        setWoCreating(false);
+        setSyncStatusMsg('');
+      }
+    };
+
     setWoCreating(true);
     const newWO = {
       product: product.code,
       quantity: quantity,
       plannedStart: plannedDateStr,
       bomNo: bomNo,
-      lineNo: lineNo || 'Filling Line 1',
+      lineNo: lineNo || selectedWoLine || 'Filling Line 1',
       company,
       sourceWarehouse,
       fgWarehouse,
@@ -4399,33 +4757,31 @@ function App() {
     };
 
     try {
-      const conn = frappe.getConnectionSettings();
-      setSyncStatusMsg('Creating Work Order on ERPNext...');
-      const res = await frappe.createWorkOrder(newWO);
-      if (res.success) {
-        let jobCards = [];
-        const ops = await frappe.getBOMOperations(bomNo);
-        if (ops && ops.length > 0) {
-          jobCards = ops;
-        }
+      setSyncStatusMsg('Checking raw material availability in warehouse...');
+      const stockCheck = await frappe.checkRawMaterialsAvailability(bomNo, quantity, sourceWarehouse);
 
-        const nextWO = {
-          id: res.name,
-          ...newWO,
-          item: product.name,
-          produced: 0,
-          status: 'Pending',
-          jobCards: jobCards
-        };
-        setWorkOrders(prev => [nextWO, ...prev]);
-        setSelectedWOId(res.name);
-        setShowNewWODrawer(false);
-        loadWorkOrders();
+      if (stockCheck && stockCheck.has_shortage) {
+        setWoCreating(false);
+        setSyncStatusMsg('');
+        setRawMaterialShortageModal({
+          bomNo,
+          productName: product.name,
+          productCode: product.code,
+          quantity,
+          sourceWarehouse,
+          items: stockCheck.items || [],
+          pendingWO: newWO,
+          product,
+          executeAction: () => executeWorkOrderCreation(newWO, product, bomNo)
+        });
+        return;
       }
+
+      await executeWorkOrderCreation(newWO, product, bomNo);
     } catch (err) {
-      showAlert(`Error creating Work Order on ERPNext: ${err.message}`, 'error', 'ERPNext Error');
-    } finally {
+      showAlert(`Error validating raw materials: ${err.message}`, 'error', 'Stock Check Error');
       setWoCreating(false);
+      setSyncStatusMsg('');
     }
   };
 
@@ -5113,6 +5469,12 @@ function App() {
             bomPage={bomPage}
             setBomPage={setBomPage}
             activeBomMaterials={activeBomMaterials}
+            availableWarehouses={availableWarehouses}
+            warehousesLoading={warehousesLoading}
+            bomRawMaterialWarehouse={bomRawMaterialWarehouse}
+            setBomRawMaterialWarehouse={setBomRawMaterialWarehouse}
+            bomFgWarehouse={bomFgWarehouse}
+            setBomFgWarehouse={setBomFgWarehouse}
           />
         )}
 
@@ -5687,10 +6049,16 @@ function App() {
               </div>
 
               <div className="form-group">
-                <label>Production Bottling Line</label>
-                <select name="lineNo" className="form-input">
+                <label>Production Bottling Line *</label>
+                <select
+                  name="lineNo"
+                  className="form-input"
+                  value={selectedWoLine}
+                  onChange={(e) => setSelectedWoLine(e.target.value)}
+                  required
+                >
                   <option value="Filling Line 1">Filling Line 1 (Water Line)</option>
-                  <option value="Filling Line 2">Filling Line 2 (Alcoholic Cans)</option>
+                  <option value="Filling Line 2">Filling Line 2 (Alcoholic Cans / CSD / RTD)</option>
                 </select>
               </div>
 
@@ -5720,6 +6088,99 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Raw Material Shortage Warning Modal - Strict Blocking */}
+      {rawMaterialShortageModal && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="modal-panel" style={{ width: '740px', maxWidth: '95vw', border: '1px solid #fecaca' }}>
+            <div className="modal-header" style={{ backgroundColor: '#fef2f2', borderBottom: '1px solid #fee2e2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b91c1c', fontWeight: '700', fontSize: '15px' }}>
+                <span style={{ fontSize: '18px' }}>⛔</span>
+                <span>Insufficient Raw Materials — Production Blocked</span>
+              </div>
+              <button
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#991b1b' }}
+                onClick={() => setRawMaterialShortageModal(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-content" style={{ padding: '16px 20px', maxHeight: '70vh', overflowY: 'auto' }}>
+              <div style={{ backgroundColor: '#fff1f2', border: '1px solid #ffe4e6', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px', fontSize: '13px', color: '#9f1239', lineHeight: '1.5' }}>
+                <strong>Strict Validation Block:</strong> Work Order creation is prevented because the selected Source Warehouse <strong>({rawMaterialShortageModal.sourceWarehouse})</strong> does not have enough stock for the requested batch size of <strong>{rawMaterialShortageModal.quantity?.toLocaleString()}</strong> units of <strong>{rawMaterialShortageModal.productName}</strong>. Please reduce the batch quantity or replenish raw materials in ERPNext before scheduling.
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 10px', fontWeight: '600' }}>Raw Material Item</th>
+                      <th style={{ padding: '8px 10px', fontWeight: '600', textAlign: 'right' }}>Required Qty</th>
+                      <th style={{ padding: '8px 10px', fontWeight: '600', textAlign: 'right' }}>In Warehouse</th>
+                      <th style={{ padding: '8px 10px', fontWeight: '600', textAlign: 'right' }}>Shortage</th>
+                      <th style={{ padding: '8px 10px', fontWeight: '600', textAlign: 'center' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rawMaterialShortageModal.items && rawMaterialShortageModal.items.map((item, idx) => (
+                      <tr
+                        key={item.item_code || idx}
+                        style={{
+                          borderBottom: '1px solid #f1f5f9',
+                          backgroundColor: item.is_sufficient ? 'transparent' : 'rgba(254, 242, 242, 0.6)'
+                        }}
+                      >
+                        <td style={{ padding: '8px 10px' }}>
+                          <div style={{ fontWeight: '600', color: '#1e293b' }}>{item.item_name}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>{item.item_code}</div>
+                        </td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '500' }}>
+                          {item.required_qty?.toLocaleString()} <span style={{ fontSize: '10px', color: '#64748b' }}>{item.uom}</span>
+                        </td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '500', color: item.is_sufficient ? '#15803d' : '#b91c1c' }}>
+                          {item.available_qty?.toLocaleString()} <span style={{ fontSize: '10px', color: '#64748b' }}>{item.uom}</span>
+                        </td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '600' }}>
+                          {item.shortage_qty > 0 ? (
+                            <span style={{ color: '#dc2626' }}>
+                              -{item.shortage_qty?.toLocaleString()} <span style={{ fontSize: '10px' }}>{item.uom}</span>
+                            </span>
+                          ) : (
+                            <span style={{ color: '#16a34a' }}>0</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                          {item.is_sufficient ? (
+                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', backgroundColor: '#dcfce7', color: '#15803d' }}>
+                              ✓ In Stock
+                            </span>
+                          ) : (
+                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', backgroundColor: '#fee2e2', color: '#b91c1c' }}>
+                              ⚠ Shortage
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', backgroundColor: '#fafafa' }}>
+              <button
+                type="button"
+                className="primary-btn"
+                style={{ padding: '9px 22px', fontSize: '13px', fontWeight: '600' }}
+                onClick={() => setRawMaterialShortageModal(null)}
+              >
+                ← Back to Editor / Adjust Batch Size
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -6223,6 +6684,21 @@ function App() {
           <MaintBreakdownModal
             onClose={() => setActiveMaintForm(null)}
             onSubmit={(data) => handleSaveMaintForm('breakdown', data)}
+            employeeList={employeeList}
+            handleSearchEmployees={handleSearchEmployees}
+            showEmployeeDropdown={showEmployeeDropdown}
+            setShowEmployeeDropdown={setShowEmployeeDropdown}
+            activeSearchField={activeSearchField}
+          />
+        );
+      })()}
+
+      {/* Modal: Log Form 107 Hourly Weight Check */}
+      {activeMaintForm === 'form107' && (() => {
+        return (
+          <MaintForm107Modal
+            onClose={() => setActiveMaintForm(null)}
+            onSubmit={(data) => handleSaveMaintForm('form107', data)}
             employeeList={employeeList}
             handleSearchEmployees={handleSearchEmployees}
             showEmployeeDropdown={showEmployeeDropdown}
@@ -7030,6 +7506,104 @@ function App() {
         />
       )}
 
+      {/* Modal: Laboratory Form 104 Seam Checklist Form */}
+      {activeLabForm === 'form104' && (
+        <LabForm104Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 104 (Seam Checklist Form)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 83 Microbiological Analysis */}
+      {activeLabForm === 'form83' && (
+        <LabForm83Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 83 (Microbiological Analysis)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 84 Sanitation */}
+      {activeLabForm === 'form84' && (
+        <LabForm84Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 84 (Sanitation)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 34 Monitoring */}
+      {activeLabForm === 'form34' && (
+        <LabForm34Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 34: Monitoring', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 100 Production Record Form */}
+      {activeLabForm === 'form100' && (
+        <LabForm100Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 100: Production Record Form', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 69 Mock Product Recall */}
+      {activeLabForm === 'form69' && (
+        <LabForm69Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 69: Mock Product Recall', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 70 Recall Review */}
+      {activeLabForm === 'form70' && (
+        <LabForm70Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 70: Recall Review', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
       {/* Modal: View Laboratory Report Details */}
       {viewingLabRecord && (
         <LabReportViewerModal
@@ -7675,7 +8249,7 @@ function App() {
                 </div>
                 {!maintValidationModal.allCompleted && (
                   <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--warning)', fontStyle: 'italic' }}>
-                    ⚠️ All 10 Daily Preventive Checklists must be submitted before starting this Work Order.
+                    ⚠️ All {maintValidationModal.totalCount || 'required'} Daily Preventive Checklists must be submitted before starting this Work Order.
                   </p>
                 )}
               </div>
@@ -7749,7 +8323,7 @@ function App() {
                   if (woObj) proceedToStartRun(woObj);
                 }}
               >
-                {maintValidationModal.allCompleted ? '✓ Proceed & Start Work Order' : 'Complete All 10 Checklists to Start'}
+                {maintValidationModal.allCompleted ? '✓ Proceed & Start Work Order' : `Complete All ${maintValidationModal.totalCount || 'Required'} Checklists to Start`}
               </button>
             </div>
           </div>

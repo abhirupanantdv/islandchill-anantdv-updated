@@ -521,7 +521,7 @@ class FrappeService {
     if (this.connection.isLive) {
       try {
         const res = await this.fetchERP('Work Order', {
-          fields: ['name', 'production_item', 'qty', 'produced_qty', 'planned_start_date', 'status', 'bom_no'],
+          fields: ['name', 'production_item', 'qty', 'produced_qty', 'planned_start_date', 'status', 'bom_no', 'custom_production_line'],
           limit,
           start,
           order_by: 'creation desc'
@@ -537,7 +537,7 @@ class FrappeService {
             plannedStart: wo.planned_start_date || '',
             status: wo.status === 'Submitted' ? 'Pending' : (wo.status === 'Not Started' ? 'Pending' : wo.status),
             bomNo: wo.bom_no || '',
-            lineNo: 'Filling Line 1', // Default map
+            lineNo: wo.custom_production_line || 'Filling Line 1',
             batchSize: Number(wo.qty || 0),
             jobCards: [] // Filled in locally or mock
           }));
@@ -612,6 +612,7 @@ class FrappeService {
           fg_warehouse: woData.fgWarehouse || null,
           scrap_warehouse: woData.scrapWarehouse || null,
           custom_extra_goods_warehouse: woData.extraGoodsWarehouse || null,
+          custom_production_line: woData.lineNo || 'Filling Line 1',
           operations: operations,
           docstatus: 1
         };
@@ -625,6 +626,24 @@ class FrappeService {
       }
     }
     return { success: true, name: `MFG-WO-2026-${Date.now().toString().slice(-5)}` };
+  }
+
+  // Check raw materials availability in source warehouse for a BOM and batch quantity
+  async checkRawMaterialsAvailability(bomNo, quantity, sourceWarehouse) {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.callIslandChillMethod('check_raw_materials_availability', {
+          bom_no: bomNo,
+          quantity: quantity,
+          source_warehouse: sourceWarehouse
+        });
+        return res || { success: true, all_available: true, has_shortage: false, items: [] };
+      } catch (e) {
+        console.error('Failed to check raw materials stock availability:', e);
+        return { success: false, all_available: true, has_shortage: false, items: [], error: e.message };
+      }
+    }
+    return { success: true, all_available: true, has_shortage: false, items: [] };
   }
 
   // Generic document cancellation helper via custom whitelisted methods or frappe.client.cancel
@@ -1412,11 +1431,11 @@ class FrappeService {
     return mockEmployees.slice(0, limit);
   }
 
-  // Fetch BOMs (Paginated)
-  async getBOMs(limit = 100, start = 0) {
+  // Fetch BOMs (Paginated, optional FG warehouse for stock balance)
+  async getBOMs(limit = 100, start = 0, fgWarehouse = '') {
     if (this.connection.isLive) {
       try {
-        const res = await this.callIslandChillMethod('get_all_boms_list', { limit, start });
+        const res = await this.callIslandChillMethod('get_all_boms_list', { limit, start, fg_warehouse: fgWarehouse });
         return res || [];
       } catch (e) {
         console.error('Failed to fetch BOMs from ERPNext:', e);
@@ -1426,11 +1445,15 @@ class FrappeService {
     return [];
   }
 
-  // Fetch BOM Details (raw materials)
-  async getBOMDetails(bomId) {
+  // Fetch BOM Details (raw materials and warehouse balances)
+  async getBOMDetails(bomId, sourceWarehouse = '', fgWarehouse = '') {
     if (this.connection.isLive) {
       try {
-        const res = await this.callIslandChillMethod('get_bom_details_data', { bom_id: bomId });
+        const res = await this.callIslandChillMethod('get_bom_details_data', {
+          bom_id: bomId,
+          source_warehouse: sourceWarehouse,
+          fg_warehouse: fgWarehouse
+        });
         return res || [];
       } catch (e) {
         console.error(`Failed to fetch BOM details for ${bomId}:`, e);
@@ -1438,6 +1461,24 @@ class FrappeService {
       }
     }
     return [];
+  }
+
+  // Fetch BOM Full Recipe Details
+  async getBOMRecipeFullDetails(bomId, sourceWarehouse = '', fgWarehouse = '') {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.callIslandChillMethod('get_bom_recipe_full_details', {
+          bom_id: bomId,
+          source_warehouse: sourceWarehouse,
+          fg_warehouse: fgWarehouse
+        });
+        return res || null;
+      } catch (e) {
+        console.error(`Failed to fetch BOM recipe full details for ${bomId}:`, e);
+        return null;
+      }
+    }
+    return null;
   }
 
   // Fetch Items / Inventory Balances
@@ -1582,7 +1623,7 @@ class FrappeService {
   }
 
   // Fetch Maintenance Templates from API method
-  async getMaintenanceTemplates() {
+  async getMaintenanceTemplates(params = {}) {
     if (this.connection.isLive) {
       try {
         const { url } = this.connection;
@@ -1606,7 +1647,12 @@ class FrappeService {
           }
         }
 
-        const response = await fetch(`${baseUrl}/api/method/islandchill.api.maintenance_template.get_maintenance_templates`, {
+        const queryParams = new URLSearchParams();
+        if (params.production_line) queryParams.append('production_line', params.production_line);
+        if (params.work_order) queryParams.append('work_order', params.work_order);
+        const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+        const response = await fetch(`${baseUrl}/api/method/islandchill.api.maintenance_template.get_maintenance_templates${qs}`, {
           method: 'GET',
           headers,
           credentials: 'include'
@@ -2123,21 +2169,45 @@ class FrappeService {
     return { success: true, name: `SAF-ADR-${Date.now().toString().slice(-6)}` };
   }
 
-  // Create Microbiological Analysis of Primary Raw Materials record
-  async createRawMaterialsMicroRecord(data) {
-    if (this.connection.isLive) {
+  // Generic save document record with RPC ignore_permissions & submittable safety
+  async saveDocRecord(doctype, data) {
+    if (!this.connection.isLive) return { success: true, name: `LOCAL-${Date.now().toString().slice(-6)}` };
+
+    const payload = { ...data };
+    delete payload.docstatus;
+
+    // 1. Try server RPC method (runs with ignore_permissions=True on backend)
+    try {
+      const res = await this.callIslandChillMethod('create_cleaning_sanitation_log', {
+        doctype,
+        payload
+      });
+      if (res && (res.name || res.doc)) {
+        return { success: true, name: res.name || (res.doc ? res.doc.name : `REC-${Date.now().toString().slice(-6)}`) };
+      }
+    } catch (rpcErr) {
+      console.warn(`RPC create_cleaning_sanitation_log for "${doctype}" failed, falling back to REST POST:`, rpcErr);
+    }
+
+    // 2. Fallback: REST POST as regular record
+    try {
+      const response = await this.makeRequest('POST', doctype, '', payload);
+      return { success: true, name: response?.data?.name || response?.name || response?.id };
+    } catch (e) {
+      console.warn(`Standard POST for "${doctype}" failed, attempting with docstatus:1:`, e);
       try {
-        const response = await this.makeRequest('POST', 'Microbiological Analysis of Primary Raw Materials', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Microbiological Analysis of Primary Raw Materials on ERPNext:', e);
+        const response2 = await this.makeRequest('POST', doctype, '', { ...payload, docstatus: 1 });
+        return { success: true, name: response2?.data?.name || response2?.name || response2?.id };
+      } catch (e2) {
+        console.error(`Failed to save "${doctype}" to ERPNext:`, e2);
         throw e;
       }
     }
-    return { success: true, name: `LAB-SF1-${Date.now().toString().slice(-6)}` };
+  }
+
+  // Create Microbiological Analysis of Primary Raw Materials record
+  async createRawMaterialsMicroRecord(data) {
+    return this.saveDocRecord('Microbiological Analysis of Primary Raw Materials', data);
   }
 
   // Fetch Incubator Test Type records
@@ -2164,19 +2234,7 @@ class FrappeService {
 
   // Create Chemical Test record
   async createChemicalTestRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Chemical Test', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Chemical Test on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `LAB-SF9-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Chemical Test', data);
   }
 
   // Fetch Sample List records
@@ -2203,19 +2261,7 @@ class FrappeService {
 
   // Create Microbiological Analysis Raw and Product Water record
   async createWaterMicroRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Microbiologiocal Analysis Raw and Product Water', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Microbiological Analysis Raw and Product Water on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `LAB-SF11-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Microbiologiocal Analysis Raw and Product Water', data);
   }
 
   // Fetch Taste Result Time records
@@ -2254,111 +2300,79 @@ class FrappeService {
 
   // Create Taste Test and Visual Inspection record
   async createTasteVisualRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Taste Test and Visual Inspection', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Taste Test and Visual Inspection on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `LAB-SF21-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Taste Test and Visual Inspection', data);
   }
 
-  // Create Silver Photometer Log and Calibration record
   async createSilverPhotometerRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Silver Photometer Log and Calibration', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Silver Photometer Log and Calibration on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `LAB-SF103-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Silver Photometer Log', data);
   }
 
   // Create Bourbon Whiskey And Cola Product Tank Record
   async createBourbonColaRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Bourbon Whiskey And Cola Product Tank Record', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Bourbon Whiskey And Cola Product Tank Record on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `LAB-SF36-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Bourbon Whiskey And Cola Product Tank Record', data);
   }
 
   // Create Gold Stone Rum And Cola Record
   async createGoldStoneRumColaRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Gold Stone Rum and Cola', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response?.data?.name || response?.name || response?.id };
-      } catch (e) {
-        console.warn('Failed to create Gold Stone Rum and Cola on ERPNext with docstatus:1, retrying without docstatus:', e);
-        try {
-          const response2 = await this.makeRequest('POST', 'Gold Stone Rum and Cola', '', data);
-          return { success: true, name: response2?.data?.name || response2?.name || response2?.id };
-        } catch (e2) {
-          console.error('Failed to create Gold Stone Rum and Cola without docstatus:', e2);
-          throw e;
-        }
-      }
-    }
-    return { success: true, name: `LAB-SF35-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Gold Stone Rum and Cola', data);
   }
 
   // Create Daily Production And Handover Record
   async createHandoverRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'Daily Production And Handover Record', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create Daily Production And Handover Record on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `LAB-SF100-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('Daily Production And Handover Record', data);
   }
 
   // Create Weight Check Record
   async createWeightCheckRecord(data) {
-    if (this.connection.isLive) {
-      try {
-        const response = await this.makeRequest('POST', 'For Weight Check Checklist', '', {
-          ...data,
-          docstatus: 1
-        });
-        return { success: true, name: response.data.name };
-      } catch (e) {
-        console.error('Failed to create For Weight Check Checklist record on ERPNext:', e);
-        throw e;
-      }
-    }
-    return { success: true, name: `MAINT-SF88-${Date.now().toString().slice(-6)}` };
+    return this.saveDocRecord('For Weight Check Checklist', data);
   }
+
+  // Create Microbiological Analysis record (Form 83)
+  async createMicrobiologicalAnalysisRecord(data) {
+    return this.saveDocRecord('Microbiological Analysis', data);
+  }
+
+  // Create Sanitation Record (Form 84)
+  async createSanitationRecord(data) {
+    return this.saveDocRecord('Sanitation Record', data);
+  }
+
+  // Create Seam Checklist Form record (Form 104)
+  async createSeamChecklistRecord(data) {
+    return this.saveDocRecord('Seam Checklist Form', data);
+  }
+
+  // Create Outside Perimeter Cleaning record (Form 46)
+  async createOutsidePerimeterCleaningRecord(data) {
+    return this.saveDocRecord('Outside Perimeter Cleaning', data);
+  }
+
+  // Create Monitoring record (Form 34)
+  async createMonitoringRecord(data) {
+    return this.saveDocRecord('Monitoring', data);
+  }
+
+  // Create Production Record (Form 100)
+  async createProductionRecord(data) {
+    return this.saveDocRecord('Production Record', data);
+  }
+
+  // Create Mock Product Recall record (Form 69)
+  async createMockProductRecall(data) {
+    return this.saveDocRecord('Mock Product Recall', data);
+  }
+
+  // Create Recall Review record (Form 70)
+  async createRecallReview(data) {
+    return this.saveDocRecord('Recall Review', data);
+  }
+
+  // Create Hourly Weight Check Form record (Form 107)
+  async createHourlyWeightCheck(data) {
+    return this.saveDocRecord('Hourly Weight Check Form', data);
+  }
+
+
 
   // Create Machine Breakdown Record
   async createBreakdownRecord(data) {

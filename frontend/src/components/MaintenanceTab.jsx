@@ -1,6 +1,397 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
 
+export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    time: new Date().toTimeString().slice(0, 5),
+    shift: 'Morning Shift',
+    line_machine: 'Production Line 1',
+    product_name: 'Island Chill Mineral Water',
+    target_weight: '600',
+    measured_weight: '601',
+    operator: '',
+    supervisor: ''
+  });
+  const [meta, setMeta] = useState(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [childMetas, setChildMetas] = useState({});
+  const [tableData, setTableData] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[MaintForm107Modal] Fetching DocType meta for "Hourly Weight Check Form"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Hourly Weight Check Form');
+        let fields = doctypeMeta?.fields;
+
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Inspection Date', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'time', label: 'Inspection Time', fieldtype: 'Time' },
+            { idx: 3, fieldname: 'shift', label: 'Shift', fieldtype: 'Select', options: 'Morning Shift\nAfternoon Shift\nNight Shift' },
+            { idx: 4, fieldname: 'work_order', label: 'Work Order', fieldtype: 'Link', options: 'Work Order' },
+            { idx: 5, fieldname: 'line_machine', label: 'Production Line / Machine', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'product_name', label: 'Product Name', fieldtype: 'Data' },
+            { idx: 7, fieldname: 'target_weight', label: 'Target Weight (g)', fieldtype: 'Float' },
+            { idx: 8, fieldname: 'measured_weight', label: 'Measured Weight (g)', fieldtype: 'Float' },
+            { idx: 9, fieldname: 'min_weight', label: 'Min Weight Limit (g)', fieldtype: 'Float' },
+            { idx: 10, fieldname: 'max_weight', label: 'Max Weight Limit (g)', fieldtype: 'Float' },
+            { idx: 11, fieldname: 'status', label: 'Weight Status', fieldtype: 'Select', options: 'Pass\nFail\nWithin Specs\nOut of Specs' },
+            { idx: 12, fieldname: 'operator', label: 'Operator Name', fieldtype: 'Link', options: 'Employee' },
+            { idx: 13, fieldname: 'supervisor', label: 'Supervisor Name', fieldtype: 'Link', options: 'Employee' },
+            { idx: 14, fieldname: 'comments', label: 'Notes / Remarks', fieldtype: 'Small Text' }
+          ];
+        }
+
+        if (isMounted) {
+          console.log('📋 HOURLY WEIGHT CHECK FORM DYNAMIC META:', doctypeMeta);
+          setMeta({ ...(doctypeMeta || {}), fields });
+          const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+          const childMetasObj = {};
+          for (const tf of tableFieldsList) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta && childMeta.fields) {
+                childMetasObj[tf.options] = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[MaintForm107Modal] Error fetching meta fields for Hourly Weight Check Form:', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const parseSelectOptions = (rawOptions) => {
+    if (!rawOptions) return [];
+    if (Array.isArray(rawOptions)) {
+      return rawOptions.map(opt => {
+        if (typeof opt === 'object' && opt !== null) {
+          return opt.value ?? opt.label ?? String(opt);
+        }
+        return String(opt).trim();
+      }).filter(Boolean);
+    }
+    if (typeof rawOptions === 'string') {
+      return rawOptions.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
+        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || []);
+    const newRow = {};
+    childFields.forEach(f => {
+      newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
+    });
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Hourly Weight Check Form',
+      ...formData,
+      ...tableData
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
+
+  return (
+    <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown && setShowEmployeeDropdown(false)}>
+      <div className="modal-panel" style={{ width: '680px', maxWidth: '95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>⚖️ Form 107: Hourly Weight Check Form</h3>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Hourly container weight verification log, scale readings, and net weight specs
+            </div>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px', fontSize: '12px' }}>
+            {loadingMeta ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: '600' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Hourly Weight Check Form"...
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                  {nonTableFields.map(field => {
+                    if (field.fieldtype === 'Select') {
+                      const opts = parseSelectOptions(field.options);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <select
+                            className="text-input"
+                            value={formData[field.fieldname] ?? opts[0] ?? ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          >
+                            <option value="">-- Select {field.label} --</option>
+                            {opts.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Check') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <input
+                            type="checkbox"
+                            id={`hw107_${field.fieldname}`}
+                            checked={!!formData[field.fieldname]}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
+                          />
+                          <label htmlFor={`hw107_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
+                            {field.label}
+                          </label>
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 2' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <textarea
+                            className="text-input"
+                            style={{ minHeight: '60px' }}
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Date') {
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="date"
+                            className="text-input"
+                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Time') {
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="time"
+                            className="text-input"
+                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
+                      const sKey = `maint_${field.fieldname}`;
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="text"
+                            className="text-input"
+                            placeholder="Type to search employee..."
+                            value={formData[field.fieldname] || ''}
+                            onFocus={(e) => {
+                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
+                            }}
+                            onChange={(e) => {
+                              handleFieldChange(field.fieldname, e.target.value);
+                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
+                            }}
+                          />
+                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                              {employeeList.map(emp => (
+                                <li
+                                  key={emp.name}
+                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
+                                  onClick={() => {
+                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
+                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                  }}
+                                >
+                                  {emp.employee_name} ({emp.name})
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={field.fieldname} className="form-group">
+                        <label className="input-label" style={{ fontWeight: '600' }}>
+                          {field.label} {field.reqd ? '*' : ''}
+                        </label>
+                        <input
+                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
+                          className="text-input"
+                          value={formData[field.fieldname] || ''}
+                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {tableFields.map(tf => {
+                  const childDoctype = tf.options;
+                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  const currentRows = tableData[tf.fieldname] || [];
+
+                  return (
+                    <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                          + Add Row
+                        </button>
+                      </div>
+
+                      {currentRows.length === 0 ? (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', textAlign: 'center' }}>
+                          No rows added yet. Click "+ Add Row" above.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                                {childFields.map(cf => (
+                                  <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                                ))}
+                                <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {currentRows.map((row, rIdx) => (
+                                <tr key={rIdx}>
+                                  {childFields.map(cf => (
+                                    <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                      {cf.fieldtype === 'Select' ? (
+                                        <select
+                                          className="text-input"
+                                          style={{ padding: '4px', fontSize: '11px' }}
+                                          value={row[cf.fieldname] || ''}
+                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                        >
+                                          <option value="">-- Select --</option>
+                                          {parseSelectOptions(cf.options).map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                          className="text-input"
+                                          style={{ padding: '4px', fontSize: '11px' }}
+                                          value={row[cf.fieldname] || ''}
+                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                        />
+                                      )}
+                                    </td>
+                                  ))}
+                                  <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                      🗑️
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Hourly Weight Check'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function MaintWeightCheckModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
   const [rows, setRows] = useState(Array.from({ length: 8 }, () => ({
     date: new Date().toISOString().slice(0, 10),
@@ -502,6 +893,34 @@ function WOSelectorPopup({ workOrders, onSelect, onClose }) {
             />
           </div>
 
+          {/* Option to clear selection / show all */}
+          <div
+            onClick={() => onSelect(null)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              marginBottom: '14px',
+              borderRadius: '8px',
+              border: '1px dashed var(--accent)',
+              backgroundColor: 'rgba(251, 191, 36, 0.06)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(251, 191, 36, 0.14)'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(251, 191, 36, 0.06)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '18px' }}>🌐</span>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-heading)' }}>Show All Checklists (No Work Order Filter)</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Display all equipment forms across all production lines</div>
+              </div>
+            </div>
+            <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent)' }}>View All ›</span>
+          </div>
+
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '36px', marginBottom: '8px' }}>📋</div>
@@ -511,6 +930,7 @@ function WOSelectorPopup({ workOrders, onSelect, onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {filtered.map(wo => {
                 const statusColor = STATUS_COLOR[wo.status] || STATUS_COLOR.default;
+                const lineName = wo.lineNo || wo.custom_production_line || wo.production_line || 'Filling Line 1';
                 return (
                   <div
                     key={wo.id}
@@ -539,6 +959,18 @@ function WOSelectorPopup({ workOrders, onSelect, onClose }) {
                         {wo.productName || wo.product || wo.item}
                       </div>
                     </div>
+                    {/* Production Line Badge */}
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: '700',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      color: 'var(--primary, #2563eb)',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      🏭 {lineName}
+                    </span>
                     {/* Status badge */}
                     <span style={{
                       fontSize: '10px',
@@ -636,7 +1068,7 @@ export default function MaintenanceTab({
 
   const handleSelectWO = (wo) => {
     setGlobalMaintWO(wo);
-    if (setMaintWorkOrder) setMaintWorkOrder(wo.id);
+    if (setMaintWorkOrder) setMaintWorkOrder(wo ? wo.id : '');
     setShowWOSelector(false);
   };
 
@@ -655,13 +1087,42 @@ export default function MaintenanceTab({
     );
   };
 
+  const LINE_1_EQUIPMENTS = [
+    'air compressor',
+    'boiler',
+    'syrup and cip equipment',
+    'glycol chilling plant & grasso refrigerator'
+  ];
+
+  const getTemplateLine = (t) => {
+    if (t.production_line) return t.production_line;
+    const eq = (t.equipment || t.name || '').toLowerCase().trim();
+    const isLine1 = LINE_1_EQUIPMENTS.some(item => eq.includes(item) || item.includes(eq));
+    return isLine1 ? 'Filling Line 1' : 'Filling Line 2';
+  };
+
+  // When no work order selected -> show all forms; when selected -> only those matching the WO filling line
+  const activeTemplates = (MAINTENANCE_TEMPLATES || []).filter(t => {
+    if (!globalMaintWO) return true;
+    const rawWoLine = (globalMaintWO.lineNo || globalMaintWO.custom_production_line || globalMaintWO.production_line || '').toLowerCase().trim();
+    if (!rawWoLine) return true;
+    const tplLine = getTemplateLine(t).toLowerCase().trim();
+    if (rawWoLine.includes('line 1')) {
+      return tplLine.includes('line 1');
+    }
+    if (rawWoLine.includes('line 2')) {
+      return tplLine.includes('line 2');
+    }
+    return tplLine === rawWoLine;
+  });
+
   const activeWoRecords = globalMaintWO
     ? maintenanceRecords.filter(r => (r.workOrder && r.workOrder === globalMaintWO.id) || (r.work_order && r.work_order === globalMaintWO.id))
     : maintenanceRecords;
 
   const totalChecklists = activeWoRecords.length;
 
-  const eqCount = (MAINTENANCE_TEMPLATES || []).filter(tpl =>
+  const eqCount = activeTemplates.filter(tpl =>
     maintenanceRecords.some(r =>
       matchesTplRecord(r, tpl) && (
         !globalMaintWO ||
@@ -676,7 +1137,7 @@ export default function MaintenanceTab({
     : (dashStats?.last_activity || 'No logs yet');
 
   // Filtered checklist templates for search
-  const filteredTemplates = (MAINTENANCE_TEMPLATES || []).filter(t => {
+  const filteredTemplates = activeTemplates.filter(t => {
     if (!checklistSearch) return true;
     const q = checklistSearch.toLowerCase();
     return (t.equipment || '').toLowerCase().includes(q) || (t.area || '').toLowerCase().includes(q);
@@ -734,21 +1195,53 @@ export default function MaintenanceTab({
                   }}>
                     {globalMaintWO.status}
                   </span>
+                  <span style={{
+                    display: 'inline-block',
+                    marginLeft: '8px',
+                    fontSize: '10px',
+                    fontWeight: '700',
+                    padding: '2px 7px',
+                    borderRadius: '4px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    color: 'var(--primary, #2563eb)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)'
+                  }}>
+                    🏭 {globalMaintWO.lineNo || globalMaintWO.custom_production_line || 'Filling Line'} ({activeTemplates.length} Checklists)
+                  </span>
                 </div>
               </>
             ) : (
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No Work Order selected — click to filter dashboards by Work Order</div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-heading)' }}>All Checklists View (No Work Order Selected)</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Showing all {MAINTENANCE_TEMPLATES.length} equipment checklist forms across Filling Line 1 & Line 2. Select a Work Order to filter by its specific line.</div>
+              </div>
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="secondary-btn"
-          style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '600' }}
-          onClick={() => setShowWOSelector(true)}
-        >
-          {globalMaintWO ? '⟳ Change Work Order' : '+ Select Work Order'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {globalMaintWO && (
+            <button
+              type="button"
+              className="secondary-btn"
+              style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+              onClick={() => {
+                setGlobalMaintWO(null);
+                if (setMaintWorkOrder) setMaintWorkOrder('');
+              }}
+              title="Clear selected Work Order and show all 10 forms"
+            >
+              ✕ Show All Forms
+            </button>
+          )}
+          <button
+            type="button"
+            className="secondary-btn"
+            style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '600' }}
+            onClick={() => setShowWOSelector(true)}
+          >
+            {globalMaintWO ? '⟳ Change Work Order' : '+ Select Work Order'}
+          </button>
+        </div>
       </div>
 
       {/* Dashboard metrics widgets */}
@@ -771,10 +1264,12 @@ export default function MaintenanceTab({
             <span className="metric-icon">⚙️</span>
           </div>
           <div className="metric-value" style={{ fontSize: '24px', fontWeight: '800', margin: '8px 0' }}>
-            {`${eqCount} / ${MAINTENANCE_TEMPLATES.length}`}
+            {`${eqCount} / ${activeTemplates.length}`}
           </div>
-          <div className="metric-footer text-success" style={{ fontSize: '11px', color: eqCount >= MAINTENANCE_TEMPLATES.length ? 'var(--success)' : 'var(--warning)' }}>
-            {eqCount >= MAINTENANCE_TEMPLATES.length ? '● All Operational' : `● ${MAINTENANCE_TEMPLATES.length - eqCount} Pending`}
+          <div className="metric-footer text-success" style={{ fontSize: '11px', color: (eqCount >= activeTemplates.length && activeTemplates.length > 0) ? 'var(--success)' : 'var(--warning)' }}>
+            {(eqCount >= activeTemplates.length && activeTemplates.length > 0)
+              ? '● All Operational'
+              : `● ${Math.max(0, activeTemplates.length - eqCount)} Pending`}
           </div>
         </div>
         <div className="metric-card">
@@ -820,7 +1315,14 @@ export default function MaintenanceTab({
         <>
           {/* Header + search + view toggle */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Available Daily Preventive Checklists</h3>
+            <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>
+              Available Daily Preventive Checklists
+              {globalMaintWO && (
+                <span style={{ fontSize: '12px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                  ({globalMaintWO.lineNo || globalMaintWO.custom_production_line || 'Selected Line'} • {filteredTemplates.length} Forms)
+                </span>
+              )}
+            </h3>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <div style={{ position: 'relative' }}>
                 <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px' }}>🔍</span>
@@ -861,7 +1363,7 @@ export default function MaintenanceTab({
                   );
                 };
 
-                const originalIdx = MAINTENANCE_TEMPLATES.findIndex(t => t.id === tpl.id);
+                const originalIdx = MAINTENANCE_TEMPLATES.findIndex(t => t.id === tpl.id || (t.equipment && tpl.equipment && t.equipment.toLowerCase() === tpl.equipment.toLowerCase()));
                 const doneForWO = globalMaintWO && maintenanceRecords.some(r =>
                   matchesTemplate(r) && (
                     (r.workOrder && r.workOrder === globalMaintWO.id) ||
@@ -971,7 +1473,7 @@ export default function MaintenanceTab({
                       );
                     };
 
-                    const originalIdx = MAINTENANCE_TEMPLATES.findIndex(t => t.id === tpl.id);
+                    const originalIdx = MAINTENANCE_TEMPLATES.findIndex(t => t.id === tpl.id || (t.equipment && tpl.equipment && t.equipment.toLowerCase() === tpl.equipment.toLowerCase()));
                     const doneForWO = globalMaintWO && maintenanceRecords.some(r =>
                       matchesTemplate(r) && (
                         (r.workOrder && r.workOrder === globalMaintWO.id) ||
@@ -1028,6 +1530,7 @@ export default function MaintenanceTab({
                               if (setMaintOperatorDisplay) setMaintOperatorDisplay('');
                               setMaintSupervisor('');
                               if (setMaintSupervisorDisplay) setMaintSupervisorDisplay('');
+                              if (setMaintWorkOrder) setMaintWorkOrder(globalMaintWO ? globalMaintWO.id : '');
                             }}
                           >
                             {doneForWO ? '✓ Submitted' : '📝 Fill Checklist'}
@@ -1060,6 +1563,23 @@ export default function MaintenanceTab({
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
               <button type="button" className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => setActiveMaintForm('breakdown')}>📝 Log Breakdown</button>
+            </div>
+          </div>
+
+          {/* Form 107: Hourly Weight Check */}
+          <div
+            className="inv-card"
+            style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', transition: 'all 0.2s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+          >
+            <div>
+              <span className="badge" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: 'var(--accent)', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px' }}>QUALITY / WEIGHT</span>
+              <h4 style={{ fontSize: '14px', fontWeight: '700', marginTop: '12px', marginBottom: '4px', color: 'var(--text-heading)' }}>⚖️ Form 107: Hourly Weight Check</h4>
+              <p className="text-muted" style={{ fontSize: '11px', marginBottom: '12px' }}>Log hourly container weight checks, scale readings, and net weight specifications.</p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <button type="button" className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setActiveMaintForm('form107')}>📝 Fill Form 107</button>
             </div>
           </div>
         </div>
