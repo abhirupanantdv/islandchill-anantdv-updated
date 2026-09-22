@@ -1,6 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
 
+// Helper to dynamically fetch Link options for target DocTypes
+const fetchLinkOptionsMap = async (fields, childMetasObj) => {
+  const linkDoctypes = new Set();
+  (fields || []).forEach(f => {
+    if (f.fieldtype === 'Link' && f.options) linkDoctypes.add(f.options);
+  });
+  Object.values(childMetasObj || {}).forEach(cFields => {
+    (cFields || []).forEach(cf => {
+      if (cf.fieldtype === 'Link' && cf.options) linkDoctypes.add(cf.options);
+    });
+  });
+
+  const optsMap = {};
+  await Promise.all(
+    Array.from(linkDoctypes).map(async (dt) => {
+      try {
+        const res = await frappe.getLinkOptions(dt, 100);
+        optsMap[dt] = (res || []).map(r => (typeof r === 'object' ? (r.name || r.title || String(r)) : String(r)));
+      } catch (err) {
+        console.warn(`Failed to fetch link options for ${dt}:`, err);
+        optsMap[dt] = [];
+      }
+    })
+  );
+  return optsMap;
+};
+
+const isDatetimeField = (fieldtype, fieldname, label) => {
+  if (!fieldtype && !fieldname && !label) return false;
+  const ft = (fieldtype || '').toLowerCase();
+  const fn = (fieldname || '').toLowerCase();
+  const lb = (label || '').toLowerCase();
+  return (
+    ft === 'datetime' ||
+    ft === 'date time' ||
+    ft.includes('datetime') ||
+    lb.includes('date & time') ||
+    lb.includes('date and time') ||
+    lb.includes('datetime') ||
+    fn.endsWith('_datetime') ||
+    fn.endsWith('_date_time') ||
+    fn.includes('incubation_in') ||
+    fn.includes('incubation_out')
+  );
+};
+
 export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -11,6 +57,7 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({});
 
   useEffect(() => {
@@ -54,6 +101,10 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
             }
           }
           setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
         }
       } catch (err) {
         console.error('[MaintForm88DynamicModal] Error fetching meta fields for Weight Check:', err);
@@ -210,6 +261,24 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
                       );
                     }
 
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
                     if (field.fieldtype === 'Date') {
                       return (
                         <div key={field.fieldname} className="form-group">
@@ -242,8 +311,34 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
                       );
                     }
 
-                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
-                      const sKey = `maint_${field.fieldname}`;
+                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+
+                      const empOpts = isEmpTarget ? (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`) : [];
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts]));
+                      const datalistId = `dl_m88_${sKey}`;
+
                       return (
                         <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
                           <label className="input-label" style={{ fontWeight: '600' }}>
@@ -251,32 +346,43 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
                           </label>
                           <input
                             type="text"
+                            list={isEmpTarget ? undefined : datalistId}
                             className="text-input"
-                            placeholder="Type to search employee..."
+                            placeholder={`Select or type ${field.label}...`}
                             value={formData[field.fieldname] || ''}
-                            onFocus={(e) => {
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-                            }}
-                            onChange={(e) => {
-                              handleFieldChange(field.fieldname, e.target.value);
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                            onFocus={() => {
+                              if (isEmpTarget) {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }
                             }}
                           />
-                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                              {employeeList.map(emp => (
-                                <li
-                                  key={emp.name}
-                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
-                                  onClick={() => {
-                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
-                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                  }}
-                                >
-                                  {emp.employee_name} ({emp.name})
-                                </li>
+                          {!isEmpTarget && (
+                            <datalist id={datalistId}>
+                              {combinedOpts.map((opt, idx) => (
+                                <option key={idx} value={opt} />
                               ))}
-                            </ul>
+                            </datalist>
+                          )}
+                          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                              {employeeList.map(emp => {
+                                const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                return (
+                                  <div
+                                    key={emp.name}
+                                    style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                    onMouseDown={() => {
+                                      handleFieldChange(field.fieldname, empVal);
+                                      if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                    }}
+                                  >
+                                    <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       );
@@ -344,12 +450,28 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
                                             <option key={opt} value={opt}>{opt}</option>
                                           ))}
                                         </select>
+                                      ) : cf.fieldtype === 'Link' ? (
+                                        <>
+                                          <input
+                                            type="text"
+                                            list={`dl_m88_tbl_${cf.fieldname}_${rIdx}`}
+                                            className="text-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            value={row[cf.fieldname] || ''}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          />
+                                          <datalist id={`dl_m88_tbl_${cf.fieldname}_${rIdx}`}>
+                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
+                                              <option key={opt} value={opt} />
+                                            ))}
+                                          </datalist>
+                                        </>
                                       ) : (
                                         <input
-                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : (cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? 'datetime-local' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
                                           className="text-input"
                                           style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
+                                          value={row[cf.fieldname] || ((cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? (new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)) : '')}
                                           onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
                                         />
                                       )}
@@ -399,6 +521,7 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({});
 
   useEffect(() => {
@@ -445,6 +568,10 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
             }
           }
           setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
         }
       } catch (err) {
         console.error('[MaintForm107Modal] Error fetching meta fields for Hourly Weight Check Form:', err);
@@ -601,6 +728,24 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
                       );
                     }
 
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
                     if (field.fieldtype === 'Date') {
                       return (
                         <div key={field.fieldname} className="form-group">
@@ -633,8 +778,16 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
                       );
                     }
 
-                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
-                      const sKey = `maint_${field.fieldname}`;
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+
+                      const empOpts = isEmpTarget ? (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`) : [];
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts]));
+                      const datalistId = `dl_m107_${sKey}`;
+
                       return (
                         <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
                           <label className="input-label" style={{ fontWeight: '600' }}>
@@ -642,32 +795,43 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
                           </label>
                           <input
                             type="text"
+                            list={isEmpTarget ? undefined : datalistId}
                             className="text-input"
-                            placeholder="Type to search employee..."
+                            placeholder={`Select or type ${field.label}...`}
                             value={formData[field.fieldname] || ''}
-                            onFocus={(e) => {
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-                            }}
-                            onChange={(e) => {
-                              handleFieldChange(field.fieldname, e.target.value);
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                            onFocus={() => {
+                              if (isEmpTarget) {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }
                             }}
                           />
-                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                              {employeeList.map(emp => (
-                                <li
-                                  key={emp.name}
-                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
-                                  onClick={() => {
-                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
-                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                  }}
-                                >
-                                  {emp.employee_name} ({emp.name})
-                                </li>
+                          {!isEmpTarget && (
+                            <datalist id={datalistId}>
+                              {combinedOpts.map((opt, idx) => (
+                                <option key={idx} value={opt} />
                               ))}
-                            </ul>
+                            </datalist>
+                          )}
+                          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                              {employeeList.map(emp => {
+                                const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                return (
+                                  <div
+                                    key={emp.name}
+                                    style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                    onMouseDown={() => {
+                                      handleFieldChange(field.fieldname, empVal);
+                                      if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                    }}
+                                  >
+                                    <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       );
@@ -735,12 +899,28 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
                                             <option key={opt} value={opt}>{opt}</option>
                                           ))}
                                         </select>
+                                      ) : cf.fieldtype === 'Link' ? (
+                                        <>
+                                          <input
+                                            type="text"
+                                            list={`dl_m107_tbl_${cf.fieldname}_${rIdx}`}
+                                            className="text-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            value={row[cf.fieldname] || ''}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          />
+                                          <datalist id={`dl_m107_tbl_${cf.fieldname}_${rIdx}`}>
+                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
+                                              <option key={opt} value={opt} />
+                                            ))}
+                                          </datalist>
+                                        </>
                                       ) : (
                                         <input
-                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : (cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? 'datetime-local' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
                                           className="text-input"
                                           style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
+                                          value={row[cf.fieldname] || ((cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? (new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)) : '')}
                                           onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
                                         />
                                       )}

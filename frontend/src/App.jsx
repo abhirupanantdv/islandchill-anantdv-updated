@@ -20,7 +20,7 @@ import BOMTab from './components/BOMTab';
 import SalesTab, { SalesInvoiceFormModal, DeliveryNoteFormModal } from './components/SalesTab';
 import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal, MaintForm88DynamicModal } from './components/MaintenanceTab';
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
-import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
+import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm12Modal, LabForm13Modal, LabForm64Modal, LabForm72Modal, LabForm47Modal, LabForm39Modal, LabForm85Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
 import line1 from "../public/line1.png"
 import line2 from "../public/line2.png"
@@ -7555,6 +7555,90 @@ function App() {
         <LabForm104Modal
           onClose={() => setActiveLabForm(null)}
           onSubmit={(data) => handleSaveLaboratory('Form 104 (Seam Checklist Form)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 12 Autoclave Record */}
+      {(activeLabForm === 'form12' || activeLabForm === 'form85') && (
+        <LabForm12Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 12 (Autoclave Record)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 13 Media Preparation Record */}
+      {activeLabForm === 'form13' && (
+        <LabForm13Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 13 (Media Preparation Record)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 64 Rinse-Off Test for Raw Materials */}
+      {activeLabForm === 'form64' && (
+        <LabForm64Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 64 (Rinse-Off Test for Raw Materials)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 72 Library Sample Record */}
+      {activeLabForm === 'form72' && (
+        <LabForm72Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 72 (Library Sample Record)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 47 Traceability of products */}
+      {activeLabForm === 'form47' && (
+        <LabForm47Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 47 (Traceability of products)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 39 Induction */}
+      {activeLabForm === 'form39' && (
+        <LabForm39Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 39 (Induction)', data)}
           saving={labSaving}
           employeeList={employeeList}
           handleSearchEmployees={handleSearchEmployees}

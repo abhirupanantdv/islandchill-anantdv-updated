@@ -1,0 +1,43 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-26 17:18:12.714269",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "areas",
+  "approval"
+ ],
+ "fields": [
+  {
+   "fieldname": "areas",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Areas",
+   "options": "\nCompany Policy (ISO 9001:2015, HACCP, Harassment, Health & Safety )\nDress Code (jewelry policy, sanitizing hands, hair nets/face masks, safety shoes)\nNo use of Mobile Phones in Production area\nNo use of ear plugs or ear muffs in following section\nToilets/ Change Rooms\nSmoking/Non Smoking Areas\nAuthorized/Unauthorized Areas\nHazard Reporting Procedures (Damaged Bait Stations, incomplete structures, etc.)\nAccident/Incident Reporting Procedures\nEvacuation Procedures\nNearest Exit in the Case of Emergency\nLocation of Nearest Fire Fighting Equipment\nLocation of First Aid Kit/Certified first aiders\nAny health issues or food poisoning has occurred at least 2 weeks prior to factory visit\nLocation of MSDS"
+  },
+  {
+   "fieldname": "approval",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Approval",
+   "options": "\nYES\nNO"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-22 16:19:37.606035",
+ "modified_by": "sharda.k@anantdv.com",
+ "module": "Islandchill",
+ "name": "INDUCTION AREAS CHECKLIST",
+ "owner": "sharda.k@anantdv.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

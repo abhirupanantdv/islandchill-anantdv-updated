@@ -20,6 +20,52 @@ const parseSelectOptions = (rawOptions) => {
   return [];
 };
 
+const isDatetimeField = (fieldtype, fieldname, label) => {
+  if (!fieldtype && !fieldname && !label) return false;
+  const ft = (fieldtype || '').toLowerCase();
+  const fn = (fieldname || '').toLowerCase();
+  const lb = (label || '').toLowerCase();
+  return (
+    ft === 'datetime' ||
+    ft === 'date time' ||
+    ft.includes('datetime') ||
+    lb.includes('date & time') ||
+    lb.includes('date and time') ||
+    lb.includes('datetime') ||
+    fn.endsWith('_datetime') ||
+    fn.endsWith('_date_time') ||
+    fn.includes('incubation_in') ||
+    fn.includes('incubation_out')
+  );
+};
+
+// Helper to dynamically fetch Link options for target DocTypes
+const fetchLinkOptionsMap = async (fields, childMetasObj) => {
+  const linkDoctypes = new Set();
+  (fields || []).forEach(f => {
+    if (f.fieldtype === 'Link' && f.options) linkDoctypes.add(f.options);
+  });
+  Object.values(childMetasObj || {}).forEach(cFields => {
+    (cFields || []).forEach(cf => {
+      if (cf.fieldtype === 'Link' && cf.options) linkDoctypes.add(cf.options);
+    });
+  });
+
+  const optsMap = {};
+  await Promise.all(
+    Array.from(linkDoctypes).map(async (dt) => {
+      try {
+        const res = await frappe.getLinkOptions(dt, 100);
+        optsMap[dt] = (res || []).map(r => (typeof r === 'object' ? (r.name || r.title || String(r)) : String(r)));
+      } catch (err) {
+        console.warn(`Failed to fetch link options for ${dt}:`, err);
+        optsMap[dt] = [];
+      }
+    })
+  );
+  return optsMap;
+};
+
 export const CLEANING_TEMPLATES = [
   { id: 'toilet-clean', name: 'Cleaning of Toilets', doctype: 'Cleaning of Toilets', description: 'Log daily toilet sanitation status.' },
   { id: 'toilet-purpose', name: 'Toilet Cleaning Purpose', doctype: 'Toilet Cleaning purpose', description: 'Log toilet cleaning purpose details.' },
@@ -60,6 +106,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({});
 
   useEffect(() => {
@@ -102,6 +149,10 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
               }
             }
             setChildMetas(childMetasObj);
+
+            fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+              if (isMounted) setLinkOptionsMap(optsMap);
+            });
           }
         } catch (e) {
           console.error('[CleaningFormModal] Error fetching meta:', e);
@@ -1198,6 +1249,24 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
                         );
                       }
 
+                      if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                        const now = new Date();
+                        const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                        return (
+                          <div key={field.fieldname} className="form-group">
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="datetime-local"
+                              className="text-input"
+                              value={formData[field.fieldname] || localDT}
+                              onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            />
+                          </div>
+                        );
+                      }
+
                       if (field.fieldtype === 'Date') {
                         return (
                           <div key={field.fieldname} className="form-group">
@@ -1230,77 +1299,174 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
                         );
                       }
 
+                      if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
+                        const now = new Date();
+                        const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                        return (
+                          <div key={field.fieldname} className="form-group">
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="datetime-local"
+                              className="text-input"
+                              value={formData[field.fieldname] || localDT}
+                              onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            />
+                          </div>
+                        );
+                      }
+
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+                      const datalistId = `dl_clean_${sKey}`;
+
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+                      const combinedOpts = Array.from(new Set([
+                        ...empOpts,
+                        ...fetchedOpts
+                      ])).filter(Boolean);
+
                       return (
-                        <div key={field.fieldname} className="form-group">
+                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
                           <label className="input-label" style={{ fontWeight: '600' }}>
                             {field.label} {field.reqd ? '*' : ''}
                           </label>
                           <input
-                            type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
+                            type="text"
+                            list={isEmpTarget ? undefined : datalistId}
                             className="text-input"
+                            placeholder={`Select or type ${field.label}...`}
                             value={formData[field.fieldname] || ''}
                             onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                            onFocus={() => {
+                              if (isEmpTarget && handleSearchEmployees) {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }
+                            }}
                           />
+                          {!isEmpTarget && (
+                            <datalist id={datalistId}>
+                              {combinedOpts.map((opt, idx) => (
+                                <option key={idx} value={opt} />
+                              ))}
+                            </datalist>
+                          )}
+
+                          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                              {employeeList.map(emp => {
+                                const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                return (
+                                  <div
+                                    key={emp.name}
+                                    style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                    onMouseDown={() => {
+                                      handleInputChange(field.fieldname, empVal);
+                                      if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                    }}
+                                  >
+                                    <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       );
-                    })}
+                    }
 
-                    {/* Dynamic Table Fields (Child Tables) */}
-                    {(meta?.fields || []).filter(f => f.fieldtype === 'Table').map(tf => {
-                      const childDoctype = tf.options;
-                      const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
-                      const currentRows = tableData[tf.fieldname] || [];
+                    return (
+                      <div key={field.fieldname} className="form-group">
+                        <label className="input-label" style={{ fontWeight: '600' }}>
+                          {field.label} {field.reqd ? '*' : ''}
+                        </label>
+                        <input
+                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
+                          className="text-input"
+                          value={formData[field.fieldname] || ''}
+                          onChange={e => handleInputChange(field.fieldname, e.target.value)}
+                        />
+                      </div>
+                    );
+                  })}
 
-                      return (
-                        <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
-                            <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
-                              + Add Row
-                            </button>
+                  {/* Dynamic Table Fields (Child Tables) */}
+                  {(meta?.fields || []).filter(f => f.fieldtype === 'Table').map(tf => {
+                    const childDoctype = tf.options;
+                    const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                    const currentRows = tableData[tf.fieldname] || [];
+
+                    return (
+                      <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
+                          <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                            + Add Row
+                          </button>
+                        </div>
+
+                        {currentRows.length === 0 ? (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', textAlign: 'center' }}>
+                            No rows added yet. Click "+ Add Row" above.
                           </div>
-
-                          {currentRows.length === 0 ? (
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', italic: 'true', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', textAlign: 'center' }}>
-                              No rows added yet. Click "+ Add Row" above.
-                            </div>
-                          ) : (
-                            <div style={{ overflowX: 'auto' }}>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                                <thead>
-                                  <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                        ) : (
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                              <thead>
+                                <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                                  {childFields.map(cf => (
+                                    <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                                  ))}
+                                  <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {currentRows.map((row, rIdx) => (
+                                  <tr key={rIdx}>
                                     {childFields.map(cf => (
-                                      <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                                    ))}
-                                    <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {currentRows.map((row, rIdx) => (
-                                    <tr key={rIdx}>
-                                      {childFields.map(cf => (
-                                        <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                          {cf.fieldtype === 'Select' ? (
-                                            <select
-                                              className="text-input"
-                                              style={{ padding: '4px', fontSize: '11px' }}
-                                              value={row[cf.fieldname] || ''}
-                                              onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                            >
-                                              <option value="">-- Select --</option>
-                                              {parseSelectOptions(cf.options).map(opt => (
-                                                <option key={opt} value={opt}>{opt}</option>
-                                              ))}
-                                            </select>
-                                          ) : (
+                                      <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                        {cf.fieldtype === 'Select' ? (
+                                          <select
+                                            className="text-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            value={row[cf.fieldname] || ''}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          >
+                                            <option value="">-- Select --</option>
+                                            {parseSelectOptions(cf.options).map(opt => (
+                                              <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                          </select>
+                                        ) : cf.fieldtype === 'Link' ? (
+                                          <>
                                             <input
-                                              type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                              type="text"
+                                              list={`dl_clean_tbl_${cf.fieldname}_${rIdx}`}
                                               className="text-input"
                                               style={{ padding: '4px', fontSize: '11px' }}
                                               value={row[cf.fieldname] || ''}
                                               onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
                                             />
-                                          )}
+                                            <datalist id={`dl_clean_tbl_${cf.fieldname}_${rIdx}`}>
+                                              {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
+                                                <option key={opt} value={opt} />
+                                              ))}
+                                            </datalist>
+                                          </>
+                                        ) : (
+                                          <input
+                                            type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : (cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? 'datetime-local' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                            className="text-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            value={row[cf.fieldname] || ((cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? (new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)) : '')}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          />
+                                        )}
                                         </td>
                                       ))}
                                       <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>

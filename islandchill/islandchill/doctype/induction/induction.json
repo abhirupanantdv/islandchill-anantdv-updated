@@ -1,0 +1,163 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-26 17:00:24.428564",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "name1",
+  "reason_for_visit",
+  "specify_other_reason",
+  "visiting_areas",
+  "section_break_ttgl",
+  "induction_areas_checklist",
+  "section_break_gljd",
+  "comments",
+  "section_break_whld",
+  "names",
+  "signature",
+  "work_order",
+  "column_break_ouiw",
+  "inductors_name",
+  "inductors_signature",
+  "inductors_date",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "name1",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": " Name"
+  },
+  {
+   "fieldname": "reason_for_visit",
+   "fieldtype": "Select",
+   "label": "Reason for Visit",
+   "options": "\nAudit\nTour\nOther"
+  },
+  {
+   "depends_on": "eval:doc.reason_for_visit==\"Other\"",
+   "fieldname": "specify_other_reason",
+   "fieldtype": "Data",
+   "label": "Specify Other Reason"
+  },
+  {
+   "fieldname": "visiting_areas",
+   "fieldtype": "Data",
+   "label": "Visiting Areas"
+  },
+  {
+   "fieldname": "section_break_ttgl",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "induction_areas_checklist",
+   "fieldtype": "Table",
+   "label": "INDUCTION AREAS CHECKLIST",
+   "options": "INDUCTION AREAS CHECKLIST"
+  },
+  {
+   "fieldname": "section_break_gljd",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "section_break_whld",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "names",
+   "fieldtype": "Data",
+   "label": "Name",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Signature",
+   "label": "Signature"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Work Order"
+  },
+  {
+   "fieldname": "column_break_ouiw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "inductors_name",
+   "fieldtype": "Link",
+   "label": "Inductor's Name ",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "inductors_signature",
+   "fieldtype": "Signature",
+   "label": "Inductor's Signature"
+  },
+  {
+   "default": "Today",
+   "fieldname": "inductors_date",
+   "fieldtype": "Date",
+   "label": "Inductor's Date"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Induction",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-22 16:18:01.907033",
+ "modified_by": "sharda.k@anantdv.com",
+ "module": "Islandchill",
+ "name": "Induction",
+ "owner": "sharda.k@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Operation Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -827,6 +827,65 @@ def _sanitize_employee_link_val(val):
 
     return val
 
+def _auto_create_link_record(target_dt, val):
+    if not val or not isinstance(val, str):
+        return
+    try:
+        val = val.strip()
+        if not val or frappe.db.exists(target_dt, val):
+            return
+        dt_meta = frappe.get_meta(target_dt)
+        doc = frappe.new_doc(target_dt)
+
+        primary_field = None
+        if dt_meta.autoname and dt_meta.autoname.startswith("field:"):
+            primary_field = dt_meta.autoname.split("field:")[1]
+
+        if primary_field and hasattr(doc, primary_field):
+            setattr(doc, primary_field, val)
+        else:
+            set_field = False
+            for f in dt_meta.fields:
+                if f.fieldtype == "Data" and f.reqd:
+                    setattr(doc, f.fieldname, val)
+                    set_field = True
+                    break
+            if not set_field and dt_meta.fields:
+                for f in dt_meta.fields:
+                    if f.fieldtype == "Data":
+                        setattr(doc, f.fieldname, val)
+                        break
+
+        doc.flags.ignore_permissions = True
+        doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(f"Failed to auto-create link record for {target_dt} '{val}': {str(e)}")
+
+def _resolve_target_link_doc(target_dt, val):
+    if not val or not isinstance(val, str):
+        return val
+    val = val.strip()
+    if not val or not target_dt or target_dt == "Employee" or not frappe.db.exists("DocType", target_dt):
+        return val
+
+    if frappe.db.exists(target_dt, val):
+        return val
+
+    try:
+        existing = frappe.get_all(target_dt, limit=200, pluck="name")
+        if existing:
+            lower = val.lower()
+            for doc_name in existing:
+                doc_lower = str(doc_name).lower()
+                if doc_lower == lower or doc_lower in lower:
+                    return doc_name
+    except Exception:
+        pass
+
+    _auto_create_link_record(target_dt, val)
+    return val
+
 def _clean_doc_payload_links(doctype, payload_dict):
     if not isinstance(payload_dict, dict):
         return payload_dict
@@ -841,22 +900,34 @@ def _clean_doc_payload_links(doctype, payload_dict):
     for k, v in payload_dict.items():
         if k in link_fields and link_fields[k] == "Employee":
             cleaned[k] = _sanitize_employee_link_val(v)
+        elif k in link_fields:
+            cleaned_val = _sanitize_employee_link_val(v) if isinstance(v, str) else v
+            target_dt = link_fields[k]
+            if isinstance(cleaned_val, str) and cleaned_val:
+                cleaned_val = _resolve_target_link_doc(target_dt, cleaned_val)
+            cleaned[k] = cleaned_val
         elif isinstance(v, list):
             try:
                 table_field_df = meta.get_field(k) if 'meta' in locals() else None
                 child_dt = table_field_df.options if table_field_df and table_field_df.fieldtype == "Table" else None
                 child_meta = frappe.get_meta(child_dt) if child_dt and frappe.db.exists("DocType", child_dt) else None
-                child_emp_links = {df.fieldname for df in child_meta.fields if df.fieldtype == "Link" and df.options == "Employee"} if child_meta else set()
+                child_links = {df.fieldname: df.options for df in child_meta.fields if df.fieldtype == "Link"} if child_meta else {}
             except Exception:
-                child_emp_links = set()
+                child_links = {}
 
             cleaned_rows = []
             for row in v:
                 if isinstance(row, dict):
                     row_copy = dict(row)
                     for cf_name, cf_val in row_copy.items():
-                        if cf_name in child_emp_links or (isinstance(cf_val, str) and ("(HR-EMP-" in cf_val or "(EMP-" in cf_val)):
-                            row_copy[cf_name] = _sanitize_employee_link_val(cf_val)
+                        if isinstance(cf_val, str) and ("(HR-EMP-" in cf_val or "(EMP-" in cf_val):
+                            cf_val = _sanitize_employee_link_val(cf_val)
+                            row_copy[cf_name] = cf_val
+
+                        target_dt = child_links.get(cf_name)
+                        if isinstance(cf_val, str) and cf_val and target_dt and target_dt != "Employee":
+                            row_copy[cf_name] = _resolve_target_link_doc(target_dt, cf_val)
+
                     cleaned_rows.append(row_copy)
                 else:
                     cleaned_rows.append(row)
@@ -866,7 +937,7 @@ def _clean_doc_payload_links(doctype, payload_dict):
 
     return cleaned
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def create_cleaning_sanitation_log(doctype, payload=None):
     if isinstance(payload, str):
         payload = frappe.parse_json(payload)
@@ -907,7 +978,13 @@ def create_cleaning_sanitation_log(doctype, payload=None):
         'Mock Product Recall',
         'Recall Review',
         'Hourly Weight Check Form',
-        'Weight Check'
+        'Weight Check',
+        'Autoclave Record',
+        'Media Preparation Record',
+        'Rinse-Off Test for Raw Materials',
+        'Library Sample Record',
+        'Traceability of products',
+        'Induction'
     }
 
     if doctype not in allowed_doctypes:
@@ -947,16 +1024,44 @@ def create_cleaning_sanitation_log(doctype, payload=None):
     doc = frappe.new_doc(doctype)
     doc.update(payload_copy)
     doc.flags.ignore_permissions = True
+
+    # Auto-promote status / approval_status / workflow_state to Approved or Submitted
+    if doc.meta.has_field("status"):
+        curr_st = doc.get("status")
+        if not curr_st or curr_st in ["Draft", "Pending"]:
+            status_opts = [op.strip() for op in (doc.meta.get_field("status").options or "").split("\n") if op.strip()]
+            if "Approved" in status_opts:
+                doc.status = "Approved"
+            elif "Submitted" in status_opts:
+                doc.status = "Submitted"
+            elif "Completed" in status_opts:
+                doc.status = "Completed"
+            elif "Active" in status_opts:
+                doc.status = "Active"
+
+    if doc.meta.has_field("approval_status"):
+        curr_app = doc.get("approval_status")
+        if not curr_app or curr_app in ["Draft", "Pending"]:
+            doc.approval_status = "Approved"
+
+    if doc.meta.has_field("workflow_state"):
+        curr_wf = doc.get("workflow_state")
+        if not curr_wf or curr_wf in ["Draft", "Pending"]:
+            doc.workflow_state = "Approved"
+
     doc.insert(ignore_permissions=True)
     
     meta = frappe.get_meta(doctype)
-    if meta.is_submittable:
+    if meta.is_submittable and doc.docstatus == 0:
         doc.flags.ignore_permissions = True
-        doc.submit()
-        
+        try:
+            doc.submit()
+        except Exception as se:
+            frappe.log_error(f"Auto-submit for {doctype} {doc.name} failed: {str(se)}")
+            
     frappe.db.commit()
 
-    return {"success": True, "name": doc.name, "doc": doc.as_dict()}
+    return {"success": True, "name": doc.name, "status": doc.get("status") or doc.get("approval_status") or ("Submitted" if doc.docstatus == 1 else "Approved"), "doc": doc.as_dict()}
 
 
 @frappe.whitelist()
@@ -1935,3 +2040,13 @@ def create_islandchill_work_order(
     }
 
 
+@frappe.whitelist(allow_guest=True)
+def get_form_number_configurations():
+    """Fetch all records from Form number configuration doctype."""
+    try:
+        dt = "Form number configuration" if frappe.db.exists("DocType", "Form number configuration") else ("Form Number Configuration" if frappe.db.exists("DocType", "Form Number Configuration") else None)
+        if dt:
+            return frappe.get_all(dt, fields=["*"], limit=200)
+    except Exception as e:
+        frappe.log_error(f"Error fetching Form number configuration: {str(e)}", "Form Number Config")
+    return []

@@ -163,6 +163,67 @@ class FrappeService {
     return '';
   }
 
+  getCsrfToken() {
+    if (typeof window === 'undefined') return '';
+    if (window.csrf_token && window.csrf_token !== '{{ frappe.session.csrf_token }}') {
+      return window.csrf_token;
+    }
+    if (window.frappe?.csrf_token && window.frappe.csrf_token !== '{{ frappe.session.csrf_token }}') {
+      return window.frappe.csrf_token;
+    }
+    const metaTag = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaTag && metaTag !== '{{ frappe.session.csrf_token }}') {
+      return metaTag;
+    }
+
+    try {
+      if (typeof document !== 'undefined' && document.cookie) {
+        const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+        if (match && match[1]) {
+          const val = decodeURIComponent(match[1]);
+          if (val && val !== '{{ frappe.session.csrf_token }}') {
+            return val;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[FrappeService] Error reading csrf_token cookie:', e);
+    }
+    return '';
+  }
+
+  attachCsrfHeader(headers = {}) {
+    const auth = this.getAuthHeader();
+    if (auth) {
+      headers['Authorization'] = auth;
+    }
+
+    const csrfToken = this.getCsrfToken();
+    if (csrfToken) {
+      headers['X-Frappe-CSRF-Token'] = csrfToken;
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+    return headers;
+  }
+
+  async refreshCsrfToken() {
+    try {
+      const baseUrl = this.resolveUrl(this.connection.url);
+      const res = await fetch(`${baseUrl}/api/method/frappe.auth.get_logged_user`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const freshToken = this.getCsrfToken();
+        if (freshToken) {
+          window.csrf_token = freshToken;
+        }
+      }
+    } catch (e) {
+      console.warn('[FrappeService] Could not refresh CSRF token:', e);
+    }
+  }
+
   cleanFrappeError(value) {
     let message = value || 'ERPNext request failed';
 
@@ -234,38 +295,22 @@ class FrappeService {
 
     const promise = (async () => {
       const baseUrl = this.resolveUrl(this.connection.url);
-      const auth = this.getAuthHeader();
-
-      const headers = {
+      const headers = this.attachCsrfHeader({
         Accept: 'application/json',
         'Content-Type': 'application/json'
-      };
-
-      if (auth) {
-        headers.Authorization = auth;
-      } else {
-        const csrfToken =
-          window.csrf_token ||
-          window.frappe?.csrf_token ||
-          document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-        if (csrfToken) {
-          headers['X-Frappe-CSRF-Token'] = csrfToken;
-          headers['X-CSRF-Token'] = csrfToken;
-        }
-      }
+      });
 
       try {
-        const response = await fetch(`${baseUrl}/api/method/islandchill.api.manufacturing.${methodName}`, {
+        let response = await fetch(`${baseUrl}/api/method/islandchill.api.manufacturing.${methodName}`, {
           method: 'POST',
           headers,
           credentials: 'include',
           body: JSON.stringify(payload)
         });
 
-        const json = await response.json().catch(() => null);
+        let json = await response.json().catch(() => null);
 
-        if (!response.ok) {
+        if (!response.ok || (json && (json.exc_type === 'CSRFTokenError' || String(json.exception || '').includes('CSRFTokenError')))) {
           const rawMessage =
             json?._server_messages ||
             json?.exception ||
@@ -274,11 +319,29 @@ class FrappeService {
             response.statusText ||
             'ERPNext request failed';
 
-          const cleaned = this.cleanFrappeError(rawMessage);
-          if (this.isSessionExpiredError(response.status, rawMessage)) {
-            this.triggerSessionExpired(cleaned);
+          if (typeof rawMessage === 'string' && (rawMessage.includes('CSRFTokenError') || rawMessage.includes('Invalid Request'))) {
+            console.warn('[FrappeService] CSRFTokenError encountered in callIslandChillMethod. Refreshing token & retrying...');
+            await this.refreshCsrfToken();
+            const freshHeaders = this.attachCsrfHeader({
+              Accept: 'application/json',
+              'Content-Type': 'application/json'
+            });
+            response = await fetch(`${baseUrl}/api/method/islandchill.api.manufacturing.${methodName}`, {
+              method: 'POST',
+              headers: freshHeaders,
+              credentials: 'include',
+              body: JSON.stringify(payload)
+            });
+            json = await response.json().catch(() => null);
           }
-          throw new Error(cleaned);
+
+          if (!response.ok) {
+            const cleaned = this.cleanFrappeError(rawMessage);
+            if (this.isSessionExpiredError(response.status, rawMessage)) {
+              this.triggerSessionExpired(cleaned);
+            }
+            throw new Error(cleaned);
+          }
         }
 
         return json?.message || json;
@@ -460,32 +523,17 @@ class FrappeService {
 
     const { url } = this.connection;
     const baseUrl = this.resolveUrl(url);
-    const headers = {
+    const headers = this.attachCsrfHeader({
       'Accept': 'application/json',
       'Content-Type': 'application/json'
-    };
-
-    const auth = this.getAuthHeader();
-    if (auth) {
-      headers['Authorization'] = auth;
-    } else {
-      const csrfToken =
-        window.csrf_token ||
-        window.frappe?.csrf_token ||
-        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-      if (csrfToken) {
-        headers['X-Frappe-CSRF-Token'] = csrfToken;
-        headers['X-CSRF-Token'] = csrfToken;
-      }
-    }
+    });
 
     const fetchUrl = docname
       ? `${baseUrl}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}?ignore_permissions=true`
       : `${baseUrl}/api/resource/${encodeURIComponent(doctype)}?ignore_permissions=true`;
 
     try {
-      const response = await fetch(fetchUrl, {
+      let response = await fetch(fetchUrl, {
         method,
         headers,
         credentials: 'include',
@@ -503,16 +551,43 @@ class FrappeService {
             errData.message ||
             message;
         } catch { }
-        const cleaned = this.cleanFrappeError(message);
-        if (this.isSessionExpiredError(response.status, message)) {
-          this.triggerSessionExpired(cleaned);
+
+        if (typeof message === 'string' && (message.includes('CSRFTokenError') || message.includes('Invalid Request'))) {
+          console.warn('[FrappeService] CSRFTokenError encountered in makeRequest. Refreshing token & retrying...');
+          await this.refreshCsrfToken();
+          const freshHeaders = this.attachCsrfHeader({
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          });
+          response = await fetch(fetchUrl, {
+            method,
+            headers: freshHeaders,
+            credentials: 'include',
+            body: body ? JSON.stringify(body) : null
+          });
+          if (!response.ok) {
+            try {
+              const retryErr = await response.json();
+              message = retryErr._server_messages || retryErr.exception || retryErr.exc || retryErr.message || message;
+            } catch { }
+          }
         }
-        throw new Error(cleaned);
+
+        if (!response.ok) {
+          const cleaned = this.cleanFrappeError(message);
+          if (this.isSessionExpiredError(response.status, message)) {
+            this.triggerSessionExpired(cleaned);
+          }
+          throw new Error(cleaned);
+        }
       }
 
-      return await response.json();
+      const res = await response.json();
+      return res;
     } finally {
-      if (requestKey) this._pendingRequests.delete(requestKey);
+      if (requestKey) {
+        this._pendingRequests.delete(requestKey);
+      }
     }
   }
 
@@ -911,25 +986,16 @@ class FrappeService {
       };
     }
 
-    const { url } = this.connection;
-    const baseUrl = this.resolveUrl(url);
-
-    const csrfToken =
-      window.csrf_token ||
-      window.frappe?.csrf_token ||
-      document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-      '';
+    const headers = this.attachCsrfHeader({
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    });
 
     const response = await fetch(
       `${baseUrl}/api/method/islandchill.api.manufacturing.save_stock_entry_draft`,
       {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Frappe-CSRF-Token': csrfToken,
-          'X-CSRF-Token': csrfToken
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify({
           work_order: data.workOrder,
@@ -964,22 +1030,16 @@ class FrappeService {
     const { url } = this.connection;
     const baseUrl = this.resolveUrl(url);
 
-    const csrfToken =
-      window.csrf_token ||
-      window.frappe?.csrf_token ||
-      document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-      '';
+    const headers = this.attachCsrfHeader({
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    });
 
     const response = await fetch(
       `${baseUrl}/api/method/islandchill.api.manufacturing.submit_stock_entry`,
       {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Frappe-CSRF-Token': csrfToken,
-          'X-CSRF-Token': csrfToken
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify({
           stock_entry_name: stockEntryName
@@ -2208,6 +2268,57 @@ class FrappeService {
     const payload = { ...data };
     delete payload.docstatus;
 
+    // Helper to sanitize employee names or parenthesized link values like "John Doe (HR-EMP-00015)" -> "HR-EMP-00015"
+    const sanitizeVal = (val) => {
+      if (!val || typeof val !== 'string') return val;
+      const trimmed = val.trim();
+      const parenMatch = trimmed.match(/\(([^)]+)\)$/);
+      if (parenMatch && parenMatch[1]) return parenMatch[1].trim();
+      return trimmed;
+    };
+
+    // Clean top-level and child row values
+    Object.keys(payload).forEach(key => {
+      if (typeof payload[key] === 'string') {
+        payload[key] = sanitizeVal(payload[key]);
+      } else if (Array.isArray(payload[key])) {
+        payload[key] = payload[key].map(row => {
+          if (row && typeof row === 'object') {
+            const cleanedRow = { ...row };
+            Object.keys(cleanedRow).forEach(rk => {
+              if (typeof cleanedRow[rk] === 'string') {
+                cleanedRow[rk] = sanitizeVal(cleanedRow[rk]);
+              }
+            });
+            return cleanedRow;
+          }
+          return row;
+        });
+      }
+    });
+
+    // Helper for sample link prefix fallback (e.g. "Silver Ion Water" -> "Sample: Silver Ion Water")
+    const fixSampleLinkPrefixes = (p) => {
+      const copy = JSON.parse(JSON.stringify(p));
+      Object.keys(copy).forEach(k => {
+        if (Array.isArray(copy[k])) {
+          copy[k] = copy[k].map(row => {
+            if (row && typeof row === 'object') {
+              const r = { ...row };
+              ['sample', 'sample_source', 'sample_point', 'sample_name', 'water_sample'].forEach(sf => {
+                if (r[sf] && typeof r[sf] === 'string' && !r[sf].startsWith('Sample: ')) {
+                  r[sf] = `Sample: ${r[sf]}`;
+                }
+              });
+              return r;
+            }
+            return row;
+          });
+        }
+      });
+      return copy;
+    };
+
     // 1. Try server RPC method (runs with ignore_permissions=True on backend)
     try {
       const res = await this.callIslandChillMethod('create_cleaning_sanitation_log', {
@@ -2218,7 +2329,19 @@ class FrappeService {
         return { success: true, name: res.name || (res.doc ? res.doc.name : `REC-${Date.now().toString().slice(-6)}`) };
       }
     } catch (rpcErr) {
-      console.warn(`RPC create_cleaning_sanitation_log for "${doctype}" failed, falling back to REST POST:`, rpcErr);
+      console.warn(`RPC create_cleaning_sanitation_log for "${doctype}" failed, trying with sample link fix or REST:`, rpcErr);
+      const rpcMsg = String(rpcErr.message || rpcErr);
+      if (rpcMsg.includes('Could not find') || rpcMsg.includes('LinkValidationError')) {
+        try {
+          const fixedPayload = fixSampleLinkPrefixes(payload);
+          const res2 = await this.callIslandChillMethod('create_cleaning_sanitation_log', { doctype, payload: fixedPayload });
+          if (res2 && (res2.name || res2.doc)) {
+            return { success: true, name: res2.name || (res2.doc ? res2.doc.name : `REC-${Date.now().toString().slice(-6)}`) };
+          }
+        } catch (eFix) {
+          console.warn('RPC sample link fix retry failed:', eFix);
+        }
+      }
     }
 
     // 2. Fallback: REST POST as regular record
@@ -2226,7 +2349,18 @@ class FrappeService {
       const response = await this.makeRequest('POST', doctype, '', payload);
       return { success: true, name: response?.data?.name || response?.name || response?.id };
     } catch (e) {
-      console.warn(`Standard POST for "${doctype}" failed, attempting with docstatus:1:`, e);
+      console.warn(`Standard POST for "${doctype}" failed, attempting retry or docstatus:1:`, e);
+      const errMsg = String(e.message || e);
+      if (errMsg.includes('Could not find') || errMsg.includes('LinkValidationError')) {
+        try {
+          const fixedPayload = fixSampleLinkPrefixes(payload);
+          const responseFixed = await this.makeRequest('POST', doctype, '', fixedPayload);
+          return { success: true, name: responseFixed?.data?.name || responseFixed?.name || responseFixed?.id };
+        } catch (eFixed) {
+          console.warn('REST POST sample link fix retry failed:', eFixed);
+        }
+      }
+
       try {
         const response2 = await this.makeRequest('POST', doctype, '', { ...payload, docstatus: 1 });
         return { success: true, name: response2?.data?.name || response2?.name || response2?.id };
@@ -2719,6 +2853,22 @@ async getEquipmentList(params = {}) {
       } catch (e) {
         console.error(`Failed to fetch link options for ${targetDoctype}:`, e);
         return [];
+      }
+    }
+    return [];
+  }
+
+  // Fetch Form Number Configuration list
+  async getFormNumberConfigurations() {
+    if (this.connection.isLive) {
+      try {
+        const res = await this.callIslandChillMethod('get_form_number_configurations');
+        if (Array.isArray(res) && res.length > 0) return res;
+
+        const fallback = await this.fetchERP('Form number configuration', { fields: ['*'], limit: 200 });
+        if (Array.isArray(fallback) && fallback.length > 0) return fallback;
+      } catch (e) {
+        console.warn('Could not fetch Form number configuration from ERPNext:', e);
       }
     }
     return [];

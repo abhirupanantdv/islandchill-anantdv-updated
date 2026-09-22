@@ -21,9 +21,135 @@ const parseSelectOptions = (rawOptions) => {
   return [];
 };
 
+const isDatetimeField = (fieldtype, fieldname, label) => {
+  if (!fieldtype && !fieldname && !label) return false;
+  const ft = (fieldtype || '').toLowerCase();
+  const fn = (fieldname || '').toLowerCase();
+  const lb = (label || '').toLowerCase();
+  return (
+    ft === 'datetime' ||
+    ft === 'date time' ||
+    ft.includes('datetime') ||
+    lb.includes('date & time') ||
+    lb.includes('date and time') ||
+    lb.includes('datetime') ||
+    fn.endsWith('_datetime') ||
+    fn.endsWith('_date_time') ||
+    fn.includes('incubation_in') ||
+    fn.includes('incubation_out')
+  );
+};
+
+const resolveLinkValue = (val, targetDoctype, linkOptionsMap) => {
+  if (!val || typeof val !== 'string') return val;
+  const trimmed = val.trim();
+  if (!trimmed) return trimmed;
+
+  const parenMatch = trimmed.match(/\(([^)]+)\)$/);
+  if (parenMatch && parenMatch[1]) {
+    return parenMatch[1].trim();
+  }
+
+  const opts = linkOptionsMap ? linkOptionsMap[targetDoctype] : null;
+  if (opts && opts.length > 0) {
+    if (opts.includes(trimmed)) return trimmed;
+
+    const lower = trimmed.toLowerCase();
+    const exactCi = opts.find(o => String(o).toLowerCase() === lower);
+    if (exactCi) return exactCi;
+
+    const containedOpt = opts.find(o => {
+      const oLower = String(o).toLowerCase();
+      return lower.includes(oLower) || oLower.includes(lower);
+    });
+    if (containedOpt) return containedOpt;
+  }
+
+  return trimmed;
+};
+
+// Helper to dynamically fetch Link options for target DocTypes
+const fetchLinkOptionsMap = async (fields, childMetasObj) => {
+  const linkDoctypes = new Set();
+  (fields || []).forEach(f => {
+    if (f.fieldtype === 'Link' && f.options) linkDoctypes.add(f.options);
+  });
+  Object.values(childMetasObj || {}).forEach(cFields => {
+    (cFields || []).forEach(cf => {
+      if (cf.fieldtype === 'Link' && cf.options) linkDoctypes.add(cf.options);
+    });
+  });
+
+  const optsMap = {};
+  await Promise.all(
+    Array.from(linkDoctypes).map(async (dt) => {
+      try {
+        const res = await frappe.getLinkOptions(dt, 100);
+        optsMap[dt] = (res || []).map(r => (typeof r === 'object' ? (r.name || r.title || String(r)) : String(r)));
+      } catch (err) {
+        console.warn(`Failed to fetch link options for ${dt}:`, err);
+        optsMap[dt] = [];
+      }
+    })
+  );
+  return optsMap;
+};
+
+
+export function FormFootnote({ doctype, defaultFormNo, formTitle }) {
+  const [configs, setConfigs] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchConfigs() {
+      try {
+        const res = await frappe.getFormNumberConfigurations();
+        if (isMounted && res && Array.isArray(res)) {
+          setConfigs(res);
+        }
+      } catch (err) {
+        console.warn('FormFootnote config fetch error:', err);
+      }
+    }
+    fetchConfigs();
+    return () => { isMounted = false; };
+  }, []);
+
+  const target = (doctype || '').toLowerCase();
+  const matched = configs.find(c => {
+    const dt = (c.doctype_name || c.form_name || c.doctype || c.name || '').toLowerCase();
+    const fno = (c.form_number || c.form_no || c.code || '').toLowerCase();
+    return (target && dt.includes(target)) || (target && target.includes(dt)) || (fno && target.includes(fno));
+  });
+
+  const formNo = matched?.form_number || matched?.form_no || matched?.code || defaultFormNo || 'Form Configuration';
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      borderTop: '1px solid var(--border-color)',
+      paddingTop: '12px',
+      marginTop: '16px',
+      fontSize: '11px',
+      color: 'var(--text-muted)',
+      fontWeight: '600',
+      gap: '6px'
+    }}>
+      <span>Island Chill - Form no.</span>
+      <span style={{ fontWeight: '700', color: 'var(--accent)', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+        {formNo}
+      </span>
+      {formTitle && <span style={{ fontStyle: 'italic', opacity: 0.85 }}>({formTitle})</span>}
+    </div>
+  );
+}
+
+
 export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -147,6 +273,9 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({
             ...newTableDataInit,
             ...prev
@@ -241,45 +370,71 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
   );
 
   const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const fType = field.fieldtype;
-    const isEmployeeLink = fType === 'Link' && (
-      field.options === 'Employee' ||
-      field.options === 'User' ||
-      !field.options ||
-      ['analyst', 'manager', 'verified_by', 'approved_by', 'prepared_by', 'analyst_name', 'approved_by_name'].includes(field.fieldname) ||
-      field.fieldname?.toLowerCase().includes('analyst') ||
-      field.fieldname?.toLowerCase().includes('approved') ||
-      field.fieldname?.toLowerCase().includes('manager') ||
-      field.fieldname?.toLowerCase().includes('verified') ||
-      field.fieldname?.toLowerCase().includes('by') ||
-      field.label?.toLowerCase().includes('analyst') ||
-      field.label?.toLowerCase().includes('approved') ||
-      field.label?.toLowerCase().includes('manager') ||
-      field.label?.toLowerCase().includes('verified') ||
-      field.label?.toLowerCase().includes('by')
-    );
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (isEmployeeLink) {
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
         <div style={{ position: 'relative' }}>
           <input
             type="text"
+            list={isEmpTarget ? undefined : datalistId}
             className="form-input"
-            required={field.reqd === 1}
+            required={reqd === 1}
             value={val || ''}
-            onFocus={(e) => handleSearchEmployees(e.target.value, searchFieldKey)}
-            onChange={(e) => { onChange(e.target.value); handleSearchEmployees(e.target.value, searchFieldKey); }}
-            placeholder={`Search ${field.label}...`}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
           />
-          {showEmployeeDropdown && activeSearchField === searchFieldKey && (
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
             <div className="autocomplete-dropdown">
               {employeeList.map(emp => (
                 <div
                   key={emp.name}
                   className="dropdown-item"
-                  onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
                 >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Employee'})
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                 </div>
               ))}
             </div>
@@ -316,6 +471,11 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
       );
     }
 
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
     if (fType === 'Date') {
       return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
     }
@@ -477,7 +637,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                 </div>
               </div>
             )}
-
+            <FormFootnote doctype="Microbiological Analysis of Primary Raw Materials" defaultFormNo="Form 1" formTitle="Microbiological Analysis of Primary Raw Materials" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -495,6 +655,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
 export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -632,6 +793,9 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({
             ...newTableDataInit,
             ...prev
@@ -724,45 +888,71 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
   );
 
   const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const fType = field.fieldtype;
-    const isEmployeeLink = fType === 'Link' && (
-      field.options === 'Employee' ||
-      field.options === 'User' ||
-      !field.options ||
-      ['analyst', 'verified_by', 'approved_by', 'prepared_by', 'analyst_name', 'approved_by_name'].includes(field.fieldname) ||
-      field.fieldname?.toLowerCase().includes('analyst') ||
-      field.fieldname?.toLowerCase().includes('approved') ||
-      field.fieldname?.toLowerCase().includes('manager') ||
-      field.fieldname?.toLowerCase().includes('verified') ||
-      field.fieldname?.toLowerCase().includes('by') ||
-      field.label?.toLowerCase().includes('analyst') ||
-      field.label?.toLowerCase().includes('approved') ||
-      field.label?.toLowerCase().includes('manager') ||
-      field.label?.toLowerCase().includes('verified') ||
-      field.label?.toLowerCase().includes('by')
-    );
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (isEmployeeLink) {
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
         <div style={{ position: 'relative' }}>
           <input
             type="text"
+            list={isEmpTarget ? undefined : datalistId}
             className="form-input"
-            required={field.reqd === 1}
+            required={reqd === 1}
             value={val || ''}
-            onFocus={(e) => handleSearchEmployees(e.target.value, searchFieldKey)}
-            onChange={(e) => { onChange(e.target.value); handleSearchEmployees(e.target.value, searchFieldKey); }}
-            placeholder={`Search ${field.label}...`}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
           />
-          {showEmployeeDropdown && activeSearchField === searchFieldKey && (
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
             <div className="autocomplete-dropdown">
               {employeeList.map(emp => (
                 <div
                   key={emp.name}
                   className="dropdown-item"
-                  onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
                 >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Employee'})
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                 </div>
               ))}
             </div>
@@ -799,6 +989,11 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
       );
     }
 
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
     if (fType === 'Date') {
       return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
     }
@@ -978,6 +1173,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
 export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -1005,9 +1201,9 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
   // Dynamic state for child table fields (fieldname -> array of row objects)
   const [tableData, setTableData] = useState({
     water_micro_details: [
-      { sample: 'Silver Ion Water', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-      { sample: 'BH (Bore Hole) Water', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-      { sample: '0.45um Filter Water', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' }
+      { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
+      { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
+      { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' }
     ]
   });
 
@@ -1115,14 +1311,17 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
           // Initial default rows if not populated
           newTableDataInit[tf.fieldname] = [
-            { sample: 'Silver Ion Water', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-            { sample: 'BH (Bore Hole) Water', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-            { sample: '0.45um Filter Water', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' }
+            { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
+            { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
+            { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' }
           ];
         }
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({
             ...newTableDataInit,
             ...prev
@@ -1211,63 +1410,73 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
     // Filter hidden fields
     if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (fieldtype === 'Link') {
-      const isEmployeeField =
-        options === 'Employee' ||
-        options === 'User' ||
-        !options ||
-        ['analyst', 'approved_by', 'manager', 'verified_by', 'prepared_by', 'analyst_name', 'approved_by_name'].includes(fieldname) ||
-        fieldname?.toLowerCase().includes('analyst') ||
-        fieldname?.toLowerCase().includes('approved') ||
-        fieldname?.toLowerCase().includes('manager') ||
-        fieldname?.toLowerCase().includes('verified') ||
-        fieldname?.toLowerCase().includes('by') ||
-        label?.toLowerCase().includes('analyst') ||
-        label?.toLowerCase().includes('approved') ||
-        label?.toLowerCase().includes('manager') ||
-        label?.toLowerCase().includes('verified') ||
-        label?.toLowerCase().includes('by');
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
 
+    if (fieldtype === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
       const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
 
-      if (isEmployeeField) {
-        return (
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={Boolean(reqd)}
-              value={value || ''}
-              onFocus={(e) => {
-                if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-              }}
-              onChange={(e) => {
-                onChange(e.target.value);
-                if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
-              }}
-              placeholder={`Search ${label || options}...`}
-            />
-            {showEmployeeDropdown && activeSearchField === sKey && employeeList && (
-              <div className="autocomplete-dropdown">
-                {employeeList.map(emp => (
-                  <div key={emp.name} className="dropdown-item" onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
-                    👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
-        <input
-          type="text"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder={`Select ${options || label}...`}
-        />
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={Boolean(reqd)}
+            value={value || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="dropdown-item"
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       );
     }
 
@@ -1295,13 +1504,15 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
       );
     }
 
-    if (fieldtype === 'Datetime') {
+    if (fieldtype === 'Datetime' || fieldtype === 'Date Time') {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       return (
         <input
           type="datetime-local"
           className="form-input"
           required={Boolean(reqd)}
-          value={value || ''}
+          value={value || localDT}
           onChange={e => onChange(e.target.value)}
         />
       );
@@ -1548,6 +1759,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
               </>
             )}
 
+            <FormFootnote doctype="Microbiologiocal Analysis Raw and Product Water" defaultFormNo="Form 11" formTitle="Raw and Product Water Analysis" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -1565,6 +1777,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
 export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -1705,6 +1918,9 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({
             ...newTableDataInit,
             ...prev
@@ -1797,30 +2013,71 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 
   const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const fType = field.fieldtype;
-    const isEmployeeLink = fType === 'Link' && (field.options === 'Employee' || ['approved_by', 'verified_by', 'analyst', 'h4_done_by', 'h36_done_by', 'h72_done_by', 'd5_done_by', 'd10_done_by', 'd30_done_by'].includes(field.fieldname));
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (isEmployeeLink) {
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
         <div style={{ position: 'relative' }}>
           <input
             type="text"
+            list={isEmpTarget ? undefined : datalistId}
             className="form-input"
-            required={field.reqd === 1}
+            required={reqd === 1}
             value={val || ''}
-            onFocus={(e) => handleSearchEmployees(e.target.value, searchFieldKey)}
-            onChange={(e) => { onChange(e.target.value); handleSearchEmployees(e.target.value, searchFieldKey); }}
-            placeholder={`Search ${field.label}...`}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
           />
-          {showEmployeeDropdown && activeSearchField === searchFieldKey && (
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
             <div className="autocomplete-dropdown">
               {employeeList.map(emp => (
                 <div
                   key={emp.name}
                   className="dropdown-item"
-                  onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
                 >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Employee'})
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                 </div>
               ))}
             </div>
@@ -1857,6 +2114,11 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
       );
     }
 
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
     if (fType === 'Date') {
       return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
     }
@@ -2019,6 +2281,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
               </div>
             )}
 
+            <FormFootnote doctype="Taste Test and Visual Inspection" defaultFormNo="Form 21" formTitle="Taste & Visual Inspection Log" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -2034,770 +2297,453 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
 
 export function LabReportViewerModal({ record, onClose, setEmailModal }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [fullDoc, setFullDoc] = useState(null);
+
+  // Map record type / doctype to Frappe DocType name
+  const getDocTypeName = (rec) => {
+    if (!rec) return '';
+    const idStr = String(rec.id || rec.name || '').trim();
+
+    // 1. Check ID Prefix first for 100% accurate DocType matching
+    if (idStr.startsWith('MARPW')) return 'Microbiologiocal Analysis Raw and Product Water';
+    if (idStr.startsWith('MARPM') || idStr.startsWith('MAPRM')) return 'Microbiological Analysis of Primary Raw Materials';
+    if (idStr.startsWith('CHEM') || idStr.startsWith('CT-')) return 'Chemical Test';
+    if (idStr.startsWith('TV-') || idStr.startsWith('TTVI')) return 'Taste Test and Visual Inspection';
+    if (idStr.startsWith('BOUR') || idStr.startsWith('BWCP')) return 'Bourbon Whiskey And Cola Product Tank Record';
+    if (idStr.startsWith('RUM') || idStr.startsWith('GSRC')) return 'Gold Stone Rum and Cola Tank Record';
+    if (idStr.startsWith('MA-') || idStr.startsWith('F83')) return 'Microbiological Analysis';
+    if (idStr.startsWith('SAN-') || idStr.startsWith('SR-')) return 'Sanitation Record';
+    if (idStr.startsWith('INC-') || idStr.startsWith('ITR')) return 'Incubator Temperature Record';
+    if (idStr.startsWith('WCC-') || idStr.startsWith('WC-')) return 'Weight Check Checklist';
+    if (idStr.startsWith('SILV-') || idStr.startsWith('SPL-')) return 'Silver Photometer Log';
+    if (idStr.startsWith('SEAM-') || idStr.startsWith('SCF-')) return 'Seam Checklist Form';
+    if (idStr.startsWith('SYR-') || idStr.startsWith('SPR-')) return 'Syrup Preparation Record';
+    if (idStr.startsWith('RSIL-')) return 'Retain Sample Inspection Log';
+    if (idStr.startsWith('CCL-')) return 'Customer Complaint Log';
+    if (idStr.startsWith('RR-')) return 'Recall Review';
+    if (idStr.startsWith('LSR-') || idStr.startsWith('LIB-') || idStr.startsWith('F72')) return 'Library Sample Record';
+    if (idStr.startsWith('ROT-') || idStr.startsWith('ROTRM-') || idStr.startsWith('F64')) return 'Rinse-Off Test for Raw Materials';
+    if (idStr.startsWith('MPR-') || idStr.startsWith('F13')) return 'Media Preparation Record';
+    if (idStr.startsWith('AUTO-') || idStr.startsWith('AR-') || idStr.startsWith('F12') || idStr.startsWith('F85')) return 'Autoclave Record';
+    if (idStr.startsWith('TOP-') || idStr.startsWith('TRAC-') || idStr.startsWith('F47')) return 'Traceability of products';
+    if (idStr.startsWith('IND-') || idStr.startsWith('INDUT-') || idStr.startsWith('F39')) return 'Induction';
+
+    // 2. Check explicit doctype property
+    if (rec.doctype) return rec.doctype;
+
+    // 3. Fallback to type string with exact word boundaries
+    const typeStr = String(rec.type || rec.reportType || '');
+
+    if (/\bForm 11\b/i.test(typeStr) || /Raw and Product Water/i.test(typeStr) || /Micro Water/i.test(typeStr)) {
+      return 'Microbiologiocal Analysis Raw and Product Water';
+    }
+    if (/\bForm 104\b/i.test(typeStr) || /Seam Checklist/i.test(typeStr)) {
+      return 'Seam Checklist Form';
+    }
+    if (/\bForm 103\b/i.test(typeStr) || /Silver Photometer/i.test(typeStr) || /Silver Log/i.test(typeStr)) {
+      return 'Silver Photometer Log';
+    }
+    if (/\bForm 100\b/i.test(typeStr) || /Retain Sample/i.test(typeStr) || /Production Record/i.test(typeStr)) {
+      return 'Retain Sample Inspection Log';
+    }
+    if (/\bForm 1\b/i.test(typeStr) || /Primary Raw/i.test(typeStr) || /Micro raw/i.test(typeStr)) {
+      return 'Microbiological Analysis of Primary Raw Materials';
+    }
+    if (/\bForm 9\b/i.test(typeStr) || /Chemical Test/i.test(typeStr) || /Chemical/i.test(typeStr)) {
+      return 'Chemical Test';
+    }
+    if (/\bForm 21\b/i.test(typeStr) || /Taste Test/i.test(typeStr) || /Taste\/Visual/i.test(typeStr)) {
+      return 'Taste Test and Visual Inspection';
+    }
+    if (/\bForm 35\b/i.test(typeStr) || /Gold Stone/i.test(typeStr)) {
+      return 'Gold Stone Rum and Cola Tank Record';
+    }
+    if (/\bForm 36\b/i.test(typeStr) || /Bourbon/i.test(typeStr)) {
+      return 'Bourbon Whiskey And Cola Product Tank Record';
+    }
+    if (/\bForm 83\b/i.test(typeStr) || /Microbiological Analysis/i.test(typeStr)) {
+      return 'Microbiological Analysis';
+    }
+    if (/\bForm 84\b/i.test(typeStr) || /Sanitation Record/i.test(typeStr)) {
+      return 'Sanitation Record';
+    }
+    if (/\bForm 86\b/i.test(typeStr) || /Incubator Temperature/i.test(typeStr)) {
+      return 'Incubator Temperature Record';
+    }
+    if (/\bForm 88\b/i.test(typeStr) || /Weight Check/i.test(typeStr)) {
+      return 'Weight Check Checklist';
+    }
+    if (/\bForm 34\b/i.test(typeStr) || /Syrup Preparation/i.test(typeStr)) {
+      return 'Syrup Preparation Record';
+    }
+    if (/\bForm 69\b/i.test(typeStr) || /Customer Complaint/i.test(typeStr)) {
+      return 'Customer Complaint Log';
+    }
+    if (/\bForm 70\b/i.test(typeStr) || /Recall Review/i.test(typeStr)) {
+      return 'Recall Review';
+    }
+    if (/\bForm 72\b/i.test(typeStr) || /Library Sample/i.test(typeStr)) {
+      return 'Library Sample Record';
+    }
+    if (/\bForm 64\b/i.test(typeStr) || /Rinse-Off Test/i.test(typeStr) || /Rinse Off/i.test(typeStr)) {
+      return 'Rinse-Off Test for Raw Materials';
+    }
+    if (/\bForm 13\b/i.test(typeStr) || /Media Preparation/i.test(typeStr)) {
+      return 'Media Preparation Record';
+    }
+    if (/\bForm 12\b/i.test(typeStr) || /\bForm 85\b/i.test(typeStr) || /Autoclave/i.test(typeStr)) {
+      return 'Autoclave Record';
+    }
+    if (/\bForm 47\b/i.test(typeStr) || /Traceability/i.test(typeStr)) {
+      return 'Traceability of products';
+    }
+    if (/\bForm 39\b/i.test(typeStr) || /Induction/i.test(typeStr)) {
+      return 'Induction';
+    }
+
+    return typeStr;
+  };
+
+  const targetDocType = getDocTypeName(record);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMetaAndDoc() {
+      if (!targetDocType) {
+        setLoadingMeta(false);
+        return;
+      }
+      try {
+        setLoadingMeta(true);
+
+        const docId = record?.id || record?.name;
+        let fetchedDoc = null;
+        if (docId) {
+          try {
+            const docRes = await frappe.makeRequest('GET', targetDocType, docId);
+            if (docRes?.data) fetchedDoc = docRes.data;
+          } catch (e) {
+            console.warn(`Could not fetch live doc ${docId} for ${targetDocType}:`, e);
+          }
+        }
+        if (isMounted) {
+          setFullDoc(fetchedDoc || record);
+        }
+
+        const doctypeMeta = await frappe.getDocTypeMeta(targetDocType);
+        if (isMounted && doctypeMeta) {
+          setMeta(doctypeMeta);
+
+          const tableFields = (doctypeMeta?.fields || []).filter(f => f.fieldtype === 'Table' && f.options);
+          const childMap = {};
+          for (const tf of tableFields) {
+            try {
+              const cm = await frappe.getDocTypeMeta(tf.options);
+              if (cm) childMap[tf.options] = cm.fields || [];
+            } catch (err) {
+              console.warn(`Could not load child meta for ${tf.options}:`, err);
+            }
+          }
+          if (isMounted) {
+            setChildMetas(childMap);
+          }
+        }
+      } catch (err) {
+        console.error(`Error loading meta/doc for viewer ${targetDocType}:`, err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    loadMetaAndDoc();
+  }, [targetDocType, record?.id, record?.name]);
+
+  const activeDoc = fullDoc || record || {};
+
+  // Helper to format field value
+  const getFieldValue = (field) => {
+    if (!activeDoc) return '-';
+    const fn = field.fieldname;
+    if (activeDoc[fn] !== undefined && activeDoc[fn] !== null && activeDoc[fn] !== '') {
+      return activeDoc[fn];
+    }
+    // Aliases
+    if (fn === 'date' || fn === 'posting_date' || fn === 'date_of_analysis' || fn === 'sanitation_date' || fn === 'form_date' || fn === 'date_of_product') {
+      return activeDoc.date || activeDoc.posting_date || activeDoc.date_of_analysis || activeDoc.sanitation_date || activeDoc.form_date || activeDoc.date_of_product || '-';
+    }
+    if (fn === 'analyst' || fn === 'recorded_by' || fn === 'operator' || fn === 'analyst_name') {
+      return activeDoc.analyst || activeDoc.analyst_name || activeDoc.recordedBy || activeDoc.operator || activeDoc.cleaner || activeDoc.checked_by || '-';
+    }
+    if (fn === 'verified_by' || fn === 'approved_by' || fn === 'supervisor' || fn === 'manager') {
+      return activeDoc.verified_by || activeDoc.verifiedBy || activeDoc.approved_by || activeDoc.approvedBy || activeDoc.supervisor || activeDoc.manager || '-';
+    }
+    if (fn === 'comments' || fn === 'remarks' || fn === 'general_observations') {
+      return activeDoc.comments || activeDoc.remarks || activeDoc.general_observations || activeDoc.overallComments || '-';
+    }
+    if (fn === 'market_area' || fn === 'market') {
+      return activeDoc.market_area || activeDoc.market || '-';
+    }
+    if (fn === 'product_size' || fn === 'product_size_l') {
+      return activeDoc.product_size || activeDoc.productSize || '-';
+    }
+    if (fn === 'compact_dry_ec_batch' || fn === 'compact_dry_ec') {
+      return activeDoc.compact_dry_ec_batch || activeDoc.compact_dry_ec || activeDoc.compactDryEC || '-';
+    }
+    if (fn === 'pipette_lot_no' || fn === 'pipette_lot') {
+      return activeDoc.pipette_lot_no || activeDoc.pipette_lot || activeDoc.pipetteLot || '-';
+    }
+    if (fn === 'vessel_number' || fn === 'vessel_lot_no' || fn === 'vessel') {
+      return activeDoc.vessel_number || activeDoc.vessel_lot_no || activeDoc.vessel || '-';
+    }
+    if (fn === 'spc_agar_prep_date' || fn === 'spc_agar_date') {
+      return activeDoc.spc_agar_prep_date || activeDoc.spc_agar_date || activeDoc.spcAgarDate || '-';
+    }
+    if (fn === 'incubator_no' || fn === 'incubator_no_tcc_and_hpc') {
+      return activeDoc.incubator_no || activeDoc.incubator_no_tcc_and_hpc || activeDoc.incubatorNo || '-';
+    }
+
+    // Convert snake_case to camelCase check
+    const camelKey = fn.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+    if (activeDoc[camelKey] !== undefined && activeDoc[camelKey] !== null && activeDoc[camelKey] !== '') {
+      return activeDoc[camelKey];
+    }
+
+    return '-';
+  };
+
+  // Helper to get rows for table fields
+  const getTableRows = (tf) => {
+    if (!activeDoc) return [];
+    const fn = tf.fieldname;
+    if (Array.isArray(activeDoc[fn]) && activeDoc[fn].length > 0) return activeDoc[fn];
+
+    // Alias map for table fields
+    if (fn === 'raw_materials_details' || fn === 'water_micro_details' || fn === 'microbiological_analysis_details' || fn === 'sanitation_details') {
+      return activeDoc.water_micro_details || activeDoc.raw_materials_details || activeDoc.microbiological_analysis_details || activeDoc.sanitation_details || activeDoc.sampleRows || activeDoc.rows || [];
+    }
+    if (fn === 'taste_test_details') return activeDoc.taste_test_details || activeDoc.tasteRows || [];
+    if (fn === 'particle_count_details') return activeDoc.particle_count_details || activeDoc.particleRows || [];
+    if (fn === 'seam_checks') return activeDoc.seam_checks || activeDoc.seam_rows || [];
+    if (fn === 'table_wahj' || fn === 'incubator_checks') return activeDoc.table_wahj || activeDoc.incubator_checks || activeDoc.rows || [];
+
+    if (Array.isArray(activeDoc.rows)) return activeDoc.rows;
+    if (Array.isArray(activeDoc.sampleRows)) return activeDoc.sampleRows;
+    if (Array.isArray(activeDoc.ingredients)) return activeDoc.ingredients;
+
+    return [];
+  };
+
+  // Group fields by Section Break
+  const buildSections = () => {
+    const fields = meta?.fields || [];
+    const sections = [];
+    let currentSection = {
+      title: 'General Information',
+      description: '',
+      standardFields: [],
+      tableFields: []
+    };
+
+    fields.forEach(f => {
+      if (f.hidden === 1 || f.fieldname === 'amended_from' || f.fieldname === 'docstatus' || f.fieldname === 'idx') return;
+
+      if (f.fieldtype === 'Section Break') {
+        if (currentSection.standardFields.length > 0 || currentSection.tableFields.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = {
+          title: f.label || 'Section Details',
+          description: f.description || '',
+          standardFields: [],
+          tableFields: []
+        };
+      } else if (f.fieldtype === 'Column Break' || f.fieldtype === 'Fold') {
+        // Layout divider inside section
+      } else if (f.fieldtype === 'Table') {
+        currentSection.tableFields.push(f);
+      } else {
+        currentSection.standardFields.push(f);
+      }
+    });
+
+    if (currentSection.standardFields.length > 0 || currentSection.tableFields.length > 0) {
+      sections.push(currentSection);
+    }
+
+    return sections;
+  };
+
+  const sections = meta ? buildSections() : [];
+  const sig = activeDoc?.signature || activeDoc?.analyst_signature || activeDoc?.operator_signature;
+
   return (
     <div className="modal-backdrop">
-      <div className="modal-panel print-report-container" style={{ width: '880px', maxWidth: '95%' }}>
+      <div className="modal-panel print-report-container" style={{ width: '900px', maxWidth: '95%' }}>
         <div className="modal-header">
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Water (Fiji) Limited</h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Archived QC Laboratory Document Details ({record.id})</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Archived QC Laboratory Document ({targetDocType || activeDoc?.type}) - ID: {activeDoc?.id || activeDoc?.name}
+            </span>
           </div>
           <button className="no-print" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
         </div>
-        <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+        <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Header Summary Card */}
           <div style={{ padding: '12px 16px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>QC REPORT TYPE</span>
-              <strong style={{ fontSize: '14px', color: 'var(--accent)' }}>{record.type}</strong>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>QC REPORT TYPE / DOCTYPE</span>
+              <strong style={{ fontSize: '14px', color: 'var(--accent)' }}>{targetDocType || activeDoc?.type}</strong>
             </div>
             <div>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>LOGGED TIMESTAMP</span>
-              <strong>{record.timestamp}</strong>
+              <strong>{activeDoc?.timestamp || activeDoc?.creation || activeDoc?.modified || new Date().toISOString().substring(0, 10)}</strong>
             </div>
           </div>
 
-          {/* Form 1 raw Micro */}
-          {(record.type === 'Form 1 (Micro raw)' || record.doctype === 'Microbiological Analysis of Primary Raw Materials' || record.type?.includes('Form 1')) && (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                <div><strong>Analysis Date:</strong> {record.date}</div>
-                <div><strong>Analyst Name:</strong> {record.analyst}</div>
-                <div><strong>Operations Manager:</strong> {record.manager || record.verified_by || '-'}</div>
-                <div><strong>Preform Lot:</strong> {record.preformLotNo || record.preform_lot_no || '-'}</div>
-                <div><strong>Closures Lot:</strong> {record.closuresLotNo || record.closures_lot_no || '-'}</div>
-                <div><strong>BIB Inner Bag:</strong> {record.bibInnerBag || record.bib_inner_bag || '-'}</div>
+          {loadingMeta ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              ⏳ Fetching DocType meta and section structure from ERPNext...
+            </div>
+          ) : sections.length > 0 ? (
+            sections.map((sec, sIdx) => (
+              <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px', backgroundColor: '#ffffff' }}>
+                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: 'var(--accent)', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                  📌 {sec.title}
+                </h4>
+                {sec.description && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sec.description}</div>}
+
+                {/* Standard Fields Grid */}
+                {sec.standardFields.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+                    {sec.standardFields.map(field => {
+                      const val = getFieldValue(field);
+                      return (
+                        <div key={field.fieldname} style={{ padding: '6px 10px', borderRadius: '4px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '2px' }}>
+                            {field.label || field.fieldname}
+                          </span>
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a', wordBreak: 'break-word' }}>
+                            {field.fieldtype === 'Check' ? (val ? 'Yes (✓)' : 'No (✗)') : String(val)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Table Fields */}
+                {sec.tableFields.map(tf => {
+                  const rows = getTableRows(tf);
+                  const childDoctype = tf.options;
+                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'docstatus' && cf.hidden !== 1);
+
+                  // Headers
+                  let headers = [];
+                  if (childFields.length > 0) {
+                    headers = childFields.map(cf => ({ key: cf.fieldname, label: cf.label }));
+                  } else if (rows.length > 0) {
+                    headers = Object.keys(rows[0]).filter(k => k !== 'name' && k !== 'owner' && k !== 'parent' && k !== 'parentfield' && k !== 'parenttype' && k !== 'docstatus' && k !== 'idx').map(k => ({ key: k, label: k.replace(/_/g, ' ').toUpperCase() }));
+                  }
+
+                  return (
+                    <div key={tf.fieldname} style={{ marginTop: '8px' }}>
+                      <h5 style={{ fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                        📋 {tf.label || tf.fieldname}
+                      </h5>
+                      {rows.length === 0 ? (
+                        <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', padding: '8px', border: '1px dashed #cbd5e1', borderRadius: '4px' }}>
+                          No table rows recorded.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f1f5f9' }}>
+                                <th style={{ padding: '6px', textAlign: 'center', width: '35px' }}>#</th>
+                                {headers.map(h => (
+                                  <th key={h.key} style={{ padding: '6px' }}>{h.label}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((row, rIdx) => (
+                                <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                  <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700', color: '#64748b' }}>{rIdx + 1}</td>
+                                  {headers.map(h => {
+                                    const cellVal = row[h.key];
+                                    const strVal = cellVal !== undefined && cellVal !== null ? String(cellVal) : '-';
+                                    const isPass = strVal.toLowerCase().includes('pass') || strVal.toLowerCase().includes('absent') || strVal.toLowerCase().includes('satisfactory');
+                                    const isFail = strVal.toLowerCase().includes('fail') || strVal.toLowerCase().includes('present') || strVal.toLowerCase().includes('unsatisfactory');
+
+                                    return (
+                                      <td key={h.key} style={{ padding: '6px' }}>
+                                        {isPass ? (
+                                          <span style={{ color: 'var(--success)', fontWeight: '600' }}>{strVal}</span>
+                                        ) : isFail ? (
+                                          <span style={{ color: 'var(--danger)', fontWeight: '600' }}>{strVal}</span>
+                                        ) : (
+                                          strVal
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <h4 style={{ color: 'var(--accent)', marginBottom: '8px' }}>Microbiological Cultivation Log</h4>
-              <table className="custom-table" style={{ width: '100%' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6' }}>
-                    <th style={{ padding: '6px' }}>Sample Description</th>
-                    <th style={{ padding: '6px' }}>TCC Status</th>
-                    <th style={{ padding: '6px' }}>E-Coli Status</th>
-                    <th style={{ padding: '6px' }}>Row Analyst</th>
-                    <th style={{ padding: '6px' }}>Incubation In</th>
-                    <th style={{ padding: '6px' }}>Incubation Out</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(record.sampleRows || record.raw_materials_details || []).map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '6px', fontWeight: '700' }}>{row.description}</td>
-                      <td style={{ padding: '6px', color: row.tcc === 'Absent' ? 'var(--success)' : 'var(--danger)' }}>{row.tcc}</td>
-                      <td style={{ padding: '6px', color: row.ecoli === 'Absent' ? 'var(--success)' : 'var(--danger)' }}>{row.ecoli}</td>
-                      <td style={{ padding: '6px' }}>{row.analyst || '-'}</td>
-                      <td style={{ padding: '6px' }}>{row.inDate || row.in_date} {row.inTime || row.in_time}</td>
-                      <td style={{ padding: '6px' }}>{row.outDate || row.out_date} {row.outTime || row.out_time}</td>
-                    </tr>
+            ))
+          ) : (
+            /* Fallback generic view if meta fetch yielded no fields */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+                {Object.entries(record || {})
+                  .filter(([k, v]) => typeof v !== 'object' && k !== 'id' && k !== 'type' && k !== 'timestamp')
+                  .map(([k, v]) => (
+                    <div key={k} style={{ padding: '6px 10px', borderRadius: '4px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '10px', textTransform: 'uppercase', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '2px' }}>
+                        {k.replace(/_/g, ' ')}
+                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a' }}>{String(v)}</span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+              </div>
             </div>
           )}
 
-          {/* Form 9 Chemical */}
-          {(record.type === 'Form 9 (Chemical)' || record.doctype === 'Chemical Test' || record.type?.includes('Chemical')) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                <div><strong>Date Logged:</strong> {record.date}</div>
-                <div><strong>Analyst:</strong> {record.analyst}</div>
-                <div><strong>Verified By:</strong> {record.verifiedBy}</div>
+          {/* Overall Comments Card */}
+          {(record?.overallComments || record?.comments || record?.remarks || record?.general_observations) && (
+            <div style={{ padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: '#f9fafb' }}>
+              <strong style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>OVERALL COMMENTS / OBSERVATIONS</strong>
+              <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-heading)' }}>
+                {record?.overallComments || record?.comments || record?.remarks || record?.general_observations}
               </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Raw Water Levels</h4>
-                  <div><strong>pH level:</strong> {record.rawPh} (at {record.rawPhTime})</div>
-                  <div><strong>TDS level:</strong> {record.rawTds} ppm (at {record.rawTdsTime})</div>
-                  <div style={{ marginTop: '8px' }}><strong>pH After CIP:</strong> {record.cipPh} (at {record.cipTime})</div>
-                </div>
-                <div>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Changeover Tests</h4>
-                  <div><strong>RTD to CSD Alcohol %:</strong> {record.alcoholCheck}%</div>
-                  <div><strong>RTD to Water Brix:</strong> {record.brixCheck}</div>
-                </div>
-              </div>
-
-              <div>
-                <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>3. Product Water PET / BIB</h4>
-                <table className="custom-table" style={{ width: '100%', fontSize: '11px', marginBottom: '8px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f3f4f6' }}>
-                      <th>Line / Row</th>
-                      <th>pH Level / Time</th>
-                      <th>TDS Level (ppm) / Time</th>
-                      <th>Taste & Odour Check</th>
-                      <th>Visual Particle Check</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td><strong>Row 1 (PET)</strong></td>
-                      <td>{record.prodPh1 || record.prodPh} (at {record.prodPhTime1 || record.prodPhTime})</td>
-                      <td>{record.prodTds1 || record.prodTds} ppm (at {record.prodTdsTime1 || record.prodTdsTime})</td>
-                      <td>{record.tasteCheck1 || record.tasteCheck} (at {record.tasteTime1 || record.tasteTime})</td>
-                      <td>{record.particleCheck1 || record.particleCheck} (at {record.particleTime1 || record.particleTime})</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td><strong>Row 2 (BIB)</strong></td>
-                      <td>{record.prodPh2 || record.prodPh || '-'} (at {record.prodPhTime2 || record.prodPhTime || '-'})</td>
-                      <td>{record.prodTds2 || record.prodTds || '-'} ppm (at {record.prodTdsTime2 || record.prodTdsTime || '-'})</td>
-                      <td>{record.tasteCheck2 || record.tasteCheck || '-'} (at {record.tasteTime2 || record.tasteTime || '-'})</td>
-                      <td>{record.particleCheck2 || record.particleCheck || '-'} (at {record.particleTime2 || record.particleTime || '-'})</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div>
-                <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Reagent & Instrument Checks</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                  <div><strong>pH 4.0:</strong> {record.buffer4}</div>
-                  <div><strong>pH 7.0:</strong> {record.buffer7}</div>
-                  <div><strong>pH 10.0:</strong> {record.buffer10}</div>
-                  <div><strong>Cond. 1413:</strong> {record.cond1413}</div>
-                  <div><strong>Standard:</strong> {record.checkStandard}</div>
-                </div>
-              </div>
-
-              {record.comments && (
-                <div>
-                  <strong>Comments:</strong> {record.comments}
-                </div>
-              )}
             </div>
           )}
 
-          {/* Form 11 Water Micro */}
-          {(record.type === 'Form 11 (Micro water)' || record.doctype?.includes('Water') || record.type?.includes('11')) && (() => {
-            const rows = record.sampleRows || record.water_micro_details || record.raw_materials_details || (Array.isArray(record.sampleRows) ? record.sampleRows : []);
-            const sig = record.signature || record.analyst_signature;
-            return (
-              <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                  <div><strong>Analysis Date:</strong> {record.date_of_analysis || record.date}</div>
-                  <div><strong>Analyst Name:</strong> {record.analyst}</div>
-                  <div><strong>Approved By:</strong> {record.approved_by || record.approvedBy || '-'}</div>
-                  <div><strong>Market Area:</strong> {record.market_area || record.market}</div>
-                  <div><strong>Product Size:</strong> {record.product_size || record.productSize}</div>
-                  <div><strong>Vessel / Lot:</strong> {record.vessel_number || record.vessel}</div>
-                  <div><strong>Compact Dry EC Batch:</strong> {record.compact_dry_ec_batch || record.compactDryEC}</div>
-                  <div><strong>Pipette Lot:</strong> {record.pipette_lot_no || record.pipetteLot}</div>
-                  <div><strong>SPC Agar Date:</strong> {record.spc_agar_prep_date || record.spcAgarDate}</div>
-                  <div><strong>Incubator ID:</strong> {record.incubator_no || record.incubatorNo}</div>
-                  <div><strong>Incubator Test Type:</strong> {record.incubator_test_type || record.incubatorTestType}</div>
-                </div>
-                <h4 style={{ color: 'var(--accent)', marginBottom: '8px' }}>Microbiological Cultivation Results</h4>
-                <table className="custom-table" style={{ width: '100%' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f3f4f6' }}>
-                      <th style={{ padding: '6px' }}>Sample Source</th>
-                      <th style={{ padding: '6px' }}>TCC</th>
-                      <th style={{ padding: '6px' }}>E-Coli</th>
-                      <th style={{ padding: '6px' }}>HPC (Count 1)</th>
-                      <th style={{ padding: '6px' }}>HPC (Count 2)</th>
-                      <th style={{ padding: '6px' }}>Row Analyst</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '6px', fontWeight: '700' }}>{row.sample || row.sample_source || row.description}</td>
-                        <td style={{ padding: '6px' }}>{row.tcc}</td>
-                        <td style={{ padding: '6px' }}>{row.ecoli}</td>
-                        <td style={{ padding: '6px', color: Number(row.hpc1) > 100 ? 'var(--danger)' : '' }}>{row.hpc1} cfu</td>
-                        <td style={{ padding: '6px', color: Number(row.hpc2) > 100 ? 'var(--danger)' : '' }}>{row.hpc2} cfu</td>
-                        <td style={{ padding: '6px' }}>{row.analyst || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {(record.general_observations || record.comments) && (
-                  <div style={{ marginTop: '12px' }}>
-                    <strong>General Observations:</strong> {record.general_observations || record.comments}
-                  </div>
-                )}
-                {sig && (
-                  <div style={{ marginTop: '16px', borderTop: '1px dashed var(--border-color)', paddingTop: '12px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✍️ Signature Verification:</span>
-                    <div style={{ fontFamily: '"Caveat", cursive', fontSize: '20px', color: '#1e3a8a', marginTop: '2px' }}>
-                      {sig}
-                    </div>
-                  </div>
-                )}
+          {/* Signature Verification */}
+          {sig && (
+            <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '12px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✍️ Signature Verification:</span>
+              <div style={{ fontFamily: '"Caveat", cursive', fontSize: '20px', color: '#1e3a8a', marginTop: '2px' }}>
+                {sig}
               </div>
-            );
-          })()}
-
-          {/* Form 83 Microbiological Analysis */}
-          {(record.type?.includes('83') || record.doctype === 'Microbiological Analysis' || record.type === 'Form 83 (Microbiological Analysis)') && (() => {
-            const rows = record.microbiological_analysis_details || record.sampleRows || [];
-            const sig = record.signature || record.analyst_signature;
-            return (
-              <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                  <div><strong>Date of Analysis:</strong> {record.date_of_analysis || record.date}</div>
-                  <div><strong>Analyst Name:</strong> {record.analyst || '-'}</div>
-                  <div><strong>Approved By:</strong> {record.approved_by || record.approvedBy || '-'}</div>
-                  <div><strong>Sample Type:</strong> {record.sample_type || '-'}</div>
-                  <div><strong>Batch / Lot No:</strong> {record.batch_no || '-'}</div>
-                </div>
-                {rows.length > 0 && (
-                  <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
-                    <h4 style={{ color: 'var(--accent)', marginBottom: '8px' }}>Microbiological Analysis Details</h4>
-                    <table className="custom-table" style={{ width: '100%' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ padding: '6px' }}>Sample Description</th>
-                          <th style={{ padding: '6px' }}>TCC</th>
-                          <th style={{ padding: '6px' }}>E-Coli</th>
-                          <th style={{ padding: '6px' }}>HPC Count</th>
-                          <th style={{ padding: '6px' }}>Result</th>
-                          <th style={{ padding: '6px' }}>Tested By</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '6px', fontWeight: '700' }}>{row.sample_name || row.sample || '-'}</td>
-                            <td style={{ padding: '6px' }}>{row.tcc || '-'}</td>
-                            <td style={{ padding: '6px' }}>{row.ecoli || '-'}</td>
-                            <td style={{ padding: '6px' }}>{row.hpc_count || '-'}</td>
-                            <td style={{ padding: '6px' }}>
-                              <span className={`badge ${String(row.result).toLowerCase().includes('pass') ? 'badge-completed' : 'badge-failed'}`} style={{ fontSize: '10px' }}>
-                                {row.result || 'Pass'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '6px' }}>{row.analyst || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {(record.remarks || record.comments) && (
-                  <div style={{ marginTop: '12px' }}>
-                    <strong>General Remarks:</strong> {record.remarks || record.comments}
-                  </div>
-                )}
-                {sig && (
-                  <div style={{ marginTop: '16px', borderTop: '1px dashed var(--border-color)', paddingTop: '12px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✍️ Signature Verification:</span>
-                    <div style={{ fontFamily: '"Caveat", cursive', fontSize: '20px', color: '#1e3a8a', marginTop: '2px' }}>
-                      {sig}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Form 84 Sanitation */}
-          {(record.type?.includes('84') || record.doctype === 'Sanitation Record' || record.type === 'Form 84 (Sanitation)') && (() => {
-            const rows = record.sanitation_details || record.sampleRows || [];
-            const sig = record.signature || record.operator_signature;
-            return (
-              <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                  <div><strong>Sanitation Date:</strong> {record.sanitation_date || record.date}</div>
-                  <div><strong>Operator / Performed By:</strong> {record.operator || record.analyst || '-'}</div>
-                  <div><strong>Supervisor / Verified By:</strong> {record.supervisor || record.approvedBy || '-'}</div>
-                  <div><strong>Sanitation Type:</strong> {record.sanitation_type || '-'}</div>
-                  <div><strong>Line / Section:</strong> {record.line_number || '-'}</div>
-                  <div><strong>Chemical Used:</strong> {record.chemical_used || '-'}</div>
-                  <div><strong>Contact Time:</strong> {record.contact_time_mins ? `${record.contact_time_mins} mins` : '-'}</div>
-                </div>
-                {rows.length > 0 && (
-                  <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
-                    <h4 style={{ color: 'var(--accent)', marginBottom: '8px' }}>Sanitation Checklist & Items</h4>
-                    <table className="custom-table" style={{ width: '100%' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ padding: '6px' }}>Area / Equipment</th>
-                          <th style={{ padding: '6px' }}>Cleaning Method</th>
-                          <th style={{ padding: '6px' }}>Solution Temp (°C)</th>
-                          <th style={{ padding: '6px' }}>Status</th>
-                          <th style={{ padding: '6px' }}>Verified By</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '6px', fontWeight: '700' }}>{row.area_equipment || '-'}</td>
-                            <td style={{ padding: '6px' }}>{row.method || '-'}</td>
-                            <td style={{ padding: '6px' }}>{row.temp_c || '-'}</td>
-                            <td style={{ padding: '6px' }}>
-                              <span className={`badge ${String(row.status).toLowerCase().includes('sat') ? 'badge-completed' : 'badge-failed'}`} style={{ fontSize: '10px' }}>
-                                {row.status || 'Satisfactory'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '6px' }}>{row.verified_by || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {(record.remarks || record.comments) && (
-                  <div style={{ marginTop: '12px' }}>
-                    <strong>Observations / Remarks:</strong> {record.remarks || record.comments}
-                  </div>
-                )}
-                {sig && (
-                  <div style={{ marginTop: '16px', borderTop: '1px dashed var(--border-color)', paddingTop: '12px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✍️ Signature Verification:</span>
-                    <div style={{ fontFamily: '"Caveat", cursive', fontSize: '20px', color: '#1e3a8a', marginTop: '2px' }}>
-                      {sig}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Form 21 Taste / Visual */}
-          {(record.type === 'Form 21 (Taste/Visual)' || record.type === 'Taste Test and Visual Inspection' || record.type?.includes('21')) && (() => {
-            const tasteRows = record.taste_test_details || record.tasteRows || [];
-            const particleRows = record.particle_count_details || record.particleRows || [];
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  <div><strong>Logged Date:</strong> {record.form_date || record.date}</div>
-                  <div><strong>Approved / Verified By:</strong> {record.approved_by || record.verifiedBy || '-'}</div>
-                  <div><strong>Revision No:</strong> {record.revision_no || '01'}</div>
-                </div>
-
-                {tasteRows.length > 0 && (
-                  <div>
-                    <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Part A: Taste Test Details (4h, 36h, 72h)</h4>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ padding: '6px' }}>Sample Date</th>
-                          <th style={{ padding: '6px' }}>Size</th>
-                          <th style={{ padding: '6px' }}>4H Taste</th>
-                          <th style={{ padding: '6px' }}>4H Done By</th>
-                          <th style={{ padding: '6px' }}>36H Taste</th>
-                          <th style={{ padding: '6px' }}>36H Done By</th>
-                          <th style={{ padding: '6px' }}>72H Taste</th>
-                          <th style={{ padding: '6px' }}>72H Done By</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tasteRows.map((row, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '6px' }}>{row.sample_date || row.sampleDate}</td>
-                            <td style={{ padding: '6px' }}>{row.sample_size || row.sampleSize}</td>
-                            <td style={{ padding: '6px' }}>{row.h4_taste}</td>
-                            <td style={{ padding: '6px' }}>{row.h4_done_by || row.h4_doneBy}</td>
-                            <td style={{ padding: '6px' }}>{row.h36_taste}</td>
-                            <td style={{ padding: '6px' }}>{row.h36_done_by || row.h36_doneBy}</td>
-                            <td style={{ padding: '6px' }}>{row.h72_taste}</td>
-                            <td style={{ padding: '6px' }}>{row.h72_done_by || row.h72_doneBy}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {particleRows.length > 0 && (
-                  <div>
-                    <h4 style={{ color: 'var(--accent)', marginBottom: '6px' }}>Part B: Particle Count Details (5d, 10d, 30d)</h4>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ padding: '6px' }}>Sample Date</th>
-                          <th style={{ padding: '6px' }}>Size</th>
-                          <th style={{ padding: '6px' }}>5D Particles</th>
-                          <th style={{ padding: '6px' }}>5D Done By</th>
-                          <th style={{ padding: '6px' }}>10D Particles</th>
-                          <th style={{ padding: '6px' }}>10D Done By</th>
-                          <th style={{ padding: '6px' }}>30D Particles</th>
-                          <th style={{ padding: '6px' }}>30D Done By</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {particleRows.map((row, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '6px' }}>{row.sample_date || row.sampleDate}</td>
-                            <td style={{ padding: '6px' }}>{row.sample_size || row.sampleSize}</td>
-                            <td style={{ padding: '6px' }}>{row.d5_particle}</td>
-                            <td style={{ padding: '6px' }}>{row.d5_done_by || row.d5_doneBy}</td>
-                            <td style={{ padding: '6px' }}>{row.d10_particle}</td>
-                            <td style={{ padding: '6px' }}>{row.d10_done_by || row.d10_doneBy}</td>
-                            <td style={{ padding: '6px' }}>{row.d30_particle}</td>
-                            <td style={{ padding: '6px' }}>{row.d30_done_by || row.d30_doneBy}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Form 36 Bourbon Whiskey & Cola */}
-          {record.type === 'Form 36 (Bourbon/Cola)' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                <div><strong>Log Date:</strong> {record.date}</div>
-                <div><strong>Tank No:</strong> {record.tankNo}</div>
-                <div><strong>Volume:</strong> {record.volume}</div>
-                <div><strong>Prepared By:</strong> {record.preparedBy}</div>
-                <div><strong>Verified By:</strong> {record.verifiedBy}</div>
-                <div><strong>Lab Alc %:</strong> {record.labAlc}% (Analysed: {record.analysedBy})</div>
-                <div><strong>Tank pH:</strong> {record.tankPh}</div>
-                <div><strong>Finished pH:</strong> {record.finishedPh}</div>
-              </div>
-
-              <h4 style={{ color: 'var(--accent)', marginBottom: '4px' }}>Batch Recipe Checklist</h4>
-              <table className="custom-table" style={{ width: '100%' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6' }}>
-                    <th>Ingredient Description</th>
-                    <th>Standard Qty (2000L)</th>
-                    <th>Lot / Batch No.</th>
-                    <th>Added Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Bourbon</td>
-                    <td>42Kg (46L)</td>
-                    <td>{record.bourbonLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Ethanol</td>
-                    <td>125Kg (158.5L)</td>
-                    <td>{record.ethanolLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Aged Cola Flavour</td>
-                    <td>2.0Kg</td>
-                    <td>{record.agedColaLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Cola Flavour</td>
-                    <td>3.6Kg</td>
-                    <td>{record.colaFlavourLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Cola Acidulant</td>
-                    <td>1.0Kg</td>
-                    <td>{record.acidulantLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Sodium Benzoate</td>
-                    <td>0.4Kg</td>
-                    <td>{record.benzoateLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td>Sugar</td>
-                    <td>150Kg</td>
-                    <td>{record.sugarLot}</td>
-                    <td>✅ Added</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                <div><strong>Brix % Mixer:</strong> {record.brixMixer}% (Taken by: {record.brixMixerBy})</div>
-                <div><strong>Brix % Product:</strong> {record.brixProduct}% (Taken by: {record.brixProductBy})</div>
-                <div><strong>Gas Level:</strong> {record.gasLevel}</div>
-              </div>
-
-              {record.comments && (
-                <div><strong>Comments:</strong> {record.comments}</div>
-              )}
             </div>
           )}
-
-          {/* Form 35 Gold Stone Rum & Cola */}
-          {(record.type === 'Form 35: Gold Stone Rum & Cola' || record.type === 'Gold Stone Rum and Cola' || record.type?.includes('35')) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                <div><strong>Log Date:</strong> {record.date}</div>
-                <div><strong>Tank No:</strong> {record.tankNo}</div>
-                <div><strong>Volume:</strong> {record.volume}</div>
-                <div><strong>Prepared By:</strong> {record.preparedBy}</div>
-                <div><strong>Verified By:</strong> {record.verifiedBy}</div>
-                <div><strong>Lab Alc %:</strong> {record.labAlc}% (Analysed: {record.analysedBy})</div>
-                <div><strong>Tank pH:</strong> {record.tankPh}</div>
-                <div><strong>Finished pH:</strong> {record.finishedPh}</div>
-              </div>
-
-              <h4 style={{ color: 'var(--accent)', marginBottom: '4px' }}>Ingredients Checklist</h4>
-              <table className="custom-table" style={{ width: '100%', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6' }}>
-                    <th style={{ width: '40px' }}>No.</th>
-                    <th>Item</th>
-                    <th>Standard Qty</th>
-                    <th>UOM</th>
-                    <th>Lot/Batch No</th>
-                    <th>Added Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(record.ingredients || []).map((ing, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ textAlign: 'center', fontWeight: '600' }}>{idx + 1}</td>
-                      <td><strong>{ing.item}</strong></td>
-                      <td>{ing.standardQty}</td>
-                      <td>{ing.uom}</td>
-                      <td>{ing.lotBatchNo || '-'}</td>
-                      <td>{ing.addedQty}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                <div><strong>Sugar Required (Kg):</strong> {record.sugarRequired}</div>
-                <div><strong>Sugar Added (Kg):</strong> {record.sugarAdded}</div>
-                <div><strong>Brix % Mixer:</strong> {record.brixMixer}%</div>
-              </div>
-
-              {record.comments && (
-                <div><strong>Comments:</strong> {record.comments}</div>
-              )}
-            </div>
-          )}
-
-          {/* Form 104 Seam Checklist Form */}
-          {(record.type === 'Form 104 (Seam Checklist Form)' || record.type === 'Form 104: Seam Checklist Form' || record.doctype === 'Seam Checklist Form' || record.type?.includes('104')) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                <div><strong>Date:</strong> {record.date || record.posting_date}</div>
-                <div><strong>Line / Machine:</strong> {record.linemachine || record.line_no || 'Line 1'}</div>
-                <div><strong>Product:</strong> {record.product || '-'}</div>
-                <div><strong>Shift:</strong> {record.shift || '-'}</div>
-                <div><strong>Operator / Supervisor:</strong> {record.operatorsupervisor || record.inspector || '-'}</div>
-                <div><strong>Verified By:</strong> {record.verified_by || record.supervisor || '-'}</div>
-                <div><strong>Approved By:</strong> {record.approved_by || '-'}</div>
-                <div><strong>Revision No:</strong> {record.revision_no || '-'}</div>
-              </div>
-
-              {record.comments && <div><strong>Comments:</strong> {record.comments}</div>}
-
-              {(record.seam_checks || record.seam_rows) && (record.seam_checks || record.seam_rows).length > 0 && (
-                <>
-                  <h4 style={{ color: 'var(--accent)', marginBottom: '4px' }}>Seam Inspection Details (Seam Checks Table)</h4>
-                  <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f3f4f6' }}>
-                        <th>Time</th>
-                        <th>Can Size</th>
-                        <th>Head #</th>
-                        <th>Countersink</th>
-                        <th>Seam Thickness</th>
-                        <th>Seam Length</th>
-                        <th>Body Hook</th>
-                        <th>Cover Hook</th>
-                        <th>Overlap</th>
-                        <th>Overlap %</th>
-                        <th>Tightness %</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(record.seam_checks || record.seam_rows).map((row, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td>{row.time || '-'}</td>
-                          <td>{row.can_size || '-'}</td>
-                          <td style={{ textAlign: 'center', fontWeight: '700' }}>{row.head_no || idx + 1}</td>
-                          <td>{row.countersink || row.countersink_mm}</td>
-                          <td>{row.seam_thickness || row.seam_thickness_mm}</td>
-                          <td>{row.seam_length || row.seam_height_length_mm}</td>
-                          <td>{row.body_hook || row.body_hook_mm}</td>
-                          <td>{row.cover_hook || row.cover_hook_mm}</td>
-                          <td>{row.overlap || row.overlap_mm}</td>
-                          <td>{row.overlap_pct || row.overlap_percentage}%</td>
-                          <td>{row.tightness_pct || row.tightness_wrinkle_pct}%</td>
-                          <td>
-                            <span style={{ color: (row.status || 'Pass') === 'Pass' ? 'var(--success)' : 'var(--danger)', fontWeight: '600' }}>
-                              {row.status || 'Pass'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Form 86 Incubator Temperature Record */}
-          {(record.type === 'Form 86: Incubator Temperature Record' || record.type === 'Incubator Temperature Record' || record.type?.includes('86')) && (() => {
-            const tableRows = record.table_wahj || record.rows || record.incubator_checks || [];
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  <div><strong>Log Date:</strong> {record.posting_date || record.date}</div>
-                  <div><strong>Checked By:</strong> {record.checked_by || record.recordedBy || record.cleaner || 'Analyst'}</div>
-                  <div><strong>Verified By:</strong> {record.verified_by || record.verifiedBy || record.supervisor || '-'}</div>
-                </div>
-
-                {tableRows.length > 0 ? (
-                  <div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--accent)' }}>📊 Incubator Temperature Check</h4>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f3f4f6' }}>
-                        <th style={{ padding: '6px', textAlign: 'center' }}>#</th>
-                        <th style={{ padding: '6px' }}>Check No.</th>
-                        <th style={{ padding: '6px' }}>Incubator No.</th>
-                        <th style={{ padding: '6px', textAlign: 'center' }}>Check Time</th>
-                        <th style={{ padding: '6px', textAlign: 'center' }}>Thermometer Reading</th>
-                        <th style={{ padding: '6px', textAlign: 'center' }}>Unit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableRows.map((row, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700' }}>{idx + 1}</td>
-                          <td style={{ padding: '6px' }}>{row.check_no || row.checkNo || idx + 1}</td>
-                          <td style={{ padding: '6px' }}>{row.incubator_no || row.incubatorNo || `Incubator ${idx + 1}`}</td>
-                          <td style={{ padding: '6px', textAlign: 'center' }}>{row.time || '-'}</td>
-                          <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700' }}>{row.thermometer_reading || row.reading || '-'}</td>
-                          <td style={{ padding: '6px', textAlign: 'center' }}>{row.unit || '°C'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '14px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--text-heading)' }}>🌡️ Incubator No. 1</h4>
-                      <div><strong>Check Time:</strong> {record.time || '12:00'}</div>
-                      <div><strong>Thermometer Reading:</strong> {record.incubator_1 || '-'} °C</div>
-                    </div>
-                    <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '16px' }}>
-                      <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--text-heading)' }}>🌡️ Incubator No. 2</h4>
-                      <div><strong>Check Time:</strong> {record.time_2 || '12:00'}</div>
-                      <div><strong>Thermometer Reading:</strong> {record.incubator_2 || '-'} °C</div>
-                    </div>
-                  </div>
-                )}
-
-                {(record.comments || record.remarks) && (
-                  <div><strong>Observations / Remarks:</strong> {record.comments || record.remarks}</div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Form 88 Weight Check Checklist */}
-          {(record.type === 'Form 88: Weight Check Checklist' || record.type === 'Standard Form 88: Weight Check' || record.type?.includes('88') || record.type?.includes('Weight Check')) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderLeft: '4px solid var(--accent)', color: 'var(--text-heading)' }}>
-                <strong>Weight Check frequency:</strong> Weight Check frequency is twice per Day.
-              </div>
-
-              <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6' }}>
-                    <th style={{ width: '50px' }}>Slot</th>
-                    <th style={{ width: '110px' }}>Date</th>
-                    <th>Checked By</th>
-                    <th>Verified By</th>
-                    <th>Product Description</th>
-                    <th style={{ width: '80px' }}>Weight 1</th>
-                    <th style={{ width: '80px' }}>Weight 2</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(record.rows || []).map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ textAlign: 'center', fontWeight: '600' }}>#{idx + 1}</td>
-                      <td>{row.date}</td>
-                      <td>{row.checkedBy || '-'}</td>
-                      <td>{row.verifiedBy || '-'}</td>
-                      <td><strong>{row.productDesc}</strong></td>
-                      <td>{row.weight1}</td>
-                      <td>{row.weight2}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {record.overallComments && (
-                <div><strong>Overall Comments / Remarks:</strong> {record.overallComments}</div>
-              )}
-            </div>
-          )}
-
-          {/* Form 103 Silver Photometer Log */}
-          {record.type === 'Form 103 (Silver Log)' && (() => {
-            const hasFailure = record.sets?.some(s => s.rows?.some(r => Number(r.reading) < 10));
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {hasFailure && (
-                  <div style={{ padding: '8px 12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', fontSize: '11px', fontWeight: '700', borderRadius: '6px' }}>
-                    ⚠️ Warning: One or more Silver Ion photometer readings are below acceptance spec level (minimum 10ppb).
-                  </div>
-                )}
-
-                {record.sets?.map((set, sIdx) => (
-                  <div key={sIdx} style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '8px' }}>
-                      <div><strong>Date Set {sIdx + 1}:</strong> {set.date}</div>
-                      <div><strong>Technician:</strong> {set.technician}</div>
-                      <div><strong>Verified By:</strong> {set.verifiedBy}</div>
-                    </div>
-                    <table className="custom-table" style={{ width: '100%', marginBottom: '8px' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ padding: '6px' }}>Sample Point</th>
-                          <th style={{ padding: '6px', textAlign: 'center' }}>Time</th>
-                          <th style={{ padding: '6px', textAlign: 'center' }}>Silver Ion Reading (ppb)</th>
-                          <th style={{ padding: '6px', textAlign: 'center' }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {set.rows?.map((row, rIdx) => {
-                          const isFailed = Number(row.reading) < 10;
-                          return (
-                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ padding: '6px', fontWeight: '600' }}>{row.sample}</td>
-                              <td style={{ padding: '6px', textAlign: 'center' }}>{row.time}</td>
-                              <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700', color: isFailed ? 'var(--danger)' : '' }}>{row.reading} ppb</td>
-                              <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700', color: isFailed ? 'var(--danger)' : 'var(--success)' }}>
-                                {isFailed ? '⚠️ Fail (<10ppb)' : 'Pass'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    <div><strong>Calibration record notes:</strong> {set.calibration || '-'}</div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {record.overallComments && (
-            <div style={{ marginTop: '16px', padding: '10px', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: '#f9fafb', marginBottom: '16px' }}>
-              <strong style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>OVERALL COMMENTS / REMARKS</strong>
-              <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-heading)' }}>{record.overallComments}</div>
-            </div>
-          )}
-
+          <FormFootnote doctype={targetDocType || record?.type} defaultFormNo="Form Report" formTitle={targetDocType || record?.type} />
         </div>
+
         <div className="modal-footer no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-          <button type="button" className="primary-btn" onClick={() => setEmailModal({ reportId: record.id, reportType: record.type || 'QC Report' })} style={{ backgroundColor: '#a27b5c', borderColor: '#a27b5c' }}>📧 Send Email</button>
+          <button type="button" className="primary-btn" onClick={() => setEmailModal && setEmailModal({ reportId: record?.id || record?.name, reportType: targetDocType || record?.type || 'QC Report' })} style={{ backgroundColor: '#a27b5c', borderColor: '#a27b5c' }}>📧 Send Email</button>
           <button type="button" className="primary-btn" onClick={() => window.print()} style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }}>🖨️ Print Report</button>
           <button type="button" className="secondary-btn" onClick={onClose}>Close Report</button>
         </div>
@@ -2808,40 +2754,455 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
 
 
 export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [tankNo, setTankNo] = useState('Tank 1');
-  const [volume, setVolume] = useState('2000L');
-  const [preparedBy, setPreparedBy] = useState('');
-  const [verifiedBy, setVerifiedBy] = useState('');
-  const [labAlc, setLabAlc] = useState('5.0');
-  const [analysedBy, setAnalysedBy] = useState('');
-  const [tankPh, setTankPh] = useState('3.8');
-  const [finishedPh, setFinishedPh] = useState('3.8');
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
 
-  const [bourbonLot, setBourbonLot] = useState('');
-  const [ethanolLot, setEthanolLot] = useState('');
-  const [agedColaLot, setAgedColaLot] = useState('');
-  const [colaFlavourLot, setColaFlavourLot] = useState('');
-  const [acidulantLot, setAcidulantLot] = useState('');
-  const [benzoateLot, setBenzoateLot] = useState('');
-  const [sugarLot, setSugarLot] = useState('');
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    tank_no: 'Tank 1',
+    volume: '2000L',
+    prepared_by: '',
+    verified_by: '',
+    analysed_by: '',
+    lab_alc: '5.0',
+    tank_ph: '3.8',
+    finished_ph: '3.8',
+    brix_mixer: '11.2',
+    brix_mixer_by: '',
+    brix_product: '11.4',
+    brix_product_by: '',
+    comments: ''
+  });
 
-  const [brixMixer, setBrixMixer] = useState('11.2');
-  const [brixMixerBy, setBrixMixerBy] = useState('');
-  const [brixProduct, setBrixProduct] = useState('11.4');
-  const [brixProductBy, setBrixProductBy] = useState('');
-  const [gasLevel, setGasLevel] = useState('2.8');
-  const [comments, setComments] = useState('');
+  const [tableData, setTableData] = useState({
+    recipe_checklist: [
+      { ingredient: 'Bourbon', standard_qty: '42Kg (46L)', lot_batch_no: '', status: '✓ Confirmed Added' },
+      { ingredient: 'Ethanol', standard_qty: '125Kg (158.5L)', lot_batch_no: '', status: '✓ Confirmed Added' },
+      { ingredient: 'Aged Cola Flavour', standard_qty: '2.0Kg', lot_batch_no: '', status: '✓ Confirmed Added' },
+      { ingredient: 'Cola Flavour', standard_qty: '3.6Kg', lot_batch_no: '', status: '✓ Confirmed Added' },
+      { ingredient: 'Cola Acidulant', standard_qty: '1.0Kg', lot_batch_no: '', status: '✓ Confirmed Added' },
+      { ingredient: 'Sodium Benzoate', standard_qty: '0.4Kg', lot_batch_no: '', status: '✓ Confirmed Added' },
+      { ingredient: 'Sugar', standard_qty: '150Kg', lot_batch_no: '', status: '✓ Confirmed Added' }
+    ],
+    gas_level: [
+      { gas_level: '2.8', checked_by: '' }
+    ]
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm36Modal] Fetching DocType meta for "Bourbon Whiskey And Cola Product Tank Record"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Bourbon Whiskey And Cola Product Tank Record');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date of Batch', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'tank_no', label: 'Tank Number', fieldtype: 'Select', options: 'Tank 1\nTank 2\nTank 3\nTank 4\nTank 5\nTank 6\nTank 7\nTank 8\nTank 9\nTank 10' },
+            { idx: 3, fieldname: 'volume', label: 'Volume', fieldtype: 'Data' },
+            { idx: 4, fieldname: 'prepared_by', label: 'Prepared By', fieldtype: 'Link', options: 'Employee' },
+            { idx: 5, fieldname: 'verified_by', label: 'Verified By', fieldtype: 'Link', options: 'Employee' },
+            { idx: 6, fieldname: 'analysed_by', label: 'Lab Report Analysed By', fieldtype: 'Link', options: 'Employee' },
+            { idx: 7, fieldname: 'lab_alc', label: 'Lab Report Alcohol %', fieldtype: 'Float' },
+            { idx: 8, fieldname: 'tank_ph', label: 'Tank pH', fieldtype: 'Float' },
+            { idx: 9, fieldname: 'finished_ph', label: 'Finished Product pH', fieldtype: 'Float' },
+            { idx: 10, fieldname: 'recipe_checklist', label: 'Batch Recipe Checklist', fieldtype: 'Table', options: 'Bourbon Whiskey and Cola Recipe Item' },
+            { idx: 11, fieldname: 'brix_mixer', label: 'Brix Mixer %', fieldtype: 'Float' },
+            { idx: 12, fieldname: 'brix_mixer_by', label: 'Brix Mixer By', fieldtype: 'Data' },
+            { idx: 13, fieldname: 'brix_product', label: 'Brix Finished Product %', fieldtype: 'Float' },
+            { idx: 14, fieldname: 'brix_product_by', label: 'Brix Finished Product By', fieldtype: 'Data' },
+            { idx: 15, fieldname: 'gas_level', label: 'Gas Level', fieldtype: 'Table', options: 'Gas Level Reading' },
+            { idx: 16, fieldname: 'comments', label: 'Comments', fieldtype: 'Text' }
+          ];
+        }
+
+        fields = fields.map(f => {
+          let lbl = f.label;
+          if (!lbl || lbl === f.fieldname) {
+            lbl = f.options || f.fieldname;
+          }
+          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+          return {
+            ...f,
+            label: lbl
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Bourbon Whiskey and Cola Recipe Item';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            if (tf.fieldname === 'recipe_checklist') {
+              childFields = [
+                { idx: 1, fieldname: 'ingredient', label: 'Ingredient Description', fieldtype: 'Data' },
+                { idx: 2, fieldname: 'standard_qty', label: 'Standard Qty (2000L)', fieldtype: 'Data' },
+                { idx: 3, fieldname: 'lot_batch_no', label: 'Lot / Batch No.', fieldtype: 'Data' },
+                { idx: 4, fieldname: 'status', label: 'Added Status', fieldtype: 'Data' }
+              ];
+            } else {
+              childFields = [
+                { idx: 1, fieldname: 'gas_level', label: 'Gas Level', fieldtype: 'Float' },
+                { idx: 2, fieldname: 'checked_by', label: 'Checked By', fieldtype: 'Link', options: 'Employee' }
+              ];
+            }
+          }
+
+          childFields = childFields.map(cf => ({
+            ...cf,
+            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          }));
+
+          childMetasObj[childOption] = childFields;
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
+        }
+      } catch (err) {
+        console.error('[LabForm36Modal] Error fetching meta fields for Bourbon Whiskey & Cola:', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableRowChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
+        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = childMetas[childDoctype] || [];
+    const newRow = {};
+    childFields.forEach(f => {
+      if (f.fieldtype === 'Select') {
+        const opts = parseSelectOptions(f.options);
+        newRow[f.fieldname] = opts[0] || '';
+      } else {
+        newRow[f.fieldname] = '';
+      }
+    });
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
 
   const handleSubmitForm = (e) => {
     e.preventDefault();
-    onSubmit({
-      date, tankNo, volume, preparedBy, verifiedBy, labAlc, analysedBy, tankPh, finishedPh,
-      bourbonLot, ethanolLot, agedColaLot, colaFlavourLot, acidulantLot, benzoateLot, sugarLot,
-      brixMixer, brixMixerBy, brixProduct, brixProductBy, gasLevel, comments,
-      analyst: preparedBy
-    });
+
+    const preparedByVal = resolveLinkValue(formData.prepared_by, 'Employee', linkOptionsMap);
+    const verifiedByVal = resolveLinkValue(formData.verified_by, 'Employee', linkOptionsMap);
+    const analysedByVal = resolveLinkValue(formData.analysed_by, 'Employee', linkOptionsMap);
+
+    const submissionData = {
+      doctype: 'Bourbon Whiskey And Cola Product Tank Record',
+      ...formData,
+      prepared_by: preparedByVal,
+      verified_by: verifiedByVal,
+      analysed_by: analysedByVal,
+      preparedBy: preparedByVal,
+      verifiedBy: verifiedByVal,
+      analysedBy: analysedByVal,
+      date: formData.date || new Date().toISOString().slice(0, 10),
+      tankNo: formData.tank_no || 'Tank 1',
+      volume: formData.volume || '2000L',
+      labAlc: formData.lab_alc || '5.0',
+      tankPh: formData.tank_ph || '3.8',
+      finishedPh: formData.finished_ph || '3.8',
+      bourbonLot: tableData.recipe_checklist?.[0]?.lot_batch_no || '',
+      ethanolLot: tableData.recipe_checklist?.[1]?.lot_batch_no || '',
+      agedColaLot: tableData.recipe_checklist?.[2]?.lot_batch_no || '',
+      colaFlavourLot: tableData.recipe_checklist?.[3]?.lot_batch_no || '',
+      acidulantLot: tableData.recipe_checklist?.[4]?.lot_batch_no || '',
+      benzoateLot: tableData.recipe_checklist?.[5]?.lot_batch_no || '',
+      sugarLot: tableData.recipe_checklist?.[6]?.lot_batch_no || '',
+      brixMixer: formData.brix_mixer || '11.2',
+      brixMixerBy: formData.brix_mixer_by || '',
+      brixProduct: formData.brix_product || '11.4',
+      brixProductBy: formData.brix_product_by || '',
+      gasLevel: formData.gas_level?.[0]?.gas_level || formData.gas_level || '2.8',
+      comments: formData.comments || '',
+      analyst: preparedByVal,
+      ...tableData
+    };
+
+    onSubmit(submissionData);
   };
+
+  const renderControlInput = (field, value, onChange, searchFieldKey = '') => {
+    const { fieldtype, fieldname, options, label, reqd } = field;
+
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    if (fieldtype === 'Link') {
+      const targetDoctype = options || 'Employee';
+      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+      const sKey = searchFieldKey || fieldname;
+
+      if (isEmpTarget) {
+        return (
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              className="form-input"
+              required={Boolean(reqd)}
+              value={value || ''}
+              onFocus={(e) => {
+                if (handleSearchEmployees) {
+                  handleSearchEmployees(e.target.value || '', sKey);
+                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                }
+              }}
+              onChange={(e) => {
+                onChange(e.target.value);
+                if (handleSearchEmployees) {
+                  handleSearchEmployees(e.target.value, sKey);
+                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                }
+              }}
+              placeholder={`Select / Search ${label || targetDoctype}...`}
+            />
+            {showEmployeeDropdown && activeSearchField === sKey && employeeList && (
+              <div className="autocomplete-dropdown">
+                {employeeList.map(emp => (
+                  <div key={emp.name} className="dropdown-item" onMouseDown={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
+                    👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const datalistId = `dl_${sKey}`;
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            className="form-input"
+            required={Boolean(reqd)}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            list={datalistId}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          <datalist id={datalistId}>
+            {fetchedOpts.map((opt, i) => (
+              <option key={i} value={opt} />
+            ))}
+          </datalist>
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fieldtype, fieldname, label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return (
+        <input
+          type="datetime-local"
+          className="form-input"
+          required={Boolean(reqd)}
+          value={value || localDT}
+          onChange={e => onChange(e.target.value)}
+        />
+      );
+    }
+
+    if (fieldtype === 'Date') {
+      return (
+        <input
+          type="date"
+          className="form-input"
+          required={Boolean(reqd)}
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+        />
+      );
+    }
+
+    if (fieldtype === 'Time') {
+      return (
+        <input
+          type="time"
+          className="form-input"
+          required={Boolean(reqd)}
+          value={value || new Date().toTimeString().slice(0, 5)}
+          onChange={e => onChange(e.target.value)}
+        />
+      );
+    }
+
+    if (fieldtype === 'Select') {
+      const selectOpts = parseSelectOptions(options);
+      return (
+        <select
+          className="form-input"
+          required={Boolean(reqd)}
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+        >
+          <option value="">-- Select {label || 'Option'} --</option>
+          {selectOpts.map((opt, i) => (
+            <option key={i} value={opt}>{opt}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (fieldtype === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={e => onChange(e.target.checked ? 1 : 0)}
+          />
+          <span>{label}</span>
+        </label>
+      );
+    }
+
+    if (['Small Text', 'Text', 'Long Text'].includes(fieldtype)) {
+      return (
+        <textarea
+          className="form-input"
+          rows="2"
+          style={{ resize: 'vertical' }}
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder={`Enter ${label}...`}
+        />
+      );
+    }
+
+    if (['Float', 'Int', 'Currency', 'Percent'].includes(fieldtype)) {
+      return (
+        <input
+          type="number"
+          step="any"
+          className="form-input"
+          required={Boolean(reqd)}
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder={`Enter ${label}...`}
+        />
+      );
+    }
+
+    if (fieldtype === 'Signature') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>✍️ Digital Signature Input</span>
+            {value && (
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
+                onClick={() => onChange('')}
+              >
+                Clear Signature
+              </button>
+            )}
+          </div>
+          <input
+            type="text"
+            className="form-input"
+            style={{
+              fontFamily: '"Caveat", "Brush Script MT", cursive',
+              fontSize: '22px',
+              color: '#1e3a8a',
+              letterSpacing: '1px',
+              padding: '8px 12px',
+              background: '#fff'
+            }}
+            placeholder="Type your full name to sign dynamically..."
+            value={value || ''}
+            onChange={e => onChange(e.target.value)}
+          />
+          {value && (
+            <div style={{ marginTop: '6px', fontSize: '11px', color: '#166534', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              ✓ Digitally Signed by: {value}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <input
+        type="text"
+        className="form-input"
+        required={Boolean(reqd)}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={`Enter ${label}...`}
+      />
+    );
+  };
+
+  const fieldsList = meta?.fields || [];
+  const normalFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    !f.fieldname?.includes('signature') &&
+    f.hidden !== 1
+  );
+
+  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
+  const signatureFields = fieldsList.filter(f => (f.fieldtype === 'Signature' || f.fieldname?.includes('signature')) && f.hidden !== 1);
 
   return (
     <div className="modal-backdrop">
@@ -2856,228 +3217,109 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Date of Batch</label>
-                <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
+            {loadingMeta ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Bourbon Whiskey And Cola Product Tank Record"...
               </div>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Tank Number</label>
-                <select className="form-input" value={tankNo} onChange={e => setTankNo(e.target.value)}>
-                  {Array.from({ length: 10 }, (_, i) => `Tank ${i + 1}`).map(t => (
-                    <option key={t} value={t}>{t}</option>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  {normalFields.map(field => (
+                    <div key={field.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {field.label} {field.reqd ? '*' : ''}
+                      </label>
+                      {renderControlInput(
+                        field,
+                        formData[field.fieldname],
+                        (val) => handleFieldChange(field.fieldname, val),
+                        `form36_${field.fieldname}`
+                      )}
+                    </div>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Volume</label>
-                <input type="text" className="form-input" value={volume} onChange={e => setVolume(e.target.value)} />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              <div style={{ position: 'relative' }}>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Prepared By *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  value={preparedBy}
-                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labPreparedBy')}
-                  onChange={(e) => { setPreparedBy(e.target.value); handleSearchEmployees(e.target.value, 'labPreparedBy'); }}
-                  placeholder="Search Employee..."
-                />
-                {showEmployeeDropdown && activeSearchField === 'labPreparedBy' && (
-                  <div className="autocomplete-dropdown">
-                    {employeeList.map(emp => (
-                      <div
-                        key={emp.name}
-                        className="dropdown-item employee-dropdown-item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`);
-                          setShowEmployeeDropdown(false);
-                        }}
-                        onClick={() => {
-                          setPreparedBy(`${emp.employee_name || emp.name} (${emp.name})`);
-                          setShowEmployeeDropdown(false);
-                        }}
-                      >
-                        👤 {emp.employee_name || emp.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ position: 'relative' }}>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Verified By *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  value={verifiedBy}
-                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labVerifiedBy')}
-                  onChange={(e) => { setVerifiedBy(e.target.value); handleSearchEmployees(e.target.value, 'labVerifiedBy'); }}
-                  placeholder="Search Verifier..."
-                />
-                {showEmployeeDropdown && activeSearchField === 'labVerifiedBy' && (
-                  <div className="autocomplete-dropdown">
-                    {employeeList.map(emp => (
-                      <div
-                        key={emp.name}
-                        className="dropdown-item employee-dropdown-item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
-                          setShowEmployeeDropdown(false);
-                        }}
-                        onClick={() => {
-                          setVerifiedBy(`${emp.employee_name || emp.name} (${emp.name})`);
-                          setShowEmployeeDropdown(false);
-                        }}
-                      >
-                        👤 {emp.employee_name || emp.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ position: 'relative' }}>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Lab Report Analysed By *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  value={analysedBy}
-                  onFocus={(e) => handleSearchEmployees(e.target.value, 'labAnalyst')}
-                  onChange={(e) => { setAnalysedBy(e.target.value); handleSearchEmployees(e.target.value, 'labAnalyst'); }}
-                  placeholder="Search Analyst..."
-                />
-                {showEmployeeDropdown && activeSearchField === 'labAnalyst' && (
-                  <div className="autocomplete-dropdown">
-                    {employeeList.map(emp => (
-                      <div
-                        key={emp.name}
-                        className="dropdown-item employee-dropdown-item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`);
-                          setShowEmployeeDropdown(false);
-                        }}
-                        onClick={() => {
-                          setAnalysedBy(`${emp.employee_name || emp.name} (${emp.name})`);
-                          setShowEmployeeDropdown(false);
-                        }}
-                      >
-                        👤 {emp.employee_name || emp.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Lab Report Alcohol %</label>
-                <input type="number" step="0.01" className="form-input" value={labAlc} onChange={e => setLabAlc(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Tank pH</label>
-                <input type="number" step="0.1" className="form-input" value={tankPh} onChange={e => setTankPh(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '600' }}>Finished Product pH</label>
-                <input type="number" step="0.1" className="form-input" value={finishedPh} onChange={e => setFinishedPh(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <h4 style={{ color: 'var(--accent)', marginBottom: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Batch Recipe Checklist</h4>
-              <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f3f4f6' }}>
-                    <th>Ingredient Description</th>
-                    <th>Standard Qty (2000L)</th>
-                    <th>Lot / Batch No. *</th>
-                    <th>Added Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Bourbon</td>
-                    <td>42Kg (46L)</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={bourbonLot} onChange={e => setBourbonLot(e.target.value)} placeholder="Bourbon batch lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                  <tr>
-                    <td>Ethanol</td>
-                    <td>125Kg (158.5L)</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={ethanolLot} onChange={e => setEthanolLot(e.target.value)} placeholder="Ethanol batch lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                  <tr>
-                    <td>Aged Cola Flavour</td>
-                    <td>2.0Kg</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={agedColaLot} onChange={e => setAgedColaLot(e.target.value)} placeholder="Aged Cola batch lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                  <tr>
-                    <td>Cola Flavour</td>
-                    <td>3.6Kg</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={colaFlavourLot} onChange={e => setColaFlavourLot(e.target.value)} placeholder="Cola Flavour lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                  <tr>
-                    <td>Cola Acidulant</td>
-                    <td>1.0Kg</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={acidulantLot} onChange={e => setAcidulantLot(e.target.value)} placeholder="Acidulant lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                  <tr>
-                    <td>Sodium Benzoate</td>
-                    <td>0.4Kg</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={benzoateLot} onChange={e => setBenzoateLot(e.target.value)} placeholder="Benzoate lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                  <tr>
-                    <td>Sugar</td>
-                    <td>150Kg</td>
-                    <td><input type="text" className="form-input" style={{ height: '28px' }} required value={sugarLot} onChange={e => setSugarLot(e.target.value)} placeholder="Sugar lot" /></td>
-                    <td><span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ Confirmed Added</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '11px' }}>Brix Mixer %</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="number" step="0.1" className="form-input" value={brixMixer} onChange={e => setBrixMixer(e.target.value)} />
-                  <input type="text" className="form-input" placeholder="By" value={brixMixerBy} onChange={e => setBrixMixerBy(e.target.value)} />
                 </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px' }}>Brix Finished Product %</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="number" step="0.1" className="form-input" value={brixProduct} onChange={e => setBrixProduct(e.target.value)} />
-                  <input type="text" className="form-input" placeholder="By" value={brixProductBy} onChange={e => setBrixProductBy(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px' }}>Gas Level</label>
-                <input type="number" step="0.1" className="form-input" value={gasLevel} onChange={e => setGasLevel(e.target.value)} />
-              </div>
-            </div>
 
-            <div>
-              <label style={{ fontSize: '11px' }}>Comments</label>
-              <textarea className="form-input" style={{ minHeight: '50px', padding: '6px' }} value={comments} onChange={e => setComments(e.target.value)} placeholder="Remarks..." />
-            </div>
+                {tableFields.map(tf => {
+                  const childDoctype = tf.options || 'Bourbon Whiskey and Cola Recipe Item';
+                  const childFields = childMetas[childDoctype] || [];
+                  const rows = tableData[tf.fieldname] || [];
+
+                  return (
+                    <div key={tf.fieldname} style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>
+                        <h4 style={{ fontSize: '13px', color: 'var(--accent)', margin: 0 }}>{tf.label}</h4>
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          style={{ fontSize: '11px', padding: '4px 8px' }}
+                          onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        >
+                          ➕ Add Row
+                        </button>
+                      </div>
+
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f3f4f6' }}>
+                              {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
+                                <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
+                                  {cf.label} {cf.reqd ? '*' : ''}
+                                </th>
+                              ))}
+                              <th style={{ width: '50px', padding: '6px', textAlign: 'center' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px' }}>
+                                    {renderControlInput(
+                                      cf,
+                                      row[cf.fieldname],
+                                      (val) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, val),
+                                      `form36_tbl_${tf.fieldname}_${cf.fieldname}_${rIdx}`
+                                    )}
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                    title="Remove Row"
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                  >
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {signatureFields.map(sf => (
+                  <div key={sf.fieldname} style={{ marginTop: '12px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                      {sf.label}
+                    </label>
+                    {renderControlInput(
+                      sf,
+                      formData[sf.fieldname],
+                      (val) => handleFieldChange(sf.fieldname, val),
+                      `form36_${sf.fieldname}`
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
 
           </div>
-          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
             <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary-btn">Save Batch Record</button>
           </div>
@@ -3539,6 +3781,7 @@ export function LabForm35Modal({ onClose, onSubmit, employeeList, handleSearchEm
 export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -3659,6 +3902,9 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({
             ...newTableDataInit,
             ...prev
@@ -3750,30 +3996,71 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 
   const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const fType = field.fieldtype;
-    const isEmployeeLink = fType === 'Link' && (field.options === 'Employee' || ['checked_by', 'verified_by', 'approved_by', 'recorded_by', 'analyst', 'supervisor'].includes(field.fieldname));
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (isEmployeeLink) {
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
         <div style={{ position: 'relative' }}>
           <input
             type="text"
+            list={isEmpTarget ? undefined : datalistId}
             className="form-input"
-            required={field.reqd === 1}
+            required={reqd === 1}
             value={val || ''}
-            onFocus={(e) => handleSearchEmployees(e.target.value, searchFieldKey)}
-            onChange={(e) => { onChange(e.target.value); handleSearchEmployees(e.target.value, searchFieldKey); }}
-            placeholder={`Search ${field.label}...`}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
           />
-          {showEmployeeDropdown && activeSearchField === searchFieldKey && (
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
             <div className="autocomplete-dropdown">
               {employeeList.map(emp => (
                 <div
                   key={emp.name}
                   className="dropdown-item"
-                  onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
                 >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Employee'})
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                 </div>
               ))}
             </div>
@@ -3810,6 +4097,11 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
       );
     }
 
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
     if (fType === 'Date') {
       return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
     }
@@ -4151,6 +4443,7 @@ export { LabForm88Modal as MaintWeightCheckModal };
 export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -4199,11 +4492,19 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
           ];
         }
 
-        // Clean label formatting (remove bracketed descriptors e.g. "(ppb)")
-        fields = fields.map(f => ({
-          ...f,
-          label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-        }));
+        // Clean label formatting and ensure technician/analyst/verifier fields are treated as Employee Link fields
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('verified by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
 
         if (isMounted) {
           console.log('=============================================================');
@@ -4267,6 +4568,9 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({
             ...newTableDataInit,
             ...prev
@@ -4367,30 +4671,71 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
   );
 
   const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const fType = field.fieldtype;
-    const isEmployeeLink = fType === 'Link' && (field.options === 'Employee' || ['technician', 'tech1', 'verified_by', 'verifier1', 'analyst', 'manager'].includes(field.fieldname));
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (isEmployeeLink) {
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
         <div style={{ position: 'relative' }}>
           <input
             type="text"
+            list={isEmpTarget ? undefined : datalistId}
             className="form-input"
-            required={field.reqd === 1}
+            required={reqd === 1}
             value={val || ''}
-            onFocus={(e) => handleSearchEmployees(e.target.value, searchFieldKey)}
-            onChange={(e) => { onChange(e.target.value); handleSearchEmployees(e.target.value, searchFieldKey); }}
-            placeholder={`Search ${field.label}...`}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
           />
-          {showEmployeeDropdown && activeSearchField === searchFieldKey && (
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
             <div className="autocomplete-dropdown">
               {employeeList.map(emp => (
                 <div
                   key={emp.name}
                   className="dropdown-item"
-                  onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
                 >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Employee'})
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                 </div>
               ))}
             </div>
@@ -4427,6 +4772,11 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
       );
     }
 
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
     if (fType === 'Date') {
       return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
     }
@@ -4596,6 +4946,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
 export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   // Dynamic state for top-level fields
@@ -4690,7 +5041,12 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
             console.error(`Error fetching child meta for ${tf.options}:`, err);
           }
         }
-        if (isMounted) setChildMetas(childMetasObj);
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
+        }
       } catch (err) {
         console.error('[LabForm104Modal] Error fetching meta fields:', err);
       } finally {
@@ -4775,30 +5131,71 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
 
   // Helper renderer for dynamic control inputs
   const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const fType = field.fieldtype;
-    const isEmployeeLink = fType === 'Link' && (field.options === 'Employee' || ['operatorsupervisor', 'verified_by', 'approved_by'].includes(field.fieldname));
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (isEmployeeLink) {
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
       return (
         <div style={{ position: 'relative' }}>
           <input
             type="text"
+            list={isEmpTarget ? undefined : datalistId}
             className="form-input"
-            required={field.reqd === 1}
+            required={reqd === 1}
             value={val || ''}
-            onFocus={(e) => handleSearchEmployees(e.target.value, searchFieldKey)}
-            onChange={(e) => { onChange(e.target.value); handleSearchEmployees(e.target.value, searchFieldKey); }}
-            placeholder={`Search ${field.label}...`}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
           />
-          {showEmployeeDropdown && activeSearchField === searchFieldKey && (
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
             <div className="autocomplete-dropdown">
               {employeeList.map(emp => (
                 <div
                   key={emp.name}
                   className="dropdown-item"
-                  onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); setShowEmployeeDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
                 >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Employee'})
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                 </div>
               ))}
             </div>
@@ -4835,6 +5232,11 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
       );
     }
 
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
     if (fType === 'Date') {
       return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
     }
@@ -5006,6 +5408,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
 export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -5104,6 +5507,9 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({ ...newTableDataInit, ...prev }));
         }
       } catch (err) {
@@ -5175,62 +5581,79 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
     if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    if (fieldtype === 'Link') {
-      const isEmployeeField =
-        options === 'Employee' ||
-        options === 'User' ||
-        !options ||
-        ['analyst', 'approved_by', 'manager', 'verified_by', 'prepared_by', 'analyst_name', 'approved_by_name'].includes(fieldname) ||
-        fieldname?.toLowerCase().includes('analyst') ||
-        fieldname?.toLowerCase().includes('approved') ||
-        fieldname?.toLowerCase().includes('manager') ||
-        fieldname?.toLowerCase().includes('verified') ||
-        fieldname?.toLowerCase().includes('by') ||
-        label?.toLowerCase().includes('analyst') ||
-        label?.toLowerCase().includes('approved') ||
-        label?.toLowerCase().includes('manager') ||
-        label?.toLowerCase().includes('verified') ||
-        label?.toLowerCase().includes('by');
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('verified by');
 
+    if (fieldtype === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
       const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
 
-      if (isEmployeeField) {
-        return (
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={Boolean(reqd)}
-              value={value || ''}
-              onFocus={(e) => {
-                if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-              }}
-              onChange={(e) => {
-                onChange(e.target.value);
-                if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
-              }}
-              placeholder={`Search ${label || options}...`}
-            />
-            {showEmployeeDropdown && activeSearchField === sKey && employeeList && (
-              <div className="autocomplete-dropdown">
-                {employeeList.map(emp => (
-                  <div key={emp.name} className="dropdown-item" onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
-                    👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={Boolean(reqd)}
+            value={value || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div key={emp.name} className="dropdown-item" onMouseDown={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fieldtype, fieldname, label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       return (
         <input
-          type="text"
+          type="datetime-local"
           className="form-input"
           required={Boolean(reqd)}
-          value={value || ''}
+          value={value || localDT}
           onChange={e => onChange(e.target.value)}
-          placeholder={`Select ${options || label}...`}
         />
       );
     }
@@ -5259,13 +5682,15 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
       );
     }
 
-    if (fieldtype === 'Datetime') {
+    if (fieldtype === 'Datetime' || fieldtype === 'Date Time') {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       return (
         <input
           type="datetime-local"
           className="form-input"
           required={Boolean(reqd)}
-          value={value || ''}
+          value={value || localDT}
           onChange={e => onChange(e.target.value)}
         />
       );
@@ -5527,6 +5952,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
 export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -5629,6 +6055,9 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
 
         if (isMounted) {
           setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
           setTableData(prev => ({ ...newTableDataInit, ...prev }));
         }
       } catch (err) {
@@ -5701,25 +6130,11 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
     if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
     if (fieldtype === 'Link') {
-      const isEmployeeField =
-        options === 'Employee' ||
-        options === 'User' ||
-        !options ||
-        ['analyst', 'approved_by', 'manager', 'verified_by', 'prepared_by', 'operator', 'supervisor'].includes(fieldname) ||
-        fieldname?.toLowerCase().includes('analyst') ||
-        fieldname?.toLowerCase().includes('approved') ||
-        fieldname?.toLowerCase().includes('manager') ||
-        fieldname?.toLowerCase().includes('verified') ||
-        fieldname?.toLowerCase().includes('by') ||
-        label?.toLowerCase().includes('analyst') ||
-        label?.toLowerCase().includes('approved') ||
-        label?.toLowerCase().includes('manager') ||
-        label?.toLowerCase().includes('verified') ||
-        label?.toLowerCase().includes('by');
-
+      const targetDoctype = options || 'Employee';
+      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
       const sKey = searchFieldKey || fieldname;
 
-      if (isEmployeeField) {
+      if (isEmpTarget) {
         return (
           <div style={{ position: 'relative' }}>
             <input
@@ -5728,18 +6143,24 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
               required={Boolean(reqd)}
               value={value || ''}
               onFocus={(e) => {
-                if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
+                if (handleSearchEmployees) {
+                  handleSearchEmployees(e.target.value || '', sKey);
+                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                }
               }}
               onChange={(e) => {
                 onChange(e.target.value);
-                if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
+                if (handleSearchEmployees) {
+                  handleSearchEmployees(e.target.value, sKey);
+                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                }
               }}
-              placeholder={`Search ${label || options}...`}
+              placeholder={`Select / Search ${label || targetDoctype}...`}
             />
             {showEmployeeDropdown && activeSearchField === sKey && employeeList && (
               <div className="autocomplete-dropdown">
                 {employeeList.map(emp => (
-                  <div key={emp.name} className="dropdown-item" onClick={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
+                  <div key={emp.name} className="dropdown-item" onMouseDown={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
                     👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
                   </div>
                 ))}
@@ -5748,14 +6169,40 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
           </div>
         );
       }
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const datalistId = `dl_${sKey}`;
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={datalistId}
+            className="form-input"
+            required={Boolean(reqd)}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          <datalist id={datalistId}>
+            {fetchedOpts.map((opt, i) => (
+              <option key={i} value={opt} />
+            ))}
+          </datalist>
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fieldtype, fieldname, label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       return (
         <input
-          type="text"
+          type="datetime-local"
           className="form-input"
           required={Boolean(reqd)}
-          value={value || ''}
+          value={value || localDT}
           onChange={e => onChange(e.target.value)}
-          placeholder={`Select ${options || label}...`}
         />
       );
     }
@@ -5784,13 +6231,15 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
       );
     }
 
-    if (fieldtype === 'Datetime') {
+    if (fieldtype === 'Datetime' || fieldtype === 'Date Time') {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       return (
         <input
           type="datetime-local"
           className="form-input"
           required={Boolean(reqd)}
-          value={value || ''}
+          value={value || localDT}
           onChange={e => onChange(e.target.value)}
         />
       );
@@ -6057,6 +6506,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({});
 
   useEffect(() => {
@@ -6098,6 +6548,10 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
             }
           }
           setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
         }
       } catch (err) {
         console.error('[LabForm34Modal] Error fetching meta fields for Monitoring:', err);
@@ -6238,6 +6692,24 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       );
                     }
 
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
                     if (field.fieldtype === 'Date') {
                       return (
                         <div key={field.fieldname} className="form-group">
@@ -6266,6 +6738,94 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
                             onChange={e => handleFieldChange(field.fieldname, e.target.value)}
                           />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+
+                      if (isEmpTarget) {
+                        return (
+                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="text"
+                              className="text-input"
+                              placeholder={`Select or type ${field.label}...`}
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                              onFocus={() => {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }}
+                            />
+                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                {employeeList.map(emp => {
+                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                  return (
+                                    <div
+                                      key={emp.name}
+                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                      onMouseDown={() => {
+                                        handleFieldChange(field.fieldname, empVal);
+                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                      }}
+                                    >
+                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const datalistId = `dl_m34_${sKey}`;
+
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="text"
+                            list={datalistId}
+                            className="text-input"
+                            placeholder={`Select or type ${field.label}...`}
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                          <datalist id={datalistId}>
+                            {fetchedOpts.map((opt, idx) => (
+                              <option key={idx} value={opt} />
+                            ))}
+                          </datalist>
                         </div>
                       );
                     }
@@ -6333,6 +6893,22 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                             <option key={opt} value={opt}>{opt}</option>
                                           ))}
                                         </select>
+                                      ) : cf.fieldtype === 'Link' ? (
+                                        <>
+                                          <input
+                                            type="text"
+                                            list={`dl_m34_tbl_${cf.fieldname}_${rIdx}`}
+                                            className="text-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            value={row[cf.fieldname] || ''}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          />
+                                          <datalist id={`dl_m34_tbl_${cf.fieldname}_${rIdx}`}>
+                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
+                                              <option key={opt} value={opt} />
+                                            ))}
+                                          </datalist>
+                                        </>
                                       ) : (
                                         <input
                                           type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
@@ -6384,6 +6960,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({});
 
   useEffect(() => {
@@ -6427,6 +7004,10 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
             }
           }
           setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
         }
       } catch (err) {
         console.error('[LabForm100Modal] Error fetching meta fields for Production Record:', err);
@@ -6567,6 +7148,24 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                       );
                     }
 
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
                     if (field.fieldtype === 'Date') {
                       return (
                         <div key={field.fieldname} className="form-group">
@@ -6599,8 +7198,72 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                       );
                     }
 
-                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
-                      const sKey = `lab_${field.fieldname}`;
+                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+
+                      if (isEmpTarget) {
+                        return (
+                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="text"
+                              className="text-input"
+                              placeholder={`Select or type ${field.label}...`}
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                              onFocus={() => {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }}
+                            />
+                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                {employeeList.map(emp => {
+                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                  return (
+                                    <div
+                                      key={emp.name}
+                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                      onMouseDown={() => {
+                                        handleFieldChange(field.fieldname, empVal);
+                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                      }}
+                                    >
+                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const datalistId = `dl_m100_${sKey}`;
+
                       return (
                         <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
                           <label className="input-label" style={{ fontWeight: '600' }}>
@@ -6608,33 +7271,17 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                           </label>
                           <input
                             type="text"
+                            list={datalistId}
                             className="text-input"
-                            placeholder="Type to search employee..."
+                            placeholder={`Select or type ${field.label}...`}
                             value={formData[field.fieldname] || ''}
-                            onFocus={(e) => {
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-                            }}
-                            onChange={(e) => {
-                              handleFieldChange(field.fieldname, e.target.value);
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
-                            }}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
                           />
-                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                              {employeeList.map(emp => (
-                                <li
-                                  key={emp.name}
-                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
-                                  onClick={() => {
-                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
-                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                  }}
-                                >
-                                  {emp.employee_name} ({emp.name})
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          <datalist id={datalistId}>
+                            {fetchedOpts.map((opt, idx) => (
+                              <option key={idx} value={opt} />
+                            ))}
+                          </datalist>
                         </div>
                       );
                     }
@@ -6753,6 +7400,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({});
 
   useEffect(() => {
@@ -6796,6 +7444,10 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
             }
           }
           setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
         }
       } catch (err) {
         console.error('[LabForm69Modal] Error fetching meta fields for Mock Product Recall:', err);
@@ -6935,6 +7587,24 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       );
                     }
 
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
                     if (field.fieldtype === 'Date') {
                       return (
                         <div key={field.fieldname} className="form-group">
@@ -6967,8 +7637,54 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       );
                     }
 
-                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
-                      const sKey = `lab_${field.fieldname}`;
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+
+                      if (isEmpTarget) {
+                        return (
+                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="text"
+                              className="text-input"
+                              placeholder={`Select or type ${field.label}...`}
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                              onFocus={() => {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }}
+                            />
+                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                {employeeList.map(emp => {
+                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                  return (
+                                    <div
+                                      key={emp.name}
+                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                      onMouseDown={() => {
+                                        handleFieldChange(field.fieldname, empVal);
+                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                      }}
+                                    >
+                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const datalistId = `dl_m69_${sKey}`;
+
                       return (
                         <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
                           <label className="input-label" style={{ fontWeight: '600' }}>
@@ -6976,33 +7692,17 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                           </label>
                           <input
                             type="text"
+                            list={datalistId}
                             className="text-input"
-                            placeholder="Type to search employee..."
+                            placeholder={`Select or type ${field.label}...`}
                             value={formData[field.fieldname] || ''}
-                            onFocus={(e) => {
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-                            }}
-                            onChange={(e) => {
-                              handleFieldChange(field.fieldname, e.target.value);
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
-                            }}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
                           />
-                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                              {employeeList.map(emp => (
-                                <li
-                                  key={emp.name}
-                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
-                                  onClick={() => {
-                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
-                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                  }}
-                                >
-                                  {emp.employee_name} ({emp.name})
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          <datalist id={datalistId}>
+                            {fetchedOpts.map((opt, idx) => (
+                              <option key={idx} value={opt} />
+                            ))}
+                          </datalist>
                         </div>
                       );
                     }
@@ -7121,6 +7821,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
   const [tableData, setTableData] = useState({
     attendees: [],
     who_were_responsible_for_verifying_and_monitoring: []
@@ -7164,6 +7865,10 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
             }
           }
           setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
         }
       } catch (err) {
         console.error('[LabForm70Modal] Error fetching meta fields for Recall Review:', err);
@@ -7309,6 +8014,24 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       );
                     }
 
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
                     if (field.fieldtype === 'Date') {
                       return (
                         <div key={field.fieldname} className="form-group">
@@ -7325,8 +8048,88 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       );
                     }
 
-                    if (field.fieldtype === 'Link' && field.options === 'Employee') {
-                      const sKey = `lab_${field.fieldname}`;
+                    if (field.fieldtype === 'Time') {
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="time"
+                            className="text-input"
+                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group">
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd ? '*' : ''}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="text-input"
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
+                      const sKey = field.fieldname;
+
+                      if (isEmpTarget) {
+                        return (
+                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
+                            <label className="input-label" style={{ fontWeight: '600' }}>
+                              {field.label} {field.reqd ? '*' : ''}
+                            </label>
+                            <input
+                              type="text"
+                              className="text-input"
+                              placeholder={`Select or type ${field.label}...`}
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                              onFocus={() => {
+                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                              }}
+                            />
+                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                {employeeList.map(emp => {
+                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                  return (
+                                    <div
+                                      key={emp.name}
+                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                      onMouseDown={() => {
+                                        handleFieldChange(field.fieldname, empVal);
+                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                      }}
+                                    >
+                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const datalistId = `dl_m70_${sKey}`;
+
                       return (
                         <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
                           <label className="input-label" style={{ fontWeight: '600' }}>
@@ -7334,33 +8137,17 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                           </label>
                           <input
                             type="text"
+                            list={datalistId}
                             className="text-input"
-                            placeholder="Type to search employee..."
+                            placeholder={`Select or type ${field.label}...`}
                             value={formData[field.fieldname] || ''}
-                            onFocus={(e) => {
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value || '', sKey);
-                            }}
-                            onChange={(e) => {
-                              handleFieldChange(field.fieldname, e.target.value);
-                              if (handleSearchEmployees) handleSearchEmployees(e.target.value, sKey);
-                            }}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
                           />
-                          {showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-                            <ul className="dropdown-list" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, maxH: '150px', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                              {employeeList.map(emp => (
-                                <li
-                                  key={emp.name}
-                                  style={{ padding: '6px 10px', cursor: 'pointer' }}
-                                  onClick={() => {
-                                    handleFieldChange(field.fieldname, `${emp.employee_name} (${emp.name})`);
-                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                  }}
-                                >
-                                  {emp.employee_name} ({emp.name})
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          <datalist id={datalistId}>
+                            {fetchedOpts.map((opt, idx) => (
+                              <option key={idx} value={opt} />
+                            ))}
+                          </datalist>
                         </div>
                       );
                     }
@@ -7432,6 +8219,23 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                             <option key={opt} value={opt}>{opt}</option>
                                           ))}
                                         </select>
+                                      ) : cf.fieldtype === 'Link' ? (
+                                        <>
+                                          <input
+                                            type="text"
+                                            list={`dl_m70_tbl_${cf.fieldname}_${rIdx}`}
+                                            className="text-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            placeholder={`Enter ${cf.label}...`}
+                                            value={row[cf.fieldname] || ''}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          />
+                                          <datalist id={`dl_m70_tbl_${cf.fieldname}_${rIdx}`}>
+                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
+                                              <option key={opt} value={opt} />
+                                            ))}
+                                          </datalist>
+                                        </>
                                       ) : (
                                         <input
                                           type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
@@ -7472,6 +8276,2999 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
     </div>
   );
 }
+
+export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Dynamic state for top-level fields
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    operator: '',
+    verified_by: '',
+    autoclave_no: 'Autoclave #1',
+    cycle_number: '1',
+    sterilization_temp: 121.0,
+    pressure_psi: 15.0,
+    exposure_time_mins: 15,
+    chemical_indicator: 'Pass',
+    biological_indicator: 'Pass',
+    remarks: 'Standard sterilization cycle completed at 121°C.'
+  });
+
+  // Dynamic state for child table fields
+  const [tableData, setTableData] = useState({
+    table_autoclave: [
+      { sample_description: 'Media Bottles & Pipettes', start_time: '09:00', end_time: '09:30', temperature: 121.0, pressure: 15.0, status: 'Pass' },
+      { sample_description: 'Sample Containers', start_time: '10:00', end_time: '10:30', temperature: 121.0, pressure: 15.0, status: 'Pass' }
+    ]
+  });
+
+  // Fetch Meta Fields from ERPNext DocType "Autoclave Record"
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm12Modal] Fetching DocType meta for "Autoclave Record"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Autoclave Record');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'operator', label: 'Operator / Technician', fieldtype: 'Link', options: 'Employee' },
+            { idx: 3, fieldname: 'verified_by', label: 'Verified By', fieldtype: 'Link', options: 'Employee' },
+            { idx: 4, fieldname: 'autoclave_no', label: 'Autoclave No.', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'cycle_number', label: 'Cycle Number', fieldtype: 'Int' },
+            { idx: 6, fieldname: 'sterilization_temp', label: 'Sterilization Temp (°C)', fieldtype: 'Float' },
+            { idx: 7, fieldname: 'pressure_psi', label: 'Pressure (PSI)', fieldtype: 'Float' },
+            { idx: 8, fieldname: 'exposure_time_mins', label: 'Exposure Time (Mins)', fieldtype: 'Int' },
+            { idx: 9, fieldname: 'chemical_indicator', label: 'Chemical Indicator Result', fieldtype: 'Select', options: 'Pass\nFail' },
+            { idx: 10, fieldname: 'biological_indicator', label: 'Biological Indicator Result', fieldtype: 'Select', options: 'Pass\nFail\nN/A' },
+            { idx: 11, fieldname: 'table_autoclave', label: 'Autoclave Items & Readings', fieldtype: 'Table', options: 'Autoclave Log Detail' },
+            { idx: 12, fieldname: 'remarks', label: 'Remarks / Notes', fieldtype: 'Small Text' }
+          ];
+        }
+
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        // Fetch child table metas for any Table fields
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Autoclave Log Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'sample_description', label: 'Item / Sample Description', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'start_time', label: 'Start Time', fieldtype: 'Time' },
+              { idx: 3, fieldname: 'end_time', label: 'End Time', fieldtype: 'Time' },
+              { idx: 4, fieldname: 'temperature', label: 'Temperature (°C)', fieldtype: 'Float' },
+              { idx: 5, fieldname: 'pressure', label: 'Pressure (PSI)', fieldtype: 'Float' },
+              { idx: 6, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Pass\nFail' }
+            ];
+          }
+
+          childMetasObj[childOption] = childFields;
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[LabForm12Modal] Error fetching meta fields for "Autoclave Record":', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
+        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Autoclave Log Detail'] || []);
+    const newRow = {};
+    childFields.forEach(f => {
+      newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
+    });
+    if (!newRow.start_time) newRow.start_time = new Date().toTimeString().slice(0, 5);
+    if (!newRow.end_time) newRow.end_time = new Date(Date.now() + 1800000).toTimeString().slice(0, 5);
+    newRow.sample_description = newRow.sample_description || 'Autoclave Batch Item';
+    newRow.temperature = newRow.temperature || 121.0;
+    newRow.pressure = newRow.pressure || 15.0;
+    newRow.status = newRow.status || 'Pass';
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Autoclave Record',
+      ...formData,
+      ...tableData,
+      analyst: formData.operator || formData.technician || 'QC Tech',
+      verifiedBy: formData.verified_by || 'Manager',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f =>
+    f.fieldtype === 'Table' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const signatureFields = fieldsList.filter(f =>
+    f.fieldtype === 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  const renderControlInput = (field, val, onChange, searchFieldKey) => {
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('operator') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={reqd === 1}
+            value={val || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="dropdown-item"
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (fType === 'Signature') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              type="text"
+              className="form-input"
+              value={val || ''}
+              onChange={e => onChange(e.target.value)}
+              placeholder={`Digital signature (${label})...`}
+              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
+            />
+            {val && (
+              <button
+                type="button"
+                className="secondary-btn"
+                style={{ fontSize: '10px', padding: '4px 8px' }}
+                onClick={() => onChange('')}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Date') {
+      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Time') {
+      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Select') {
+      const opts = parseSelectOptions(field.options);
+      return (
+        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">-- Select {field.label || 'Option'} --</option>
+          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
+        </select>
+      );
+    }
+    if (fType === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    }
+    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
+      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
+      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 12: Autoclave Sterilization Record Sheet
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Autoclave Record"...
+              </div>
+            )}
+
+
+
+            {/* Dynamic Top-Level Fields Grid */}
+            {nonTableFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {nonTableFields.map(f => (
+                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                      </label>
+                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `auto_meta_${f.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Child Table Fields */}
+            {tableFields.map(tf => {
+              const childDoctype = tf.options || 'Autoclave Log Detail';
+              const childFields = (childMetas[childDoctype] || childMetas['Autoclave Log Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const rows = tableData[tf.fieldname] || [];
+
+              return (
+                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                      📊 {tf.label}
+                    </h4>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                      No items added to autoclave log yet. Click "+ Add Row" above to record sterilization items.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                            ))}
+                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                  {cf.fieldtype === 'Select' ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    >
+                                      <option value="">-- Select --</option>
+                                      {parseSelectOptions(cf.options).map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  ) : cf.fieldtype === 'Check' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(row[cf.fieldname])}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <input
+                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
+                                      step="any"
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Signature Fields Section */}
+            {signatureFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {signatureFields.map(sf => (
+                    <div key={sf.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `auto_meta_sig_${sf.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FormFootnote doctype="Autoclave Record" defaultFormNo="Form 12" formTitle="Autoclave Sterilization Record Sheet" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Autoclave Record'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Dynamic state for top-level fields
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    prepared_by: '',
+    verified_by: '',
+    media_type: 'PCA (Plate Count Agar)',
+    batch_no: 'MP-2026-001',
+    autoclave_batch: 'AC-001',
+    sterilization_temp: 121.0,
+    autoclave_time_mins: 15,
+    ph_before: 7.0,
+    ph_after: 7.0,
+    appearance: 'Clear Straw / Yellow',
+    sterility_check: 'Pass',
+    remarks: 'Media prepared, autoclaved at 121°C for 15 mins, pH verified within spec.'
+  });
+
+  // Dynamic state for child table fields
+  const [tableData, setTableData] = useState({
+    media_preparation_details: [
+      { media_name: 'Plate Count Agar (PCA)', brand_manufacturer: 'Oxoid', lot_number: 'LOT-99812', qty_prepared: '23.5g / 1L', expiry_date: new Date(Date.now() + 30*86400000).toISOString().slice(0, 10), ph_check: 7.0, status: 'Pass' },
+      { media_name: 'Violet Red Bile Agar (VRBA)', brand_manufacturer: 'Difco', lot_number: 'LOT-88231', qty_prepared: '41.5g / 1L', expiry_date: new Date(Date.now() + 30*86400000).toISOString().slice(0, 10), ph_check: 7.4, status: 'Pass' }
+    ]
+  });
+
+  // Fetch Meta Fields from ERPNext DocType "Media Preparation Record"
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm13Modal] Fetching DocType meta for "Media Preparation Record"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Media Preparation Record');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date of Preparation', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'prepared_by', label: 'Prepared By / Analyst', fieldtype: 'Link', options: 'Employee' },
+            { idx: 3, fieldname: 'verified_by', label: 'Verified By / Supervisor', fieldtype: 'Link', options: 'Employee' },
+            { idx: 4, fieldname: 'media_type', label: 'Media / Agar Type', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'batch_no', label: 'Media Batch / Lot No.', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'autoclave_batch', label: 'Autoclave Batch No.', fieldtype: 'Data' },
+            { idx: 7, fieldname: 'sterilization_temp', label: 'Sterilization Temp (°C)', fieldtype: 'Float' },
+            { idx: 8, fieldname: 'autoclave_time_mins', label: 'Sterilization Time (Mins)', fieldtype: 'Int' },
+            { idx: 9, fieldname: 'ph_before', label: 'pH Before Sterilization', fieldtype: 'Float' },
+            { idx: 10, fieldname: 'ph_after', label: 'pH After Sterilization', fieldtype: 'Float' },
+            { idx: 11, fieldname: 'appearance', label: 'Appearance / Color', fieldtype: 'Data' },
+            { idx: 12, fieldname: 'sterility_check', label: 'Sterility Check Status', fieldtype: 'Select', options: 'Pass\nFail\nPending' },
+            { idx: 13, fieldname: 'media_preparation_details', label: 'Prepared Media Batches & Reagents', fieldtype: 'Table', options: 'Media Preparation Detail' },
+            { idx: 14, fieldname: 'remarks', label: 'Remarks / Observations', fieldtype: 'Small Text' }
+          ];
+        }
+
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('prepared by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        // Fetch child table metas for any Table fields
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Media Preparation Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'media_name', label: 'Media / Reagent Name', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'brand_manufacturer', label: 'Brand / Manufacturer', fieldtype: 'Data' },
+              { idx: 3, fieldname: 'lot_number', label: 'Lot / Serial No.', fieldtype: 'Data' },
+              { idx: 4, fieldname: 'qty_prepared', label: 'Qty Prepared (g/L)', fieldtype: 'Data' },
+              { idx: 5, fieldname: 'expiry_date', label: 'Expiry Date', fieldtype: 'Date' },
+              { idx: 6, fieldname: 'ph_check', label: 'Measured pH', fieldtype: 'Float' },
+              { idx: 7, fieldname: 'status', label: 'Quality Status', fieldtype: 'Select', options: 'Pass\nFail' }
+            ];
+          }
+
+          childFields = childFields.map(cf => ({
+            ...cf,
+            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          }));
+
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { media_name: 'Plate Count Agar (PCA)', brand_manufacturer: 'Oxoid', lot_number: 'LOT-99812', qty_prepared: '23.5g / 1L', expiry_date: new Date(Date.now() + 30*86400000).toISOString().slice(0, 10), ph_check: 7.0, status: 'Pass' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[LabForm13Modal] Error fetching meta fields for "Media Preparation Record":', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Media Preparation Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else if (cf.fieldtype === 'Date') {
+        newRow[cf.fieldname] = new Date().toISOString().slice(0, 10);
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+    newRow.media_name = newRow.media_name || 'Standard Culture Agar';
+    newRow.status = newRow.status || 'Pass';
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Media Preparation Record',
+      ...formData,
+      ...tableData,
+      analyst: formData.prepared_by || formData.operator || formData.technician || 'QC Analyst',
+      verifiedBy: formData.verified_by || 'Manager',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f =>
+    f.fieldtype === 'Table' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const signatureFields = fieldsList.filter(f =>
+    f.fieldtype === 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  const renderControlInput = (field, val, onChange, searchFieldKey) => {
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('prepared by') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={reqd === 1}
+            value={val || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="dropdown-item"
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (fType === 'Signature') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              type="text"
+              className="form-input"
+              value={val || ''}
+              onChange={e => onChange(e.target.value)}
+              placeholder={`Digital signature (${label})...`}
+              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
+            />
+            {val && (
+              <button
+                type="button"
+                className="secondary-btn"
+                style={{ fontSize: '10px', padding: '4px 8px' }}
+                onClick={() => onChange('')}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Date') {
+      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Time') {
+      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Select') {
+      const opts = parseSelectOptions(field.options);
+      return (
+        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">-- Select {field.label || 'Option'} --</option>
+          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
+        </select>
+      );
+    }
+    if (fType === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    }
+    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
+      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
+      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 13: Media Preparation Record Sheet
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Media Preparation Record"...
+              </div>
+            )}
+
+            {/* Dynamic Top-Level Fields Grid */}
+            {nonTableFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {nonTableFields.map(f => (
+                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                      </label>
+                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `mpr_meta_${f.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Child Table Fields */}
+            {tableFields.map(tf => {
+              const childDoctype = tf.options || 'Media Preparation Detail';
+              const childFields = (childMetas[childDoctype] || childMetas['Media Preparation Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const rows = tableData[tf.fieldname] || [];
+
+              return (
+                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                      📊 {tf.label}
+                    </h4>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                      No media batches added yet. Click "+ Add Row" above to record prepared media items.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                            ))}
+                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                  {cf.fieldtype === 'Select' ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    >
+                                      <option value="">-- Select --</option>
+                                      {parseSelectOptions(cf.options).map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  ) : cf.fieldtype === 'Check' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(row[cf.fieldname])}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <input
+                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
+                                      step="any"
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Signature Fields Section */}
+            {signatureFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {signatureFields.map(sf => (
+                    <div key={sf.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `mpr_meta_sig_${sf.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FormFootnote doctype="Media Preparation Record" defaultFormNo="Form 13" formTitle="Media Preparation Record Sheet" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Media Preparation Record'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Dynamic state for top-level fields
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    tested_by: '',
+    verified_by: '',
+    material_type: 'Preform 28mm PCO',
+    batch_lot_no: 'PF-2026-9901',
+    sample_size: '10 Units',
+    rinse_solution: 'Sterile Buffered Peptone Water (100mL)',
+    incubation_temp: 35.0,
+    incubation_hours: 24,
+    tcc_result: 'Absent / 0 cfu',
+    ecoli_result: 'Absent / 0 cfu',
+    spc_hpc_result: '< 10 cfu/mL',
+    overall_status: 'Pass',
+    remarks: 'Rinse-off swab test completed for raw materials. Microbiological counts within spec.'
+  });
+
+  // Dynamic state for child table fields
+  const [tableData, setTableData] = useState({
+    rinse_off_details: [
+      { sample_id: 'SAMPLE-01', item_description: '28mm Preform Inner Surface', tcc_count: '0', ecoli_count: '0', spc_count: '2', status: 'Pass' },
+      { sample_id: 'SAMPLE-02', item_description: 'Closure/Cap Contact Surface', tcc_count: '0', ecoli_count: '0', spc_count: '0', status: 'Pass' }
+    ]
+  });
+
+  // Fetch Meta Fields from ERPNext DocType "Rinse-Off Test for Raw Materials"
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm64Modal] Fetching DocType meta for "Rinse-Off Test for Raw Materials"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Rinse-Off Test for Raw Materials');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date of Test', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'tested_by', label: 'Tested By / Analyst', fieldtype: 'Link', options: 'Employee' },
+            { idx: 3, fieldname: 'verified_by', label: 'Verified By / Supervisor', fieldtype: 'Link', options: 'Employee' },
+            { idx: 4, fieldname: 'material_type', label: 'Raw Material / Item', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'batch_lot_no', label: 'Supplier Batch / Lot No.', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'sample_size', label: 'Sample Size', fieldtype: 'Data' },
+            { idx: 7, fieldname: 'rinse_solution', label: 'Rinse Solution Used', fieldtype: 'Data' },
+            { idx: 8, fieldname: 'incubation_temp', label: 'Incubation Temp (°C)', fieldtype: 'Float' },
+            { idx: 9, fieldname: 'incubation_hours', label: 'Incubation Hours', fieldtype: 'Int' },
+            { idx: 10, fieldname: 'tcc_result', label: 'Total Coliform Count (TCC)', fieldtype: 'Data' },
+            { idx: 11, fieldname: 'ecoli_result', label: 'E. Coli Result', fieldtype: 'Data' },
+            { idx: 12, fieldname: 'spc_hpc_result', label: 'SPC / HPC Count', fieldtype: 'Data' },
+            { idx: 13, fieldname: 'overall_status', label: 'Overall Test Result', fieldtype: 'Select', options: 'Pass\nFail\nPending' },
+            { idx: 14, fieldname: 'rinse_off_details', label: 'Rinse-Off Test Readings & Detail', fieldtype: 'Table', options: 'Rinse Off Test Detail' },
+            { idx: 15, fieldname: 'remarks', label: 'Remarks / Observations', fieldtype: 'Small Text' }
+          ];
+        }
+
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('tested by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        // Fetch child table metas for any Table fields
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Rinse Off Test Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'sample_id', label: 'Sample ID / Unit No.', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'item_description', label: 'Material Description', fieldtype: 'Data' },
+              { idx: 3, fieldname: 'tcc_count', label: 'TCC Count (cfu/mL)', fieldtype: 'Data' },
+              { idx: 4, fieldname: 'ecoli_count', label: 'E.Coli Count (cfu/mL)', fieldtype: 'Data' },
+              { idx: 5, fieldname: 'spc_count', label: 'SPC / HPC Count', fieldtype: 'Data' },
+              { idx: 6, fieldname: 'status', label: 'Quality Status', fieldtype: 'Select', options: 'Pass\nFail' }
+            ];
+          }
+
+          childFields = childFields.map(cf => ({
+            ...cf,
+            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          }));
+
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { sample_id: 'SAMPLE-01', item_description: '28mm Preform Inner Surface', tcc_count: '0', ecoli_count: '0', spc_count: '2', status: 'Pass' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[LabForm64Modal] Error fetching meta fields for "Rinse-Off Test for Raw Materials":', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Rinse Off Test Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else if (cf.fieldtype === 'Date') {
+        newRow[cf.fieldname] = new Date().toISOString().slice(0, 10);
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+    newRow.sample_id = newRow.sample_id || `SAMPLE-0${(tableData[tableFieldName] || []).length + 1}`;
+    newRow.status = newRow.status || 'Pass';
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Rinse-Off Test for Raw Materials',
+      ...formData,
+      ...tableData,
+      analyst: formData.tested_by || formData.operator || formData.technician || 'QC Analyst',
+      verifiedBy: formData.verified_by || 'Manager',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f =>
+    f.fieldtype === 'Table' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const signatureFields = fieldsList.filter(f =>
+    f.fieldtype === 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  const renderControlInput = (field, val, onChange, searchFieldKey) => {
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('tested by') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={reqd === 1}
+            value={val || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="dropdown-item"
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (fType === 'Signature') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              type="text"
+              className="form-input"
+              value={val || ''}
+              onChange={e => onChange(e.target.value)}
+              placeholder={`Digital signature (${label})...`}
+              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
+            />
+            {val && (
+              <button
+                type="button"
+                className="secondary-btn"
+                style={{ fontSize: '10px', padding: '4px 8px' }}
+                onClick={() => onChange('')}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Date') {
+      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Time') {
+      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Select') {
+      const opts = parseSelectOptions(field.options);
+      return (
+        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">-- Select {field.label || 'Option'} --</option>
+          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
+        </select>
+      );
+    }
+    if (fType === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    }
+    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
+      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
+      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 64: Rinse-Off Test for Raw Materials
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Rinse-Off Test for Raw Materials"...
+              </div>
+            )}
+
+            {/* Dynamic Top-Level Fields Grid */}
+            {nonTableFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {nonTableFields.map(f => (
+                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                      </label>
+                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `rot_meta_${f.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Child Table Fields */}
+            {tableFields.map(tf => {
+              const childDoctype = tf.options || 'Rinse Off Test Detail';
+              const childFields = (childMetas[childDoctype] || childMetas['Rinse Off Test Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const rows = tableData[tf.fieldname] || [];
+
+              return (
+                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                      📊 {tf.label}
+                    </h4>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                      No rinse-off test readings added yet. Click "+ Add Row" above to record sample items.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                            ))}
+                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                  {cf.fieldtype === 'Select' ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    >
+                                      <option value="">-- Select --</option>
+                                      {parseSelectOptions(cf.options).map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  ) : cf.fieldtype === 'Check' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(row[cf.fieldname])}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <input
+                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
+                                      step="any"
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Signature Fields Section */}
+            {signatureFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {signatureFields.map(sf => (
+                    <div key={sf.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `rot_meta_sig_${sf.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FormFootnote doctype="Rinse-Off Test for Raw Materials" defaultFormNo="Form 64" formTitle="Rinse-Off Test for Raw Materials" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Rinse-Off Test Log'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Dynamic state for top-level fields
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    recorded_by: '',
+    verified_by: '',
+    bottle_size: '1.5L PET',
+    product_name: 'Island Chill Natural Mineral Water',
+    batch_code: 'BC-2026-0922',
+    production_date: new Date().toISOString().slice(0, 10),
+    sample_qty: 6,
+    storage_location: 'Library Storage Rack A2',
+    retention_period_months: 24,
+    evaluation_status: 'Pass',
+    remarks: 'Library retention samples logged and stored in QA sample room.'
+  });
+
+  // Dynamic state for child table fields
+  const [tableData, setTableData] = useState({
+    library_sample_details: [
+      { sample_code: 'LS-01', bottle_size: '1.5L PET', inspection_date: new Date().toISOString().slice(0, 10), visual_check: 'Clear', taste_check: 'Normal', status: 'Pass' },
+      { sample_code: 'LS-02', bottle_size: '1.5L PET', inspection_date: new Date().toISOString().slice(0, 10), visual_check: 'Clear', taste_check: 'Normal', status: 'Pass' }
+    ]
+  });
+
+  // Fetch Meta Fields from ERPNext DocType "Library Sample Record"
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm72Modal] Fetching DocType meta for "Library Sample Record"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Library Sample Record');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date Logged', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'recorded_by', label: 'Recorded By / Technician', fieldtype: 'Link', options: 'Employee' },
+            { idx: 3, fieldname: 'verified_by', label: 'Verified By / Supervisor', fieldtype: 'Link', options: 'Employee' },
+            { idx: 4, fieldname: 'product_name', label: 'Product Name', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'bottle_size', label: 'Bottle Size / SKU', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'batch_code', label: 'Production Batch Code', fieldtype: 'Data' },
+            { idx: 7, fieldname: 'production_date', label: 'Production Date', fieldtype: 'Date' },
+            { idx: 8, fieldname: 'sample_qty', label: 'Sample Quantity', fieldtype: 'Int' },
+            { idx: 9, fieldname: 'storage_location', label: 'Storage Rack / Shelf Location', fieldtype: 'Data' },
+            { idx: 10, fieldname: 'retention_period_months', label: 'Retention Period (Months)', fieldtype: 'Int' },
+            { idx: 11, fieldname: 'evaluation_status', label: 'Periodic Evaluation Status', fieldtype: 'Select', options: 'Pass\nFail\nPending' },
+            { idx: 12, fieldname: 'library_sample_details', label: 'Library Samples & Inspection Logs', fieldtype: 'Table', options: 'Library Sample Detail' },
+            { idx: 13, fieldname: 'remarks', label: 'Remarks / Storage Notes', fieldtype: 'Small Text' }
+          ];
+        }
+
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('recorded by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        // Fetch child table metas for any Table fields
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Library Sample Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'sample_code', label: 'Sample Code', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'bottle_size', label: 'Bottle Size', fieldtype: 'Data' },
+              { idx: 3, fieldname: 'inspection_date', label: 'Inspection Date', fieldtype: 'Date' },
+              { idx: 4, fieldname: 'visual_check', label: 'Visual Check', fieldtype: 'Data' },
+              { idx: 5, fieldname: 'taste_check', label: 'Taste Check', fieldtype: 'Data' },
+              { idx: 6, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Pass\nFail' }
+            ];
+          }
+
+          childFields = childFields.map(cf => ({
+            ...cf,
+            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          }));
+
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { sample_code: 'LS-01', bottle_size: '1.5L PET', inspection_date: new Date().toISOString().slice(0, 10), visual_check: 'Clear', taste_check: 'Normal', status: 'Pass' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[LabForm72Modal] Error fetching meta fields for "Library Sample Record":', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Library Sample Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else if (cf.fieldtype === 'Date') {
+        newRow[cf.fieldname] = new Date().toISOString().slice(0, 10);
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+    newRow.sample_code = newRow.sample_code || `LS-0${(tableData[tableFieldName] || []).length + 1}`;
+    newRow.status = newRow.status || 'Pass';
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Library Sample Record',
+      ...formData,
+      ...tableData,
+      analyst: formData.recorded_by || formData.operator || formData.technician || 'QC Technician',
+      verifiedBy: formData.verified_by || 'Manager',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f =>
+    f.fieldtype === 'Table' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const signatureFields = fieldsList.filter(f =>
+    f.fieldtype === 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  const renderControlInput = (field, val, onChange, searchFieldKey) => {
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('recorded by') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={reqd === 1}
+            value={val || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="dropdown-item"
+                  onMouseDown={() => {
+                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (fType === 'Signature') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              type="text"
+              className="form-input"
+              value={val || ''}
+              onChange={e => onChange(e.target.value)}
+              placeholder={`Digital signature (${label})...`}
+              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
+            />
+            {val && (
+              <button
+                type="button"
+                className="secondary-btn"
+                style={{ fontSize: '10px', padding: '4px 8px' }}
+                onClick={() => onChange('')}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Date') {
+      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Time') {
+      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Select') {
+      const opts = parseSelectOptions(field.options);
+      return (
+        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">-- Select {field.label || 'Option'} --</option>
+          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
+        </select>
+      );
+    }
+    if (fType === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    }
+    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
+      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
+      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 72: Library Sample Record
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Library Sample Record"...
+              </div>
+            )}
+
+            {/* Dynamic Top-Level Fields Grid */}
+            {nonTableFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {nonTableFields.map(f => (
+                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                      </label>
+                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `lsr_meta_${f.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Child Table Fields */}
+            {tableFields.map(tf => {
+              const childDoctype = tf.options || 'Library Sample Detail';
+              const childFields = (childMetas[childDoctype] || childMetas['Library Sample Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const rows = tableData[tf.fieldname] || [];
+
+              return (
+                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                      📊 {tf.label}
+                    </h4>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                      No library samples added yet. Click "+ Add Row" above to record sample items.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                            ))}
+                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                  {cf.fieldtype === 'Select' ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    >
+                                      <option value="">-- Select --</option>
+                                      {parseSelectOptions(cf.options).map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  ) : cf.fieldtype === 'Check' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(row[cf.fieldname])}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <input
+                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
+                                      step="any"
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Signature Fields Section */}
+            {signatureFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {signatureFields.map(sf => (
+                    <div key={sf.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `lsr_meta_sig_${sf.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FormFootnote doctype="Library Sample Record" defaultFormNo="Form 72" formTitle="Library Sample Record" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Library Sample Record'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Dynamic state for top-level fields
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    time: new Date().toTimeString().slice(0, 5),
+    product_name: 'Island Chill Natural Mineral Water',
+    batch_code: 'BC-2026-0922',
+    production_date: new Date().toISOString().slice(0, 10),
+    expiry_date: new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0, 10),
+    shift: 'Shift A',
+    line_no: 'Line 1',
+    water_batch_no: 'WB-2026-0922',
+    preform_batch_no: 'PF-8842',
+    closure_batch_no: 'CL-9912',
+    label_batch_no: 'LB-4410',
+    carton_batch_no: 'CT-3310',
+    quantity_produced: 5000,
+    customer_destination: 'Main Distribution Center',
+    recorded_by: '',
+    verified_by: '',
+    remarks: 'Full product traceability logged successfully.'
+  });
+
+  // Dynamic state for child table fields
+  const [tableData, setTableData] = useState({
+    traceability_details: [
+      { raw_material: 'PET Preforms (28g)', supplier_lot: 'LOT-PF-1002', batch_no: 'PF-8842', qty_used: '5200 pcs', status: 'Pass' },
+      { raw_material: 'Blue Closures 28mm', supplier_lot: 'LOT-CL-5041', batch_no: 'CL-9912', qty_used: '5200 pcs', status: 'Pass' }
+    ]
+  });
+
+  // Fetch Meta Fields from ERPNext DocType "Traceability of products"
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm47Modal] Fetching DocType meta for "Traceability of products"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Traceability of products');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Date Logged', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'time', label: 'Time', fieldtype: 'Time' },
+            { idx: 3, fieldname: 'product_name', label: 'Product Name', fieldtype: 'Data' },
+            { idx: 4, fieldname: 'batch_code', label: 'Product Batch Code', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'production_date', label: 'Production Date', fieldtype: 'Date' },
+            { idx: 6, fieldname: 'expiry_date', label: 'Expiry / Best Before Date', fieldtype: 'Date' },
+            { idx: 7, fieldname: 'shift', label: 'Shift', fieldtype: 'Select', options: 'Shift A\nShift B\nShift C' },
+            { idx: 8, fieldname: 'line_no', label: 'Line / Machine No', fieldtype: 'Data' },
+            { idx: 9, fieldname: 'water_batch_no', label: 'Raw / Product Water Batch No', fieldtype: 'Data' },
+            { idx: 10, fieldname: 'preform_batch_no', label: 'Preform Lot / Batch No', fieldtype: 'Data' },
+            { idx: 11, fieldname: 'closure_batch_no', label: 'Closure Lot / Batch No', fieldtype: 'Data' },
+            { idx: 12, fieldname: 'label_batch_no', label: 'Label Lot / Batch No', fieldtype: 'Data' },
+            { idx: 13, fieldname: 'carton_batch_no', label: 'Carton / Shrink Lot No', fieldtype: 'Data' },
+            { idx: 14, fieldname: 'quantity_produced', label: 'Quantity Produced (Cases / Bottles)', fieldtype: 'Int' },
+            { idx: 15, fieldname: 'customer_destination', label: 'Customer / Warehouse Destination', fieldtype: 'Data' },
+            { idx: 16, fieldname: 'recorded_by', label: 'Recorded By / QA Officer', fieldtype: 'Link', options: 'Employee' },
+            { idx: 17, fieldname: 'verified_by', label: 'Verified By / Supervisor', fieldtype: 'Link', options: 'Employee' },
+            { idx: 18, fieldname: 'traceability_details', label: 'Raw Material Traceability Details', fieldtype: 'Table', options: 'Traceability Detail' },
+            { idx: 19, fieldname: 'remarks', label: 'Remarks / Comments', fieldtype: 'Small Text' }
+          ];
+        }
+
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('recorded by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        // Fetch child table metas for any Table fields
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Traceability Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'raw_material', label: 'Raw Material Component', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'supplier_lot', label: 'Supplier Lot No', fieldtype: 'Data' },
+              { idx: 3, fieldname: 'batch_no', label: 'Internal Batch No', fieldtype: 'Data' },
+              { idx: 4, fieldname: 'qty_used', label: 'Quantity Used', fieldtype: 'Data' },
+              { idx: 5, fieldname: 'status', label: 'Verification Status', fieldtype: 'Select', options: 'Pass\nFail\nPending' }
+            ];
+          }
+
+          childFields = childFields.map(cf => ({
+            ...cf,
+            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          }));
+
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { raw_material: 'PET Preforms (28g)', supplier_lot: 'LOT-PF-1002', batch_no: 'PF-8842', qty_used: '5200 pcs', status: 'Pass' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[LabForm47Modal] Error fetching meta fields for "Traceability of products":', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Traceability Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else if (cf.fieldtype === 'Date') {
+        newRow[cf.fieldname] = new Date().toISOString().slice(0, 10);
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+    newRow.status = newRow.status || 'Pass';
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Traceability of products',
+      ...formData,
+      ...tableData,
+      analyst: formData.recorded_by || formData.operator || formData.technician || 'QA Officer',
+      verifiedBy: formData.verified_by || 'Manager',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f =>
+    f.fieldtype === 'Table' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const signatureFields = fieldsList.filter(f =>
+    f.fieldtype === 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  const renderControlInput = (field, val, onChange, searchFieldKey) => {
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('recorded by') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={reqd === 1}
+            value={val || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="autocomplete-item"
+                  onClick={() => {
+                    onChange(emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{emp.employee_name || emp.name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.designation || emp.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Date') {
+      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Time') {
+      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Select') {
+      const opts = parseSelectOptions(field.options);
+      return (
+        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">-- Select {field.label || 'Option'} --</option>
+          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
+        </select>
+      );
+    }
+    if (fType === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    }
+    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
+      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
+      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 47: Traceability of products
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Traceability of products"...
+              </div>
+            )}
+
+            {/* Dynamic Top-Level Fields Grid */}
+            {nonTableFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {nonTableFields.map(f => (
+                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                      </label>
+                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `top_meta_${f.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Child Table Fields */}
+            {tableFields.map(tf => {
+              const childDoctype = tf.options || 'Traceability Detail';
+              const childFields = (childMetas[childDoctype] || childMetas['Traceability Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const rows = tableData[tf.fieldname] || [];
+
+              return (
+                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                      📊 {tf.label}
+                    </h4>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                      No traceability details added yet. Click "+ Add Row" above to record item details.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                            ))}
+                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                  {cf.fieldtype === 'Select' ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    >
+                                      <option value="">-- Select --</option>
+                                      {parseSelectOptions(cf.options).map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  ) : cf.fieldtype === 'Check' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(row[cf.fieldname])}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <input
+                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
+                                      step="any"
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rowIdx)}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Signature Fields Section */}
+            {signatureFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {signatureFields.map(sf => (
+                    <div key={sf.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `top_meta_sig_${sf.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FormFootnote doctype="Traceability of products" defaultFormNo="Form 47" formTitle="Traceability of products" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Traceability of products'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Dynamic state for top-level fields
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    induction_type: 'Employee Site Induction',
+    attendee_name: 'John Doe',
+    company_organization: 'Carpenters Waters (Fiji) Ltd',
+    contact_number: '+679 999 1234',
+    designation: 'QC Analyst',
+    department: 'Quality Assurance',
+    conducted_by: '',
+    verified_by: '',
+    safety_rules_acknowledged: true,
+    hygiene_rules_acknowledged: true,
+    ppe_provided: true,
+    emergency_procedures_explained: true,
+    status: 'Completed',
+    remarks: 'Site safety and quality induction completed successfully.'
+  });
+
+  // Dynamic state for child table fields
+  const [tableData, setTableData] = useState({
+    induction_items: [
+      { topic: 'Personal Protective Equipment (PPE)', completed: true, notes: 'Safety boots, hairnet, lab coat verified.' },
+      { topic: 'Personal Hygiene & Hand Sanitization', completed: true, notes: 'Hand washing guidelines demonstrated.' }
+    ]
+  });
+
+  // Fetch Meta Fields from ERPNext DocType "Induction"
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm39Modal] Fetching DocType meta for "Induction"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Induction');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Induction Date', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'induction_type', label: 'Induction Type', fieldtype: 'Select', options: 'Employee Site Induction\nVisitor Induction\nContractor Safety Induction' },
+            { idx: 3, fieldname: 'attendee_name', label: 'Attendee Full Name', fieldtype: 'Data' },
+            { idx: 4, fieldname: 'company_organization', label: 'Company / Organization', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'contact_number', label: 'Contact Number', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'designation', label: 'Designation / Role', fieldtype: 'Data' },
+            { idx: 7, fieldname: 'department', label: 'Department', fieldtype: 'Data' },
+            { idx: 8, fieldname: 'conducted_by', label: 'Conducted By / Trainer', fieldtype: 'Link', options: 'Employee' },
+            { idx: 9, fieldname: 'verified_by', label: 'Verified By / Supervisor', fieldtype: 'Link', options: 'Employee' },
+            { idx: 10, fieldname: 'safety_rules_acknowledged', label: 'Safety & Emergency Rules Acknowledged', fieldtype: 'Check' },
+            { idx: 11, fieldname: 'hygiene_rules_acknowledged', label: 'GMP & Plant Hygiene Acknowledged', fieldtype: 'Check' },
+            { idx: 12, fieldname: 'ppe_provided', label: 'PPE Issued & Verified', fieldtype: 'Check' },
+            { idx: 13, fieldname: 'emergency_procedures_explained', label: 'Emergency Evacuation Explained', fieldtype: 'Check' },
+            { idx: 14, fieldname: 'status', label: 'Induction Status', fieldtype: 'Select', options: 'Completed\nPending\nFailed' },
+            { idx: 15, fieldname: 'induction_items', label: 'Induction Checklist Items', fieldtype: 'Table', options: 'Induction Item Detail' },
+            { idx: 16, fieldname: 'remarks', label: 'Remarks / Notes', fieldtype: 'Small Text' }
+          ];
+        }
+
+        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'conducted_by', 'trainer', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+        fields = fields.map(f => {
+          const fn = (f.fieldname || '').toLowerCase();
+          const lbl = (f.label || '').toLowerCase();
+          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('trainer') || lbl.includes('conducted by') || lbl.includes('verified by') || lbl.includes('checked by');
+          return {
+            ...f,
+            fieldtype: isEmp ? 'Link' : f.fieldtype,
+            options: isEmp ? 'Employee' : f.options,
+            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          };
+        });
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        // Fetch child table metas for any Table fields
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Induction Item Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'topic', label: 'Induction Topic / Module', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'completed', label: 'Completed / Passed', fieldtype: 'Check' },
+              { idx: 3, fieldname: 'notes', label: 'Notes / Observation', fieldtype: 'Data' }
+            ];
+          }
+
+          childFields = childFields.map(cf => ({
+            ...cf,
+            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+          }));
+
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { topic: 'Personal Protective Equipment (PPE)', completed: true, notes: 'Safety boots, hairnet, lab coat verified.' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+        }
+      } catch (err) {
+        console.error('[LabForm39Modal] Error fetching meta fields for "Induction":', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Induction Item Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else if (cf.fieldtype === 'Date') {
+        newRow[cf.fieldname] = new Date().toISOString().slice(0, 10);
+      } else if (cf.fieldtype === 'Check') {
+        newRow[cf.fieldname] = true;
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Induction',
+      ...formData,
+      ...tableData,
+      analyst: formData.conducted_by || formData.operator || formData.technician || 'Safety Officer',
+      verifiedBy: formData.verified_by || 'Manager',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f =>
+    f.fieldtype === 'Table' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const signatureFields = fieldsList.filter(f =>
+    f.fieldtype === 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  const renderControlInput = (field, val, onChange, searchFieldKey) => {
+    const { fieldtype: fType, fieldname, options, label, reqd } = field;
+    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
+
+    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'conducted_by', 'trainer', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
+    const isEmpTarget = (options === 'Employee' || options === 'User') ||
+      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
+      (label || '').toLowerCase().includes('technician') ||
+      (label || '').toLowerCase().includes('analyst') ||
+      (label || '').toLowerCase().includes('trainer') ||
+      (label || '').toLowerCase().includes('conducted by') ||
+      (label || '').toLowerCase().includes('verified by');
+
+    if (fType === 'Link' || isEmpTarget) {
+      const targetDoctype = options || 'Employee';
+      const sKey = searchFieldKey || fieldname;
+      const datalistId = `dl_${sKey}`;
+
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
+      const combinedOpts = Array.from(new Set([
+        ...empOpts,
+        ...fetchedOpts
+      ])).filter(Boolean);
+
+      return (
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            list={isEmpTarget ? undefined : datalistId}
+            className="form-input"
+            required={reqd === 1}
+            value={val || ''}
+            onFocus={(e) => {
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value || '', sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            onChange={(e) => {
+              onChange(e.target.value);
+              if (isEmpTarget && handleSearchEmployees) {
+                handleSearchEmployees(e.target.value, sKey);
+                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+              }
+            }}
+            placeholder={`Select / Search ${label || targetDoctype}...`}
+          />
+          {!isEmpTarget && (
+            <datalist id={datalistId}>
+              {combinedOpts.map((opt, i) => (
+                <option key={i} value={opt} />
+              ))}
+            </datalist>
+          )}
+
+          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {employeeList.map(emp => (
+                <div
+                  key={emp.name}
+                  className="autocomplete-item"
+                  onClick={() => {
+                    onChange(emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name);
+                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{emp.employee_name || emp.name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.designation || emp.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (isDatetimeField(fType, field.fieldname, field.label)) {
+      const now = new Date();
+      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Date') {
+      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Time') {
+      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
+    }
+    if (fType === 'Select') {
+      const opts = parseSelectOptions(field.options);
+      return (
+        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">-- Select {field.label || 'Option'} --</option>
+          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
+        </select>
+      );
+    }
+    if (fType === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    }
+    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
+      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
+      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+    }
+    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 39: Induction
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Induction"...
+              </div>
+            )}
+
+            {/* Dynamic Top-Level Fields Grid */}
+            {nonTableFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {nonTableFields.map(f => (
+                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                      </label>
+                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `ind_meta_${f.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Child Table Fields */}
+            {tableFields.map(tf => {
+              const childDoctype = tf.options || 'Induction Item Detail';
+              const childFields = (childMetas[childDoctype] || childMetas['Induction Item Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const rows = tableData[tf.fieldname] || [];
+
+              return (
+                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                      📊 {tf.label}
+                    </h4>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                      No induction topics added yet. Click "+ Add Row" above to add checklist items.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                            ))}
+                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                  {cf.fieldtype === 'Select' ? (
+                                    <select
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    >
+                                      <option value="">-- Select --</option>
+                                      {parseSelectOptions(cf.options).map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  ) : cf.fieldtype === 'Check' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(row[cf.fieldname])}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
+                                    />
+                                  ) : (
+                                    <input
+                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
+                                      step="any"
+                                      className="form-input"
+                                      style={{ padding: '4px', fontSize: '11px' }}
+                                      value={row[cf.fieldname] || ''}
+                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                    />
+                                  )}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rowIdx)}
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Signature Fields Section */}
+            {signatureFields.length > 0 && (
+              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {signatureFields.map(sf => (
+                    <div key={sf.fieldname}>
+                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `ind_meta_sig_${sf.fieldname}`)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FormFootnote doctype="Induction" defaultFormNo="Form 39" formTitle="Induction" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Induction'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export const LabForm85Modal = LabForm12Modal;
 
 export default function LaboratoryTab({
   laboratoryRecords,
@@ -7592,11 +11389,17 @@ export default function LaboratoryTab({
             { id: 'form1', icon: '📄', name: 'Form 1: Raw Materials Micro', desc: 'Microbiological analysis of primary packaging raw materials (Preforms, Closures, BIB bags).' },
             { id: 'form9', icon: '📊', name: 'Form 9: Chemical Test', desc: 'pH, TDS levels check for Raw/Product Water, post-CIP levels, and conductivity calibration.' },
             { id: 'form11', icon: '🧫', name: 'Form 11: Water Micro', desc: 'Cultivate SPC Agar incubation, TCC and E-Coli counts for Silver Ion, BH, and 0.45um Filter.' },
-            { id: 'form21', icon: '👅', name: 'Form 21: Taste & Visual', desc: 'Log 4h/36h/72h taste properties and 5d/10d/30d visual particle shelf-life checks.' },
+            { id: 'form21', icon: '👁️', name: 'Form 21: Taste & Visual', desc: 'Log 4h/36h/72h taste properties and 5d/10d/30d visual particle shelf-life checks.' },
             { id: 'form35', icon: '🍹', name: 'Form 35: Gold Stone Rum & Cola', desc: 'Tank batch records, ingredients checklist (Ethanol, Rum/Lemon/Cola flavours), Brix mixer %, alcohol test, and pH levels.' },
             { id: 'form36', icon: '🥃', name: 'Form 36: Bourbon Whiskey & Cola', desc: 'Tank batch records, ingredients checklist, Brix % checks, alcohol test, and gas pressure.' },
             { id: 'form83', icon: '🧫', name: 'Form 83: Microbiological Analysis', desc: 'Microbiological analysis log sheet for raw materials, water, and finished products.' },
             { id: 'form84', icon: '🧽', name: 'Form 84: Sanitation', desc: 'Sanitation check log sheet for equipment, line CIP, and plant cleanliness.' },
+            { id: 'form12', icon: '♨️', name: 'Form 12: Autoclave Record', desc: 'Autoclave sterilization log, pressure, temperature, cycle duration, and indicator checks.' },
+            { id: 'form13', icon: '🧫', name: 'Form 13: Media Preparation Record', desc: 'Media and culture agar preparation log, lot/batch numbers, sterilization temp, pH checks, and sterility verification.' },
+            { id: 'form64', icon: '🧪', name: 'Form 64: Rinse-Off Test for Raw Materials', desc: 'Rinse-off microbiological testing log for preforms, closures, bottles, and raw material contact surfaces.' },
+            { id: 'form72', icon: '📦', name: 'Form 72: Library Sample Record', desc: 'Retention library sample log, bottle size, batch codes, storage location, shelf life, and periodic evaluation.' },
+            { id: 'form47', icon: '🔍', name: 'Form 47: Traceability of products', desc: 'Product batch traceability log, raw material lot numbers, water source batch, line assignment, and dispatch tracking.' },
+            { id: 'form39', icon: '📝', name: 'Form 39: Induction', desc: 'Employee, visitor, and contractor site safety & hygiene induction log and verification.' },
             { id: 'form86', icon: '🌡️', name: 'Form 86: Incubator Temperature Record', desc: 'Record incubator daily temp & check times for Incubator No. 1 and Incubator No. 2.' },
             { id: 'form88', icon: '⚖️', name: 'Form 88: Weight Check Checklist', desc: 'Execute and log weight checks for finished products (twice daily frequency).' },
             { id: 'form103', icon: '📡', name: 'Form 103: Silver Photometer Log', desc: 'Daily photometer readings for Silver Ion (spec >10ppb) and standard calibration tests.' },
