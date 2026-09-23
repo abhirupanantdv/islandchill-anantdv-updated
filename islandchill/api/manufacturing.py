@@ -984,7 +984,8 @@ def create_cleaning_sanitation_log(doctype, payload=None):
         'Rinse-Off Test for Raw Materials',
         'Library Sample Record',
         'Traceability of products',
-        'Induction'
+        'Induction',
+        'Customer Complaint Report'
     }
 
     if doctype not in allowed_doctypes:

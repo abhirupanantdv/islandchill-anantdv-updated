@@ -986,6 +986,9 @@ class FrappeService {
       };
     }
 
+    const { url } = this.connection;
+    const baseUrl = this.resolveUrl(url);
+
     const headers = this.attachCsrfHeader({
       'Accept': 'application/json',
       'Content-Type': 'application/json'

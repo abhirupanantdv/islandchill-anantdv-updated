@@ -1072,6 +1072,7 @@ function App() {
   const [labFilterType, setLabFilterType] = useState('All');
   const [labPage, setLabPage] = useState(1);
   const [labViewMode, setLabViewMode] = useState('grid');
+  const [selectedLabWO, setSelectedLabWO] = useState(null);
   const [invSearchQuery, setInvSearchQuery] = useState('');
   const [salesSearchQuery, setSalesSearchQuery] = useState('');
 
@@ -1632,6 +1633,7 @@ function App() {
           }));
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             date_of_analysis: data.date,
             date_of_product: data.dateOfProduct,
             product_size: data.productSize,
@@ -1715,6 +1717,7 @@ function App() {
           }));
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             taste_test: taste_test,
             visual_inspection: visual_inspection
           };
@@ -1758,6 +1761,7 @@ function App() {
           const set3 = data.sets?.[2] || {};
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             date1: set1.date || null,
             tech1: resolveEmployeeId(set1.technician, extractEmployeeId(set1.technician)),
             verifier1: resolveEmployeeId(set1.verifiedBy, extractEmployeeId(set1.verifiedBy)),
@@ -1837,6 +1841,7 @@ function App() {
           }));
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             date: data.date,
             tank_no: data.tankNo,
             volume: data.volume,
@@ -1897,6 +1902,7 @@ function App() {
           const verified_by_emp = resolveEmployeeId(data.verifiedBy, extractEmployeeId(data.verifiedBy));
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             date: data.posting_date || data.date,
             checked_by: checked_by_emp,
             verified_by: verified_by_emp,
@@ -1957,6 +1963,7 @@ function App() {
           }));
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             checked_by: resolveEmployeeId(data.checkedBy, extractEmployeeId(data.checkedBy)),
             verified_by: resolveEmployeeId(data.verifiedBy, extractEmployeeId(data.verifiedBy)),
             overall_comments: data.overallComments || '',
@@ -2011,6 +2018,7 @@ function App() {
           }));
 
           const erpPayload = {
+            work_order: data.work_order || data.workOrder || '',
             date: data.date,
             tank_no: data.tankNo,
             tank_number: data.tankNo,
@@ -2236,6 +2244,7 @@ function App() {
 
           const erpPayload = {
             ...data,
+            work_order: data.work_order || data.workOrder || '',
             doctype: 'Recall Review'
           };
 
@@ -2247,6 +2256,120 @@ function App() {
       } catch (err) {
         console.error('Failed to sync Recall Review to ERPNext:', err);
         showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
+    if (type === 'Form 12 (Autoclave Record)' || type?.includes('12')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Autoclave Record'
+          };
+          const response = await frappe.saveDocRecord('Autoclave Record', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Autoclave Record to ERPNext:', err);
+      }
+    }
+
+    if (type === 'Form 13 (Media Preparation Record)' || type?.includes('13')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Media Preparation Record'
+          };
+          const response = await frappe.saveDocRecord('Media Preparation Record', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Media Preparation Record to ERPNext:', err);
+      }
+    }
+
+    if (type === 'Form 64 (Rinse-Off Test for Raw Materials)' || type?.includes('64')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Rinse-Off Test for Raw Materials'
+          };
+          const response = await frappe.saveDocRecord('Rinse-Off Test for Raw Materials', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Rinse-Off Test for Raw Materials to ERPNext:', err);
+      }
+    }
+
+    if (type === 'Form 72 (Library Sample Record)' || type?.includes('72')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Library Sample Record'
+          };
+          const response = await frappe.saveDocRecord('Library Sample Record', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Library Sample Record to ERPNext:', err);
+      }
+    }
+
+    if (type === 'Form 47 (Traceability of products)' || type?.includes('47')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Traceability of products'
+          };
+          const response = await frappe.saveDocRecord('Traceability of products', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Traceability of products to ERPNext:', err);
+      }
+    }
+
+    if (type === 'Form 39 (Induction)' || type?.includes('39')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Induction'
+          };
+          const response = await frappe.createInductionRecord(erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Induction to ERPNext:', err);
       }
     }
 
@@ -5662,6 +5785,9 @@ function App() {
             setActiveSearchField={setActiveSearchField}
             setEmailModal={setEmailModal}
             isLoggedIn={isLoggedIn}
+            selectedLabWO={selectedLabWO}
+            setSelectedLabWO={setSelectedLabWO}
+            workOrders={workOrders}
           />
         )}
 
@@ -7437,6 +7563,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7451,6 +7578,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7465,6 +7593,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7479,6 +7608,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7492,6 +7622,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7505,6 +7636,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7519,6 +7651,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7533,6 +7666,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7547,6 +7681,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7561,6 +7696,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7575,6 +7711,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7589,6 +7726,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7603,6 +7741,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7617,6 +7756,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7631,6 +7771,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7645,6 +7786,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7659,6 +7801,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7673,6 +7816,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7687,6 +7831,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7701,6 +7846,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7715,6 +7861,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 
@@ -7729,6 +7876,7 @@ function App() {
           showEmployeeDropdown={showEmployeeDropdown}
           setShowEmployeeDropdown={setShowEmployeeDropdown}
           activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
         />
       )}
 

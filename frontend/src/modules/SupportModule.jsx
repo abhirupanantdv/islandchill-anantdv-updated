@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { frappe } from '../services/frappe';
+import { FormFootnote } from '../components/LaboratoryTab';
 
 const SupportModule = ({ 
   tickets, 
@@ -7,8 +9,53 @@ const SupportModule = ({
   onUpdateTicketStatus, 
   onSendMessage 
 }) => {
-  const [activeTab, setActiveTab] = useState('registry'); // 'registry' or 'ai-chat'
+  const [activeTab, setActiveTab] = useState('registry'); // 'registry', 'customer-tracking', or 'ai-chat'
   
+  // Customer Complaint Report / Tracking Sheet state (No Mock Data!)
+  const [complaintMeta, setComplaintMeta] = useState(null);
+  const [complaintRecords, setComplaintRecords] = useState([]);
+  const [loadingComplaintData, setLoadingComplaintData] = useState(false);
+  const [complaintError, setComplaintError] = useState(null);
+  const [isComplaintModalOpen, setIsComplaintModalOpen] = useState(false);
+
+  // Fetch metadata and records for DocType "Customer Complaint Report" from ERPNext
+  const fetchCustomerComplaintData = async () => {
+    try {
+      setLoadingComplaintData(true);
+      setComplaintError(null);
+      console.log('[Customer Complaint Report] Fetching metadata and records from ERPNext...');
+
+      let metaRes = null;
+      let recordsRes = [];
+
+      try {
+        metaRes = await frappe.getDocTypeMeta('Customer Complaint Report');
+        console.log('[Customer Complaint Report Meta Response]:', metaRes);
+      } catch (metaErr) {
+        console.error('[Customer Complaint Report Meta Error]:', metaErr);
+      }
+
+      try {
+        recordsRes = await frappe.fetchERP('Customer Complaint Report', { fields: ['*'], limit: 100, order_by: 'creation desc' });
+        console.log('[Customer Complaint Report Records Response]:', recordsRes);
+      } catch (recErr) {
+        console.error('[Customer Complaint Report Records Error]:', recErr);
+        setComplaintError(recErr.message || 'Failed to fetch Customer Complaint Report records.');
+      }
+
+      setComplaintMeta(metaRes);
+      setComplaintRecords(Array.isArray(recordsRes) ? recordsRes : []);
+    } catch (err) {
+      console.error('[Customer Complaint Report] Unexpected error:', err);
+    } finally {
+      setLoadingComplaintData(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomerComplaintData();
+  }, []);
+
   // Registry states
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -228,6 +275,12 @@ const SupportModule = ({
             </button>
           )}
 
+          {activeTab === 'customer-tracking' && (
+            <button className="primary-btn" onClick={() => setIsComplaintModalOpen(true)}>
+              ➕ Log Customer Complaint
+            </button>
+          )}
+
           {/* Toggle Tabs */}
           <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: '20px', padding: '2px', backgroundColor: '#f3f4f6', gap: '4px' }}>
             <button 
@@ -246,6 +299,26 @@ const SupportModule = ({
               }}
             >
               Incident Registry
+            </button>
+            <button 
+              onClick={() => setActiveTab('customer-tracking')}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '18px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '700',
+                backgroundColor: activeTab === 'customer-tracking' ? '#ffffff' : 'transparent',
+                color: activeTab === 'customer-tracking' ? 'var(--text-heading)' : 'var(--text-muted)',
+                boxShadow: activeTab === 'customer-tracking' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              📋 Customer Tracking Sheet
             </button>
             <button 
               onClick={() => setActiveTab('ai-chat')}
@@ -271,7 +344,105 @@ const SupportModule = ({
         </div>
       </div>
 
-      {activeTab === 'registry' ? (
+      {activeTab === 'customer-tracking' ? (
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>Customer Tracking Sheet</h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                DocType: <strong>Customer Complaint Report</strong> | Dynamic schema & real-time records from ERPNext
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                className="primary-btn"
+                onClick={() => setIsComplaintModalOpen(true)}
+                style={{ fontSize: '12px', padding: '6px 14px' }}
+              >
+                ➕ Log Customer Complaint
+              </button>
+              <button 
+                className="secondary-btn"
+                onClick={() => fetchCustomerComplaintData()}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                🔄 Refresh Data
+              </button>
+            </div>
+          </div>
+
+          {loadingComplaintData ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+              ⏳ Fetching metadata and records for "Customer Complaint Report"...
+            </div>
+          ) : (
+            <>
+              {complaintError && (
+                <div style={{ padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '8px', fontSize: '12px' }}>
+                  ⚠️ {complaintError}
+                </div>
+              )}
+
+              {/* Render dynamic columns fetched from DocType metadata */}
+              {(() => {
+                const metaFields = (complaintMeta?.fields || []).filter(f =>
+                  f.fieldtype !== 'Section Break' &&
+                  f.fieldtype !== 'Column Break' &&
+                  f.fieldtype !== 'Fold' &&
+                  f.fieldtype !== 'Table' &&
+                  f.fieldname !== 'amended_from' &&
+                  f.fieldname !== 'work_order' &&
+                  f.hidden !== 1
+                );
+
+                const displayColumns = metaFields.length > 0 
+                  ? metaFields 
+                  : [
+                      { fieldname: 'name', label: 'ID' },
+                      { fieldname: 'customer', label: 'Customer' },
+                      { fieldname: 'complaint_date', label: 'Date' },
+                      { fieldname: 'complaint_type', label: 'Type' },
+                      { fieldname: 'status', label: 'Status' },
+                      { fieldname: 'description', label: 'Description' }
+                    ];
+
+                return complaintRecords.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', border: '1px dashed var(--border-color)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                    📦 No <strong>Customer Complaint Report</strong> records found in ERPNext backend.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                    <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: 'var(--bg-card)' }}>
+                          <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Log ID</th>
+                          {displayColumns.map(col => (
+                            <th key={col.fieldname} style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>
+                              {col.label || col.fieldname}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {complaintRecords.map((rec, idx) => (
+                          <tr key={rec.name || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '10px', fontWeight: '700' }}>{rec.name || `REC-${idx + 1}`}</td>
+                            {displayColumns.map(col => (
+                              <td key={col.fieldname} style={{ padding: '10px' }}>
+                                {String(rec[col.fieldname] ?? '—')}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+      ) : activeTab === 'registry' ? (
         <>
           {/* Stats Cards Row */}
           <div className="metrics-row">
@@ -792,129 +963,361 @@ const SupportModule = ({
         </div>
       )}
 
-      {/* Drawer overlay for New Ticket */}
-      {isDrawerOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          right: 0,
-          width: '450px',
-          height: '100vh',
-          backgroundColor: '#ffffff',
-          boxShadow: '-4px 0 25px rgba(0,0,0,0.15)',
-          zIndex: 2000,
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          overflowY: 'auto'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>Raise Support Incident</h3>
-            <button 
-              onClick={() => setIsDrawerOpen(false)}
-              style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}
-            >
-              ✕
-            </button>
+      {/* Modal: Customer Complaint Report */}
+      <CustomerComplaintModal
+        isOpen={isComplaintModalOpen}
+        onClose={() => setIsComplaintModalOpen(false)}
+        complaintMeta={complaintMeta}
+        onRecordCreated={() => fetchCustomerComplaintData()}
+      />
+
+    </div>
+  );
+};
+
+const CustomerComplaintModal = ({ isOpen, onClose, complaintMeta, onRecordCreated }) => {
+  const [formData, setFormData] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  // Derive fields from complaintMeta or fallback defaults
+  let fields = complaintMeta?.fields;
+  if (!fields || fields.length === 0) {
+    fields = [
+      { idx: 1, fieldname: 'complaint_date', label: 'Complaint Date', fieldtype: 'Date' },
+      { idx: 2, fieldname: 'customer', label: 'Customer Name', fieldtype: 'Link', options: 'Customer', reqd: 1 },
+      { idx: 3, fieldname: 'contact_person', label: 'Contact Person', fieldtype: 'Data' },
+      { idx: 4, fieldname: 'contact_email', label: 'Contact Email / Phone', fieldtype: 'Data' },
+      { idx: 5, fieldname: 'product_name', label: 'Product Name / SKU', fieldtype: 'Link', options: 'Item' },
+      { idx: 6, fieldname: 'batch_no', label: 'Batch No / Lot Code', fieldtype: 'Data' },
+      { idx: 7, fieldname: 'complaint_type', label: 'Complaint Type / Category', fieldtype: 'Select', options: 'Quality Issue\nPackage Damage\nDelivery Delay\nTaste Discrepancy\nOther' },
+      { idx: 8, fieldname: 'severity', label: 'Severity / Priority', fieldtype: 'Select', options: 'Low\nMedium\nHigh\nCritical' },
+      { idx: 9, fieldname: 'recorded_by', label: 'Recorded By', fieldtype: 'Link', options: 'Employee' },
+      { idx: 10, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Open\nIn Progress\nResolved\nClosed' },
+      { idx: 11, fieldname: 'description', label: 'Detailed Complaint Description', fieldtype: 'Small Text', reqd: 1 },
+      { idx: 12, fieldname: 'action_taken', label: 'Immediate Action Taken / Corrective Action', fieldtype: 'Small Text' }
+    ];
+  }
+
+  const validFields = fields.filter(f =>
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+
+  // Fetch link options for any Link / Dynamic Link fields dynamically from ERPNext
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLinkOptions() {
+      const linkFields = validFields.filter(f => (f.fieldtype === 'Link' || f.fieldtype === 'Dynamic Link') && f.options);
+      const optionsMap = {};
+
+      for (const lf of linkFields) {
+        const targetDoctype = lf.options;
+        if (targetDoctype && !optionsMap[targetDoctype]) {
+          try {
+            console.log(`[CustomerComplaintModal] Fetching link options for DocType "${targetDoctype}"...`);
+            let records = [];
+
+            try {
+              records = await frappe.getLinkOptions(targetDoctype, 200);
+            } catch (e1) {
+              records = await frappe.fetchERP(targetDoctype, { fields: ['name'], limit: 200 });
+            }
+
+            if (Array.isArray(records) && records.length > 0) {
+              optionsMap[targetDoctype] = records
+                .map(r => typeof r === 'string' ? r : r?.name)
+                .filter(Boolean);
+            } else {
+              optionsMap[targetDoctype] = [];
+            }
+          } catch (err) {
+            console.warn(`[CustomerComplaintModal] Could not fetch link options for "${targetDoctype}":`, err);
+            optionsMap[targetDoctype] = [];
+          }
+        }
+      }
+
+      if (isMounted) {
+        console.log('[CustomerComplaintModal] Link options map loaded:', optionsMap);
+        setLinkOptionsMap(optionsMap);
+      }
+    }
+
+    if (isOpen) {
+      loadLinkOptions();
+    }
+  }, [isOpen, complaintMeta]);
+
+  if (!isOpen) return null;
+
+  const parseSelectOptions = (rawOpts) => {
+    if (!rawOpts) return [];
+    if (Array.isArray(rawOpts)) return rawOpts;
+    return String(rawOpts).split('\n').map(o => o.trim()).filter(Boolean);
+  };
+
+  const handleFieldChange = (fn, val) => {
+    setFormData(prev => ({ ...prev, [fn]: val }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitError('');
+    setSubmitting(true);
+
+    try {
+      const payload = {
+        doctype: 'Customer Complaint Report',
+        ...formData,
+        date: formData.date || formData.complaint_date || new Date().toISOString().slice(0, 10)
+      };
+
+      console.log('[Create Customer Complaint Report Payload]:', payload);
+
+      let res = null;
+      try {
+        res = await frappe.createCleaningSanitationRecord('Customer Complaint Report', payload);
+      } catch (err) {
+        console.warn('createCleaningSanitationRecord fallback to makeRequest POST:', err);
+        res = await frappe.makeRequest('POST', 'Customer Complaint Report', payload);
+      }
+
+      console.log('[Create Customer Complaint Report Response]:', res);
+
+      onRecordCreated();
+      onClose();
+    } catch (err) {
+      console.error('[Create Customer Complaint Report Error]:', err);
+      setSubmitError(err.message || 'Failed to create Customer Complaint Report in ERPNext.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderFieldInput = (f) => {
+    const val = formData[f.fieldname] ?? '';
+    const { fieldtype, fieldname, options, label, reqd } = f;
+
+    // 1. Link / Dynamic Link fields (styled matching LaboratoryTab select dropdown)
+    if (fieldtype === 'Link' || fieldtype === 'Dynamic Link') {
+      const targetDoctype = options || 'Record';
+      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+      const opts = Array.from(new Set(fetchedOpts.map(o => typeof o === 'object' ? (o.name || o.id) : String(o)).filter(Boolean)));
+
+      if (val && !opts.includes(val)) {
+        opts.unshift(val);
+      }
+
+      return (
+        <select
+          className="form-input"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+        >
+          <option value="">-- Select {label || targetDoctype} --</option>
+          {opts.map((op, i) => (
+            <option key={i} value={op}>{op}</option>
+          ))}
+        </select>
+      );
+    }
+
+    // 2. Select field type
+    if (fieldtype === 'Select') {
+      const opts = parseSelectOptions(options);
+      return (
+        <select
+          className="form-input"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+        >
+          <option value="">-- Select {label || 'Option'} --</option>
+          {opts.map((op, i) => (
+            <option key={i} value={op}>{op}</option>
+          ))}
+        </select>
+      );
+    }
+
+    // 3. Date field type
+    if (fieldtype === 'Date') {
+      return (
+        <input
+          type="date"
+          className="form-input"
+          required={reqd === 1}
+          value={val || (fieldname.includes('date') ? new Date().toISOString().slice(0, 10) : '')}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+        />
+      );
+    }
+
+    // 4. Time field type
+    if (fieldtype === 'Time') {
+      return (
+        <input
+          type="time"
+          className="form-input"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+        />
+      );
+    }
+
+    // 5. Datetime field type
+    if (fieldtype === 'Datetime') {
+      return (
+        <input
+          type="datetime-local"
+          className="form-input"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+        />
+      );
+    }
+
+    // 6. Checkbox field type
+    if (fieldtype === 'Check') {
+      return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(val)}
+            onChange={e => handleFieldChange(fieldname, e.target.checked)}
+          />
+          <span>{label}</span>
+        </label>
+      );
+    }
+
+    // 7. Textarea field types (Small Text, Text, Long Text, Text Editor, Code, HTML Editor)
+    if (['Small Text', 'Text', 'Long Text', 'Text Editor', 'Code', 'HTML Editor'].includes(fieldtype)) {
+      return (
+        <textarea
+          className="form-input"
+          rows="2"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+          placeholder={label}
+          style={{ resize: 'vertical' }}
+        />
+      );
+    }
+
+    // 8. Number field types (Int, Float, Currency, Percent)
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(fieldtype)) {
+      return (
+        <input
+          type="number"
+          step="any"
+          className="form-input"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+          placeholder={label}
+        />
+      );
+    }
+
+    // 9. Read Only field type
+    if (fieldtype === 'Read Only') {
+      return (
+        <input
+          type="text"
+          readOnly
+          className="form-input"
+          value={val || '(Auto-generated)'}
+          style={{ backgroundColor: '#f3f4f6', color: 'var(--text-muted)' }}
+        />
+      );
+    }
+
+    // 10. Attachment field types (Attach, Attach Image, File)
+    if (['Attach', 'Attach Image', 'File'].includes(fieldtype)) {
+      return (
+        <input
+          type="text"
+          className="form-input"
+          required={reqd === 1}
+          value={val}
+          onChange={e => handleFieldChange(fieldname, e.target.value)}
+          placeholder={`Enter attachment file URL / path for ${label}...`}
+        />
+      );
+    }
+
+    // 11. Default Data / Email / Phone / Password / URL / Barcode input types
+    const inputType = fieldtype === 'Email' ? 'email' : fieldtype === 'Password' ? 'password' : fieldtype === 'Phone' ? 'tel' : 'text';
+    return (
+      <input
+        type={inputType}
+        className="form-input"
+        required={reqd === 1}
+        value={val}
+        onChange={e => handleFieldChange(fieldname, e.target.value)}
+        placeholder={label}
+      />
+    );
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Log Customer Complaint / DocType: Customer Complaint Report
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+            {submitError && (
+              <div style={{ padding: '10px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '6px', fontSize: '12px' }}>
+                ⚠️ {submitError}
+              </div>
+            )}
+
+            {/* Dynamic Top-Level Fields Grid matching LaboratoryTab layout */}
+            <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                {validFields.map(f => (
+                  <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text', 'Text Editor', 'Code', 'HTML Editor'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
+                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+                      {f.label || f.fieldname} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                    </label>
+                    {renderFieldInput(f)}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <FormFootnote doctype="Customer Complaint Report" defaultFormNo="Form Customer Complaint" formTitle="Customer Complaint Report" />
           </div>
 
-          {submitError && (
-            <div style={{ padding: '10px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '6px', fontSize: '12px' }}>
-              ⚠️ {submitError}
-            </div>
-          )}
-
-          <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-main)' }}>Incident Subject *</label>
-              <input
-                type="text"
-                className="search-input"
-                placeholder="e.g. Consignment delayed at custom wharf"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                required
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-main)' }}>Inquirer Customer *</label>
-              <select
-                className="chart-select"
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
-                style={{ width: '100%', height: '38px', padding: '0 10px' }}
-              >
-                <option value="Micronesia Shipping Ltd">Micronesia Shipping Ltd</option>
-                <option value="Solomon Logistics Ltd">Solomon Logistics Ltd</option>
-                <option value="Papua Trade Agency">Papua Trade Agency</option>
-                <option value="New Zealand Seafoods">New Zealand Seafoods</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-main)' }}>Priority Level *</label>
-              <select
-                className="chart-select"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                style={{ width: '100%', height: '38px', padding: '0 10px' }}
-              >
-                <option value="Low">Low Priority</option>
-                <option value="Medium">Medium Priority</option>
-                <option value="High">High Priority</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-main)' }}>Raised By Email *</label>
-              <input
-                type="email"
-                className="search-input"
-                placeholder="e.g. logistics@customer.com"
-                value={raisedBy}
-                onChange={(e) => setRaisedBy(e.target.value)}
-                required
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-main)' }}>Detailed Description *</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Explain the operations blockages, vessel name, cargo references, etc."
-                style={{
-                  width: '100%',
-                  height: '120px',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)',
-                  outline: 'none',
-                  fontSize: '13px',
-                  fontFamily: 'var(--sans)'
-                }}
-                required
-              />
-            </div>
-
-            <button 
-              type="submit" 
-              className="primary-btn"
-              style={{
-                width: '100%',
-                height: '42px',
-                fontWeight: '700',
-                marginTop: '10px'
-              }}
-            >
-              Submit Ticket to ERPNext
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={submitting} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Submit Complaint'}
             </button>
-          </form>
-        </div>
-      )}
-      
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
