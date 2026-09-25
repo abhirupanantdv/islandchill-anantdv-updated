@@ -1167,18 +1167,20 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
         fields=["name", "equipment"],
         ignore_permissions=True
     )
-    from islandchill.api.maintenance_template import resolve_equipment_production_line
+    from islandchill.api.maintenance_template import resolve_equipment_lines, resolve_equipment_production_line
 
     eq_line_map = {}
-    line_total_map = {}
+    line_total_map = {"Filling Line 1": set(), "Filling Line 2": set()}
     for em in all_eq_masters:
         eq_n = em.get("equipment") or em.get("name")
         if eq_n:
-            p_line = resolve_equipment_production_line(eq_n)
+            lines_info = resolve_equipment_lines(eq_n)
+            p_line = lines_info.get("production_line")
             eq_line_map[eq_n] = p_line
-            if p_line not in line_total_map:
-                line_total_map[p_line] = set()
-            line_total_map[p_line].add(eq_n)
+            if lines_info.get("filling_line_1"):
+                line_total_map["Filling Line 1"].add(eq_n)
+            if lines_info.get("filling_line_2"):
+                line_total_map["Filling Line 2"].add(eq_n)
 
     maint_by_wo = {}
     for s in maint_schedules:
@@ -1356,7 +1358,7 @@ def get_work_order_maintenance_checklists(work_order):
     if not wo_line:
         wo_line = "Filling Line 1"
 
-    from islandchill.api.maintenance_template import resolve_equipment_production_line
+    from islandchill.api.maintenance_template import resolve_equipment_lines, resolve_equipment_production_line
 
     all_masters = frappe.get_all(
         "Maintenance Checklist Master",
@@ -1365,16 +1367,30 @@ def get_work_order_maintenance_checklists(work_order):
         ignore_permissions=True
     )
 
+    is_line1 = "1" in wo_line or "line 1" in wo_line.lower()
+    is_line2 = "2" in wo_line or "line 2" in wo_line.lower()
+
     masters = []
     for m in all_masters:
         eq_n = m.get("equipment") or m.get("name")
-        eq_line = resolve_equipment_production_line(eq_n)
-        if eq_line.lower() == wo_line.lower() or (wo_line.lower() in eq_line.lower()):
+        lines_info = resolve_equipment_lines(eq_n)
+        fl1 = lines_info.get("filling_line_1")
+        fl2 = lines_info.get("filling_line_2")
+        
+        matches = False
+        if is_line1 and fl1:
+            matches = True
+        elif is_line2 and fl2:
+            matches = True
+        elif not is_line1 and not is_line2:
+            matches = True
+
+        if matches:
             masters.append({
                 "name": m.get("name"),
                 "equipment": m.get("equipment"),
                 "area": m.get("area"),
-                "production_line": eq_line
+                "production_line": lines_info.get("production_line")
             })
 
     if not masters:

@@ -22,6 +22,7 @@ import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm10
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
 import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm12Modal, LabForm13Modal, LabForm64Modal, LabForm72Modal, LabForm47Modal, LabForm39Modal, LabForm85Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
+import ReportsTab from './components/ReportsTab';
 import line1 from "../public/line1.png"
 import line2 from "../public/line2.png"
 
@@ -46,6 +47,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Syrup & CIP Equipment)',
     equipment: 'Syrup and CIP Equipment',
     area: 'Utilities',
+    filling_line_1: 1,
+    filling_line_2: 0,
     production_line: 'Filling Line 1',
     days: ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
     tasks: [
@@ -67,6 +70,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (SEM-FRM-01-00-02)',
     equipment: 'Glycol Chilling Plant & Grasso Refrigerator',
     area: 'Utilities',
+    filling_line_1: 1,
+    filling_line_2: 0,
     production_line: 'Filling Line 1',
     days: ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
     tasks: [
@@ -85,6 +90,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (De-Palletizer)',
     equipment: 'De-Palletizer',
     area: 'RTD Line',
+    filling_line_1: 0,
+    filling_line_2: 1,
     production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -101,6 +108,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Date Coder)',
     equipment: 'Date Coder',
     area: 'CSD / RTD Line',
+    filling_line_1: 0,
+    filling_line_2: 1,
     production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -118,6 +127,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (CSD / RTD Filler)',
     equipment: 'CSD / RTD Filler',
     area: 'Bottling Line',
+    filling_line_1: 0,
+    filling_line_2: 1,
     production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -139,6 +150,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Conveyors)',
     equipment: 'Conveyors',
     area: 'CSD / RTD Line',
+    filling_line_1: 0,
+    filling_line_2: 1,
     production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -158,6 +171,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Co2 Mixer)',
     equipment: 'Co2 Mixer',
     area: 'RTD / CSD Line',
+    filling_line_1: 0,
+    filling_line_2: 1,
     production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -176,6 +191,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Bottle / Can Washer)',
     equipment: 'Bottle / Can Washer',
     area: 'CSD / RTD Line',
+    filling_line_1: 0,
+    filling_line_2: 1,
     production_line: 'Filling Line 2',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -189,6 +206,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Boiler)',
     equipment: 'Boiler',
     area: 'Utilities',
+    filling_line_1: 1,
+    filling_line_2: 0,
     production_line: 'Filling Line 1',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -207,6 +226,8 @@ const MAINTENANCE_TEMPLATES_STATIC = [
     name: 'Daily Preventive Maintenance Schedule (Air Compressor)',
     equipment: 'Air Compressor',
     area: 'Utilities',
+    filling_line_1: 1,
+    filling_line_2: 0,
     production_line: 'Filling Line 1',
     days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     tasks: [
@@ -5842,6 +5863,11 @@ function App() {
             isLoggedIn={isLoggedIn}
             onRefreshCleaningRecords={loadCleaningRecordsFromERP}
           />
+        )}
+
+        {/* Reports Tab */}
+        {currentTab === 'reports' && (
+          <ReportsTab isLoggedIn={isLoggedIn} />
         )}
 
         {/* Support Helpdesk Module */}

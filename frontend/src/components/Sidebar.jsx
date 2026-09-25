@@ -28,6 +28,7 @@ export default function Sidebar({
     { id: 'safety', label: '🦺 Health & Safety' },
     { id: 'laboratory', label: '🔬 Laboratory' },
     { id: 'cleaning', label: '🧹 Cleaning & Sanitation' },
+    { id: 'reports', label: '📊 Reports' },
     { id: 'support', label: '🎧 Support Helpdesk' },
     { id: 'hr', label: '👥 Human Resource' },
   ];

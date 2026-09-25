@@ -2204,6 +2204,9 @@ export default function MaintenanceTab({
   ];
 
   const getTemplateLine = (t) => {
+    if (t.filling_line_1 && t.filling_line_2) return 'Filling Line 1 & 2';
+    if (t.filling_line_1) return 'Filling Line 1';
+    if (t.filling_line_2) return 'Filling Line 2';
     if (t.production_line) return t.production_line;
     const eq = (t.equipment || t.name || '').toLowerCase().trim();
     const isLine1 = LINE_1_EQUIPMENTS.some(item => eq.includes(item) || item.includes(eq));
@@ -2215,14 +2218,24 @@ export default function MaintenanceTab({
     if (!globalMaintWO) return true;
     const rawWoLine = (globalMaintWO.lineNo || globalMaintWO.custom_production_line || globalMaintWO.production_line || '').toLowerCase().trim();
     if (!rawWoLine) return true;
+    const isLine1 = rawWoLine.includes('line 1') || rawWoLine === 'filling line 1' || rawWoLine === '1';
+    const isLine2 = rawWoLine.includes('line 2') || rawWoLine === 'filling line 2' || rawWoLine === '2';
+
+    if (isLine1) {
+      if (t.filling_line_1 === 1 || t.filling_line_1 === '1' || t.filling_line_1 === true) return true;
+      if (t.filling_line_2 === 1 && !t.filling_line_1) return false;
+      const eq = (t.equipment || t.name || '').toLowerCase().trim();
+      return LINE_1_EQUIPMENTS.some(item => eq.includes(item) || item.includes(eq));
+    }
+    if (isLine2) {
+      if (t.filling_line_2 === 1 || t.filling_line_2 === '1' || t.filling_line_2 === true) return true;
+      if (t.filling_line_1 === 1 && !t.filling_line_2) return false;
+      const eq = (t.equipment || t.name || '').toLowerCase().trim();
+      const isLine1 = LINE_1_EQUIPMENTS.some(item => eq.includes(item) || item.includes(eq));
+      return !isLine1;
+    }
     const tplLine = getTemplateLine(t).toLowerCase().trim();
-    if (rawWoLine.includes('line 1')) {
-      return tplLine.includes('line 1');
-    }
-    if (rawWoLine.includes('line 2')) {
-      return tplLine.includes('line 2');
-    }
-    return tplLine === rawWoLine;
+    return tplLine === rawWoLine || tplLine.includes(rawWoLine);
   });
 
   const activeWoRecords = globalMaintWO

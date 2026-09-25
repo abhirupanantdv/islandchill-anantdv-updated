@@ -143,7 +143,7 @@ export default function WorkOrdersTab({
                             }}
                             title={isScheduledFuture ? `Scheduled for future date (${wo.plannedStart?.substring(0, 10)}). Cannot perform maintenance before planned start date.` : "Click to view & fill maintenance checklists for this Work Order"}
                           >
-                            {isScheduledFuture ? `📅 Planned: ${wo.plannedStart?.substring(0, 10)}` : (wo.maintAllCompleted ? '✓ Maint: Completed' : `🛠️ Maint: ${wo.maintCompletedCount || 0}/10 Pending`)}
+                            {isScheduledFuture ? `📅 Planned: ${wo.plannedStart?.substring(0, 10)}` : (wo.maintAllCompleted ? '✓ Maint: Completed' : `🛠️ Maint: ${wo.maintCompletedCount || 0}/${wo.maintTotalCount !== undefined ? wo.maintTotalCount : (wo.lineNo?.includes('2') ? 6 : 4)} Pending`)}
                           </span>
 
                           {!isRawMaterialsIssued ? (
