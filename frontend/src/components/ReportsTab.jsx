@@ -67,9 +67,9 @@ export default function ReportsTab({ isLoggedIn }) {
         if (stored) {
           const parsed = JSON.parse(stored);
           localRecords = (parsed || []).filter(r =>
-            (r.doctype === reportType ||
-             (r.type || '').includes('Form 11') ||
-             (r.type || '').includes('Water'))
+          (r.doctype === reportType ||
+            (r.type || '').includes('Form 11') ||
+            (r.type || '').includes('Water'))
           );
         }
       } catch (err) {
@@ -255,28 +255,29 @@ export default function ReportsTab({ isLoggedIn }) {
           </div>
         </div>
 
-        {/* Filter Controls Bar */}
+        {/* Filter Controls Bar (Horizontal Flex Toolbar) */}
         <div
-          className="details-card"
           style={{
             padding: '16px 20px',
             backgroundColor: 'var(--bg-card)',
             border: '1px solid var(--border-color)',
             borderRadius: '10px',
             display: 'flex',
+            flexDirection: 'row',
             flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: '16px'
+            alignItems: 'flex-end',
+            gap: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}
         >
           {/* DocType / Form Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '240px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent)', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1', minWidth: '260px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Form Name / DocType Name
             </label>
             <select
               className="form-input"
-              style={{ height: '36px', fontSize: '12px' }}
+              style={{ height: '38px', fontSize: '12px', width: '100%' }}
               value={reportType}
               onChange={e => setReportType(e.target.value)}
             >
@@ -287,13 +288,13 @@ export default function ReportsTab({ isLoggedIn }) {
           </div>
 
           {/* Filter Mode Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '140px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '140px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Filter Mode
             </label>
             <select
               className="form-input"
-              style={{ height: '36px', fontSize: '12px' }}
+              style={{ height: '38px', fontSize: '12px', width: '100%' }}
               value={filterMode}
               onChange={e => setFilterMode(e.target.value)}
             >
@@ -305,13 +306,13 @@ export default function ReportsTab({ isLoggedIn }) {
           </div>
 
           {/* Year Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '110px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Year
             </label>
             <select
               className="form-input"
-              style={{ height: '36px', fontSize: '12px' }}
+              style={{ height: '38px', fontSize: '12px', width: '100%' }}
               value={selectedYear}
               onChange={e => setSelectedYear(e.target.value)}
             >
@@ -323,13 +324,13 @@ export default function ReportsTab({ isLoggedIn }) {
 
           {/* Dynamic Option based on Mode */}
           {filterMode === 'Quarterly' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '130px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '140px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Quarter
               </label>
               <select
                 className="form-input"
-                style={{ height: '36px', fontSize: '12px' }}
+                style={{ height: '38px', fontSize: '12px', width: '100%' }}
                 value={selectedQuarter}
                 onChange={e => setSelectedQuarter(e.target.value)}
               >
@@ -342,13 +343,13 @@ export default function ReportsTab({ isLoggedIn }) {
           )}
 
           {filterMode === 'Monthly' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '130px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '140px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Month
               </label>
               <select
                 className="form-input"
-                style={{ height: '36px', fontSize: '12px' }}
+                style={{ height: '38px', fontSize: '12px', width: '100%' }}
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(e.target.value)}
               >
@@ -370,26 +371,26 @@ export default function ReportsTab({ isLoggedIn }) {
 
           {filterMode === 'Custom' && (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '140px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Start Date
                 </label>
                 <input
                   type="date"
                   className="form-input"
-                  style={{ height: '36px', fontSize: '12px' }}
+                  style={{ height: '38px', fontSize: '12px', width: '100%' }}
                   value={startDate}
                   onChange={e => setStartDate(e.target.value)}
                 />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '140px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   End Date
                 </label>
                 <input
                   type="date"
                   className="form-input"
-                  style={{ height: '36px', fontSize: '12px' }}
+                  style={{ height: '38px', fontSize: '12px', width: '100%' }}
                   value={endDate}
                   onChange={e => setEndDate(e.target.value)}
                 />
@@ -415,7 +416,7 @@ export default function ReportsTab({ isLoggedIn }) {
       >
         {/* Document Print Header matching physical report image */}
         <div style={{ textAlign: 'center', marginBottom: '32px', position: 'relative' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 6px 0', fontFamily: 'serif', letterSpacing: '0.5px' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 6px 0', fontFamily: 'serif', letterSpacing: '0.5px', color: '#0f172a' }}>
             {reportType} Report
           </h1>
           <div style={{ fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', textDecoration: 'underline', letterSpacing: '0.5px', color: '#0f172a' }}>
@@ -439,11 +440,6 @@ export default function ReportsTab({ isLoggedIn }) {
           >
             {filterMode === 'Quarterly' ? `${selectedQuarter} ${String(selectedYear).slice(-2)}` : filterMode === 'Monthly' ? formatMonthHeader(selectedYear, selectedMonth) : `${selectedYear}`}
           </div>
-        </div>
-
-        {/* Console Print Notification Banner */}
-        <div className="no-print" style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '6px', padding: '10px 14px', marginBottom: '24px', fontSize: '12px', color: '#1e40af' }}>
-          💡 <strong>Developer Console Output:</strong> Fetched <strong>{records.length}</strong> record(s) from DocType <code>{reportType}</code>. Open your browser console (F12) to inspect raw record objects.
         </div>
 
         {/* Grouped Month Tables */}
@@ -494,16 +490,16 @@ export default function ReportsTab({ isLoggedIn }) {
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', width: '130px', textTransform: 'none' }}>Ref Document</th>
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', width: '120px', textTransform: 'capitalize' }}>Vessel / Size</th>
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', textTransform: 'uppercase', fontSize: '10px' }}>
-                        TOTAL COLIFORM<br/><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 100ml sample)</span>
+                        TOTAL COLIFORM<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 100ml sample)</span>
                       </th>
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', textTransform: 'uppercase', fontSize: '10px' }}>
-                        E.COLI<br/><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 100ml sample)</span>
+                        E.COLI<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 100ml sample)</span>
                       </th>
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', textTransform: 'uppercase', fontSize: '10px' }}>
-                        HPC<br/><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(Per 1ml sample) sample 1</span>
+                        HPC<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(Per 1ml sample) sample 1</span>
                       </th>
                       <th style={{ padding: '8px 10px', textTransform: 'uppercase', fontSize: '10px' }}>
-                        HPC<br/><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(Per 1ml sample) sample 2</span>
+                        HPC<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(Per 1ml sample) sample 2</span>
                       </th>
                     </tr>
                   </thead>
@@ -511,7 +507,7 @@ export default function ReportsTab({ isLoggedIn }) {
                     {group.rows.map((row, rIdx) => (
                       <tr key={rIdx} style={{ borderBottom: rIdx === group.rows.length - 1 ? 'none' : '1px solid #000000', textAlign: 'center' }}>
                         <td style={{ padding: '6px 10px', borderRight: '1px solid #000000', textTransform: 'capitalize' }}>
-                          {formatDateDisplay(row.date)}
+                          {formatDateDisplay(row.date_of_analysis)}
                         </td>
                         <td style={{ padding: '6px 10px', borderRight: '1px solid #000000', fontWeight: '600', fontFamily: 'monospace' }}>
                           {row.name}
