@@ -40,7 +40,14 @@ export default function BOMTab({
   });
 
   const totalPages = Math.ceil(filteredBoms.length / 8) || 1;
-  const paginatedBoms = filteredBoms.slice((bomPage - 1) * 8, bomPage * 8);
+  const currentPage = Math.min(Math.max(1, bomPage || 1), totalPages);
+  const paginatedBoms = filteredBoms.slice((currentPage - 1) * 8, currentPage * 8);
+
+  React.useEffect(() => {
+    if (bomPage > totalPages) {
+      setBomPage(totalPages);
+    }
+  }, [bomPage, totalPages, setBomPage]);
 
   // Finished good stock from first material or bomObj
   const fgStockQty = (activeBomMaterials && activeBomMaterials.length > 0 && activeBomMaterials[0].fg_available_qty !== undefined)
@@ -223,11 +230,13 @@ export default function BOMTab({
               })}
 
               {/* Pagination */}
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '12px' }}>
-                <button className="secondary-btn" style={{ padding: '4px 8px', fontSize: '11px' }} disabled={bomPage === 1} onClick={() => setBomPage(p => Math.max(1, p - 1))}>◀</button>
-                <span style={{ fontSize: '11px', alignSelf: 'center' }}>{bomPage} / {totalPages}</span>
-                <button className="secondary-btn" style={{ padding: '4px 8px', fontSize: '11px' }} disabled={bomPage >= totalPages} onClick={() => setBomPage(p => p + 1)}>▶</button>
-              </div>
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '12px' }}>
+                  <button className="secondary-btn" style={{ padding: '4px 8px', fontSize: '11px' }} disabled={currentPage <= 1} onClick={() => setBomPage(p => Math.max(1, p - 1))}>◀</button>
+                  <span style={{ fontSize: '11px', alignSelf: 'center' }}>{currentPage} / {totalPages}</span>
+                  <button className="secondary-btn" style={{ padding: '4px 8px', fontSize: '11px' }} disabled={currentPage >= totalPages} onClick={() => setBomPage(p => Math.min(totalPages, p + 1))}>▶</button>
+                </div>
+              )}
             </div>
           )}
         </div>

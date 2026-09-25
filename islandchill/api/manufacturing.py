@@ -985,7 +985,8 @@ def create_cleaning_sanitation_log(doctype, payload=None):
         'Library Sample Record',
         'Traceability of products',
         'Induction',
-        'Customer Complaint Report'
+        'Customer Complaint Report',
+        'Preventive Maintenance Request'
     }
 
     if doctype not in allowed_doctypes:

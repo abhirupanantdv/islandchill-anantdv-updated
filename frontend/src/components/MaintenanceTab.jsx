@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
+import { FormFootnote } from './LaboratoryTab';
 
 // Helper to dynamically fetch Link options for target DocTypes
 const fetchLinkOptionsMap = async (fields, childMetasObj) => {
@@ -1393,6 +1394,551 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
   );
 }
 
+export function MaintPMRequestModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    maintenance_type: 'Preventive',
+    priority: 'Medium',
+    status: 'Pending Approval'
+  });
+  const [meta, setMeta] = useState(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [tableData, setTableData] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[MaintPMRequestModal] Fetching DocType meta for "Preventive Maintenance Request"...');
+        let doctypeMeta = await frappe.getDocTypeMeta('Preventive Maintenance Request');
+        let fields = doctypeMeta?.fields;
+
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'request_date', label: 'Request Date', fieldtype: 'Date', reqd: 1 },
+            { idx: 2, fieldname: 'title', label: 'Maintenance Title / Subject', fieldtype: 'Data', reqd: 1 },
+            { idx: 3, fieldname: 'equipment', label: 'Equipment / Machine', fieldtype: 'Link', options: 'Equipment', reqd: 1 },
+            { idx: 4, fieldname: 'maintenance_type', label: 'Maintenance Type', fieldtype: 'Select', options: 'Preventive\nRoutine\nInspection\nCalibration\nOverhaul\nBreakdown Action' },
+            { idx: 5, fieldname: 'priority', label: 'Priority / Urgency', fieldtype: 'Select', options: 'Low\nMedium\nHigh\nUrgent' },
+            { idx: 6, fieldname: 'requested_by', label: 'Requested By', fieldtype: 'Link', options: 'Employee', reqd: 1 },
+            { idx: 7, fieldname: 'assigned_to', label: 'Assigned Technician / Lead', fieldtype: 'Link', options: 'Employee' },
+            { idx: 8, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Draft\nPending Approval\nIn Progress\nCompleted\nCancelled' },
+            { idx: 9, fieldname: 'scheduled_date', label: 'Scheduled Date & Time', fieldtype: 'Datetime' },
+            { idx: 10, fieldname: 'description', label: 'Detailed Problem / Maintenance Scope Description', fieldtype: 'Small Text', reqd: 1 },
+            { idx: 11, fieldname: 'action_taken', label: 'Action Taken / Execution Remarks', fieldtype: 'Small Text' }
+          ];
+        }
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+          const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+          const childMetasObj = {};
+          for (const tf of tableFieldsList) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta && childMeta.fields) {
+                childMetasObj[tf.options] = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+          setChildMetas(childMetasObj);
+
+          fetchLinkOptionsMap(fields, childMetasObj).then(optsMap => {
+            if (isMounted) setLinkOptionsMap(optsMap);
+          });
+        }
+      } catch (err) {
+        console.error('[MaintPMRequestModal] Error fetching meta fields for Preventive Maintenance Request:', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const parseSelectOptions = (rawOptions) => {
+    if (!rawOptions) return [];
+    if (Array.isArray(rawOptions)) {
+      return rawOptions.map(opt => {
+        if (typeof opt === 'object' && opt !== null) {
+          return opt.value ?? opt.label ?? String(opt);
+        }
+        return String(opt).trim();
+      }).filter(Boolean);
+    }
+    if (typeof rawOptions === 'string') {
+      return rawOptions.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
+        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || []);
+    const newRow = {};
+    childFields.forEach(f => {
+      newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
+    });
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Preventive Maintenance Request',
+      ...formData,
+      ...tableData
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+  const nonTableFields = fieldsList.filter(f =>
+    f.fieldtype !== 'Table' &&
+    f.fieldtype !== 'Signature' &&
+    f.fieldtype !== 'Section Break' &&
+    f.fieldtype !== 'Column Break' &&
+    f.fieldtype !== 'Fold' &&
+    f.fieldname !== 'amended_from' &&
+    f.fieldname !== 'work_order' &&
+    f.hidden !== 1
+  );
+  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
+  const signatureFields = fieldsList.filter(f => f.fieldtype === 'Signature' && f.hidden !== 1);
+
+  return (
+    <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown && setShowEmployeeDropdown(false)}>
+      <div className="modal-panel" style={{ width: '920px', maxWidth: '95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>⚙️ Form: Preventive Maintenance Request</h3>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Log & submit preventive maintenance requests for equipment & facility schedules
+            </div>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px', fontSize: '12px' }}>
+            {loadingMeta ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: '600' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Preventive Maintenance Request"...
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  {nonTableFields.map(field => {
+                    const isFullWidth = ['Small Text', 'Text', 'Long Text', 'Text Editor', 'Code', 'HTML Editor'].includes(field.fieldtype);
+
+                    if (field.fieldtype === 'Select') {
+                      const opts = parseSelectOptions(field.options);
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: isFullWidth ? 'span 3' : 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <select
+                            className="form-input"
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] ?? opts[0] ?? ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          >
+                            <option value="">-- Select {field.label} --</option>
+                            {opts.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Check') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1', display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '18px' }}>
+                          <input
+                            type="checkbox"
+                            id={`pmr_${field.fieldname}`}
+                            checked={!!formData[field.fieldname]}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
+                          />
+                          <label htmlFor={`pmr_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
+                            {field.label}
+                          </label>
+                        </div>
+                      );
+                    }
+
+                    if (['Small Text', 'Text', 'Long Text', 'Text Editor', 'Code', 'HTML Editor'].includes(field.fieldtype)) {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 3' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <textarea
+                            className="form-input"
+                            style={{ minHeight: '60px', resize: 'vertical' }}
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                            placeholder={field.label}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
+                      const now = new Date();
+                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className="form-input"
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] || localDT}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Date') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <input
+                            type="date"
+                            className="form-input"
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Time') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <input
+                            type="time"
+                            className="form-input"
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Link' || field.fieldtype === 'Dynamic Link') {
+                      const targetDoctype = field.options || 'Employee';
+                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User' || field.fieldname.includes('by') || field.fieldname.includes('assigned');
+                      const sKey = field.fieldname;
+
+                      const empOpts = isEmpTarget ? (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`) : [];
+                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
+                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts]));
+                      const datalistId = `dl_pmr_${sKey}`;
+
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1', position: 'relative' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          {combinedOpts.length > 0 && !isEmpTarget ? (
+                            <select
+                              className="form-input"
+                              required={field.reqd === 1}
+                              value={formData[field.fieldname] || ''}
+                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                            >
+                              <option value="">-- Select {field.label || targetDoctype} --</option>
+                              {combinedOpts.map((opt, idx) => (
+                                <option key={idx} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <>
+                              <input
+                                type="text"
+                                list={isEmpTarget ? undefined : datalistId}
+                                className="form-input"
+                                required={field.reqd === 1}
+                                placeholder={`Select or type ${field.label}...`}
+                                value={formData[field.fieldname] || ''}
+                                onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                                onFocus={() => {
+                                  if (isEmpTarget && handleSearchEmployees) {
+                                    handleSearchEmployees(formData[field.fieldname] || '', sKey);
+                                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
+                                  }
+                                }}
+                              />
+                              {!isEmpTarget && (
+                                <datalist id={datalistId}>
+                                  {combinedOpts.map((opt, idx) => (
+                                    <option key={idx} value={opt} />
+                                  ))}
+                                </datalist>
+                              )}
+                              {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
+                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                  {employeeList.map(emp => {
+                                    const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
+                                    return (
+                                      <div
+                                        key={emp.name}
+                                        style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                        onMouseDown={() => {
+                                          handleFieldChange(field.fieldname, empVal);
+                                          if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
+                                        }}
+                                      >
+                                        <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (['Int', 'Float', 'Currency', 'Percent'].includes(field.fieldtype)) {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input"
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                            placeholder={field.label}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (field.fieldtype === 'Read Only') {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>{field.label}</label>
+                          <input
+                            type="text"
+                            readOnly
+                            className="form-input"
+                            value={formData[field.fieldname] || '(Auto-generated)'}
+                            style={{ backgroundColor: '#f3f4f6', color: 'var(--text-muted)' }}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (['Attach', 'Attach Image', 'File'].includes(field.fieldtype)) {
+                      return (
+                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                          <label className="input-label" style={{ fontWeight: '600' }}>
+                            {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            required={field.reqd === 1}
+                            value={formData[field.fieldname] || ''}
+                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                            placeholder={`Enter attachment file URL / path for ${field.label}...`}
+                          />
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 1' }}>
+                        <label className="input-label" style={{ fontWeight: '600' }}>
+                          {field.label} {field.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
+                        </label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          required={field.reqd === 1}
+                          value={formData[field.fieldname] || ''}
+                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
+                          placeholder={field.label}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Child Tables Section */}
+                {tableFields.map(tf => {
+                  const childDoctype = tf.options;
+                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  const currentRows = tableData[tf.fieldname] || [];
+
+                  return (
+                    <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                          + Add Row
+                        </button>
+                      </div>
+
+                      {currentRows.length === 0 ? (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', textAlign: 'center' }}>
+                          No rows added yet. Click "+ Add Row" above.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                                {childFields.map(cf => (
+                                  <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                                ))}
+                                <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {currentRows.map((row, rIdx) => (
+                                <tr key={rIdx}>
+                                  {childFields.map(cf => (
+                                    <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                      {cf.fieldtype === 'Select' ? (
+                                        <select
+                                          className="form-input"
+                                          style={{ padding: '4px', fontSize: '11px' }}
+                                          value={row[cf.fieldname] || ''}
+                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                        >
+                                          <option value="">-- Select --</option>
+                                          {parseSelectOptions(cf.options).map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                        </select>
+                                      ) : cf.fieldtype === 'Link' ? (
+                                        <>
+                                          <input
+                                            type="text"
+                                            list={`dl_pmr_tbl_${cf.fieldname}_${rIdx}`}
+                                            className="form-input"
+                                            style={{ padding: '4px', fontSize: '11px' }}
+                                            value={row[cf.fieldname] || ''}
+                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                          />
+                                          <datalist id={`dl_pmr_tbl_${cf.fieldname}_${rIdx}`}>
+                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
+                                              <option key={opt} value={opt} />
+                                            ))}
+                                          </datalist>
+                                        </>
+                                      ) : (
+                                        <input
+                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : (cf.fieldtype === 'Datetime' || cf.fieldtype === 'Date Time') ? 'datetime-local' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
+                                          className="form-input"
+                                          style={{ padding: '4px', fontSize: '11px' }}
+                                          value={row[cf.fieldname] || ''}
+                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
+                                        />
+                                      )}
+                                    </td>
+                                  ))}
+                                  <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                      🗑️
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Signatures Section */}
+                {signatureFields.length > 0 && (
+                  <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', marginTop: '12px' }}>
+                    <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                      {signatureFields.map(sf => (
+                        <div key={sf.fieldname}>
+                          <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={formData[sf.fieldname] || ''}
+                            onChange={e => handleFieldChange(sf.fieldname, e.target.value)}
+                            placeholder={`Digital signature (${sf.label})...`}
+                            style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            <FormFootnote doctype="Preventive Maintenance Request" defaultFormNo="Form PM-Request" formTitle="Preventive Maintenance Request Log" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Submit PM Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── STATUS COLORS ────────────────────────────────────────────────────────────
 const STATUS_COLOR = {
@@ -2160,6 +2706,23 @@ export default function MaintenanceTab({
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
               <button type="button" className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: 'var(--success)', borderColor: 'var(--success)' }} onClick={() => setActiveMaintForm('form88-dynamic')}>📝 Fill Form 88</button>
+            </div>
+          </div>
+
+          {/* Form: Preventive Maintenance Request */}
+          <div
+            className="inv-card"
+            style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', transition: 'all 0.2s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+          >
+            <div>
+              <span className="badge" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent)', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px' }}>PREVENTIVE MAINTENANCE</span>
+              <h4 style={{ fontSize: '14px', fontWeight: '700', marginTop: '12px', marginBottom: '4px', color: 'var(--text-heading)' }}>⚙️ Preventive Maintenance Request</h4>
+              <p className="text-muted" style={{ fontSize: '11px', marginBottom: '12px' }}>Submit and log preventive maintenance requests, equipment schedules, and technician tasks.</p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <button type="button" className="primary-btn" style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={() => setActiveMaintForm('pm-request')}>📝 Request PM</button>
             </div>
           </div>
         </div>

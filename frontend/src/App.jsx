@@ -18,7 +18,7 @@ import WorkOrdersTab from './components/WorkOrdersTab';
 import InventoryTab from './components/InventoryTab';
 import BOMTab from './components/BOMTab';
 import SalesTab, { SalesInvoiceFormModal, DeliveryNoteFormModal } from './components/SalesTab';
-import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal, MaintForm88DynamicModal } from './components/MaintenanceTab';
+import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal, MaintForm88DynamicModal, MaintPMRequestModal } from './components/MaintenanceTab';
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
 import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm12Modal, LabForm13Modal, LabForm64Modal, LabForm72Modal, LabForm47Modal, LabForm39Modal, LabForm85Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
@@ -572,8 +572,7 @@ function App() {
     const conn = frappe.getConnectionSettings();
     if (conn.isLive) {
       try {
-        const offset = (bomPage - 1) * 20;
-        const liveBOMs = await frappe.getBOMs(20, offset, bomFgWarehouse || 'Finished Goods - CWFPL');
+        const liveBOMs = await frappe.getBOMs(200, 0, bomFgWarehouse || 'Finished Goods - CWFPL');
         if (liveBOMs && liveBOMs.length > 0) {
           setBomList(liveBOMs);
           if (!selectedBomId) setSelectedBomId(liveBOMs[0].id);
@@ -603,7 +602,7 @@ function App() {
 
   useEffect(() => {
     loadBOMs();
-  }, [bomPage, bomFgWarehouse, isLoggedIn]);
+  }, [bomFgWarehouse, isLoggedIn]);
 
   useEffect(() => {
     const fetchBOMDetails = async () => {
@@ -2892,14 +2891,42 @@ function App() {
       }
     }
 
+    if (type === 'pm-request' || type === 'Preventive Maintenance Request' || data?.doctype === 'Preventive Maintenance Request') {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            doctype: 'Preventive Maintenance Request',
+            ...data,
+            posting_date: data.posting_date || data.request_date || data.date || new Date().toISOString().slice(0, 10)
+          };
+
+          let response = null;
+          try {
+            response = await frappe.createCleaningSanitationRecord('Preventive Maintenance Request', erpPayload);
+          } catch (err1) {
+            console.warn('createCleaningSanitationRecord fallback to makeRequest POST:', err1);
+            response = await frappe.makeRequest('POST', 'Preventive Maintenance Request', erpPayload);
+          }
+
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Preventive Maintenance Request to ERPNext:', err);
+        showAlert(`Failed to sync to ERPNext: ${err.message}. Saved locally instead.`, 'warning', 'Sync Issue');
+      }
+    }
+
     const newRecord = {
       id: newId,
-      templateId: type, // 'weight-check' | 'breakdown'
-      equipment: type === 'weight-check' ? 'Weight Check' : 'Machine Breakdown',
-      area: type === 'weight-check' ? 'Quality Check' : 'Maintenance',
-      name: type === 'weight-check' ? 'Standard Form 88: Weight Check' : 'Appendix A: Machine Breakdown',
-      operator: data.checkedBy || data.requestorName || 'N/A',
-      supervisor: data.verifiedBy || data.approvedByProductionSV || 'N/A',
+      templateId: type,
+      equipment: type === 'pm-request' ? 'Preventive Maintenance Request' : type === 'weight-check' ? 'Weight Check' : 'Machine Breakdown',
+      area: type === 'pm-request' ? 'Preventive Maintenance' : type === 'weight-check' ? 'Quality Check' : 'Maintenance',
+      name: type === 'pm-request' ? 'Form: Preventive Maintenance Request' : type === 'weight-check' ? 'Standard Form 88: Weight Check' : 'Appendix A: Machine Breakdown',
+      operator: data.requested_by || data.checkedBy || data.requestorName || 'N/A',
+      supervisor: data.assigned_to || data.verifiedBy || data.approvedByProductionSV || 'N/A',
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       ...data
     };
@@ -6869,6 +6896,21 @@ function App() {
           <MaintForm88DynamicModal
             onClose={() => setActiveMaintForm(null)}
             onSubmit={(data) => handleSaveMaintForm('form88-dynamic', data)}
+            employeeList={employeeList}
+            handleSearchEmployees={handleSearchEmployees}
+            showEmployeeDropdown={showEmployeeDropdown}
+            setShowEmployeeDropdown={setShowEmployeeDropdown}
+            activeSearchField={activeSearchField}
+          />
+        );
+      })()}
+
+      {/* Modal: Log Preventive Maintenance Request */}
+      {activeMaintForm === 'pm-request' && (() => {
+        return (
+          <MaintPMRequestModal
+            onClose={() => setActiveMaintForm(null)}
+            onSubmit={(data) => handleSaveMaintForm('pm-request', data)}
             employeeList={employeeList}
             handleSearchEmployees={handleSearchEmployees}
             showEmployeeDropdown={showEmployeeDropdown}
