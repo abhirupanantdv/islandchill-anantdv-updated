@@ -42,15 +42,16 @@ export default function ReportsTab({ isLoggedIn }) {
           if (liveRecords && liveRecords.length > 0) {
             const detailed = await Promise.all(
               liveRecords.map(async (rec) => {
-                if (rec.name) {
+                const targetName = rec.name || rec.data?.name;
+                if (targetName) {
                   try {
-                    const fullDoc = await frappe.makeRequest('GET', reportType, rec.name);
-                    return fullDoc || rec;
+                    const res = await frappe.makeRequest('GET', reportType, targetName);
+                    return res?.data || res || rec;
                   } catch (e) {
-                    return rec;
+                    return rec.data || rec;
                   }
                 }
-                return rec;
+                return rec.data || rec;
               })
             );
             liveRecords = detailed;
@@ -70,7 +71,7 @@ export default function ReportsTab({ isLoggedIn }) {
           (r.doctype === reportType ||
             (r.type || '').includes('Form 11') ||
             (r.type || '').includes('Water'))
-          );
+          ).map(r => r.data || r);
         }
       } catch (err) {
         console.warn('[ReportsTab] Local storage read error:', err);
@@ -115,104 +116,93 @@ export default function ReportsTab({ isLoggedIn }) {
     return `${monthStr}-${yearStr}`;
   };
 
-  // Group records by Month based on selected mode
+  // Value formatting helpers preserving 'Absent' and numeric 0
+  const formatColiform = (val) => {
+    if (val === null || val === undefined || val === '') return 'Absent';
+    const str = String(val).trim();
+    if (str.toLowerCase() === 'absent') return 'Absent';
+    if (str.toLowerCase() === 'present') return 'Present';
+    return str;
+  };
+
+  const formatHPCValue = (val) => {
+    if (val === null || val === undefined || val === '') return 0;
+    const str = String(val).trim();
+    if (str === '0' || str === 0) return 0;
+    const num = Number(str);
+    return isNaN(num) ? str : num;
+  };
+
+  // Group records into month sections based on selected filter mode and year
   const getGroupedReportData = () => {
     const yrNum = parseInt(selectedYear, 10) || 2026;
 
-    // Determine target start & end dates
-    let startD, endD;
+    let targetMonths = [];
     if (filterMode === 'Quarterly') {
-      if (selectedQuarter === 'Q1') { startD = new Date(yrNum, 0, 1); endD = new Date(yrNum, 2, 31, 23, 59, 59); }
-      else if (selectedQuarter === 'Q2') { startD = new Date(yrNum, 3, 1); endD = new Date(yrNum, 5, 30, 23, 59, 59); }
-      else if (selectedQuarter === 'Q3') { startD = new Date(yrNum, 6, 1); endD = new Date(yrNum, 8, 30, 23, 59, 59); }
-      else { startD = new Date(yrNum, 9, 1); endD = new Date(yrNum, 11, 31, 23, 59, 59); }
+      if (selectedQuarter === 'Q1') targetMonths = [0, 1, 2];
+      else if (selectedQuarter === 'Q2') targetMonths = [3, 4, 5];
+      else if (selectedQuarter === 'Q3') targetMonths = [6, 7, 8];
+      else targetMonths = [9, 10, 11];
     } else if (filterMode === 'Monthly') {
-      const mIdx = parseInt(selectedMonth, 10);
-      startD = new Date(yrNum, mIdx, 1);
-      endD = new Date(yrNum, mIdx + 1, 0, 23, 59, 59);
-    } else if (filterMode === 'Custom') {
-      startD = parseRecordDate(startDate) || new Date(2000, 0, 1);
-      const eD = parseRecordDate(endDate) || new Date(2099, 11, 31);
-      endD = new Date(eD.getFullYear(), eD.getMonth(), eD.getDate(), 23, 59, 59);
+      targetMonths = [parseInt(selectedMonth, 10)];
     } else {
-      // Weekly mode: past 7 days
-      endD = new Date();
-      startD = new Date();
-      startD.setDate(startD.getDate() - 7);
+      // Custom or Weekly mode - check full year months
+      targetMonths = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     }
 
-    // Filter actual records by date range
-    const filteredRecords = (records || []).filter(r => {
-      const rDateStr = r.date_of_analysis || r.date_of_product || r.date || r.creation || r.timestamp;
-      if (!rDateStr) return true;
+    // 1. Flatten all rows from records matching the date filters
+    const allExtractedRows = [];
+
+    (records || []).forEach(rawRec => {
+      const rec = rawRec.data || rawRec;
+      const rDateStr = rec.date_of_analysis || rec.date_of_product || rec.date || rec.creation;
       const d = parseRecordDate(rDateStr);
-      if (!d) return true;
-      return d >= startD && d <= endD;
-    });
+      if (!d) return;
 
-    if (filteredRecords.length === 0) {
-      return [];
-    }
-
-    // Group actual records by YYYY-MM
-    const groups = {};
-    filteredRecords.forEach(rec => {
-      const rDateStr = rec.date_of_analysis || rec.date_of_product || rec.date || rec.creation || 'No Date';
-      let mKey = 'General';
-      let monthHeaderStr = 'Records';
-      const d = parseRecordDate(rDateStr);
-      if (d) {
-        mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        monthHeaderStr = formatMonthHeader(d.getFullYear(), d.getMonth());
-      }
-
-      if (!groups[mKey]) {
-        groups[mKey] = {
-          monthHeader: monthHeaderStr,
-          rows: []
-        };
-      }
-
-      // Check details / table rows or top-level values
-      const details = rec.water_micro_details || rec.microbiological_analysis_detail || rec.details || [];
+      const details = rec.table_aqat || rec.water_micro_details || rec.microbiological_analysis_detail || rec.details || [];
       if (Array.isArray(details) && details.length > 0) {
         details.forEach(det => {
-          groups[mKey].rows.push({
-            name: rec.name || rec.id || '—',
-            date: rDateStr,
-            total_coliform: det.tcc || det.total_coliform || rec.total_coliform || 'absent',
-            ecoli: det.ecoli || det.e_coli || rec.ecoli || 'absent',
-            hpc1: det.hpc1 ?? det.hpc_count1 ?? rec.hpc1 ?? 0,
-            hpc2: det.hpc2 ?? det.hpc_count2 ?? rec.hpc2 ?? 0,
-            sample: det.sample || rec.sample || '',
-            vessel: rec.vessel || det.vessel || '—',
-            product_size: rec.product_size || det.product_size || '—',
-            market: rec.market || '—',
-            analyst: rec.analyst || '—',
-            approved_by: rec.approved_by || '—',
-            rawRecord: rec
+          allExtractedRows.push({
+            date: d,
+            dateStr: rDateStr,
+            total_coliform: formatColiform(det.tcc || det.total_coliform || det.tcc_result || rec.total_coliform || rec.tcc),
+            ecoli: formatColiform(det.ecoli || det.e_coli || det.ecoli_result || rec.ecoli || rec.e_coli),
+            hpc1: formatHPCValue(det.hpc1 ?? det.hpc_count1 ?? det.hpc_1 ?? rec.hpc1 ?? rec.hpc_count1),
+            hpc2: formatHPCValue(det.hpc2 ?? det.hpc_count2 ?? det.hpc_2 ?? rec.hpc2 ?? rec.hpc_count2)
           });
         });
       } else {
-        groups[mKey].rows.push({
-          name: rec.name || rec.id || '—',
-          date: rDateStr,
-          total_coliform: rec.total_coliform || rec.tcc || 'absent',
-          ecoli: rec.ecoli || rec.e_coli || 'absent',
-          hpc1: rec.hpc1 ?? 0,
-          hpc2: rec.hpc2 ?? 0,
-          sample: rec.sample || '',
-          vessel: rec.vessel || '—',
-          product_size: rec.product_size || '—',
-          market: rec.market || '—',
-          analyst: rec.analyst || '—',
-          approved_by: rec.approved_by || '—',
-          rawRecord: rec
+        allExtractedRows.push({
+          date: d,
+          dateStr: rDateStr,
+          total_coliform: formatColiform(rec.total_coliform || rec.tcc),
+          ecoli: formatColiform(rec.ecoli || rec.e_coli),
+          hpc1: formatHPCValue(rec.hpc1 ?? rec.hpc_count1),
+          hpc2: formatHPCValue(rec.hpc2 ?? rec.hpc_count2)
         });
       }
     });
 
-    return Object.values(groups);
+    // Sort all rows by Analysis Date ascending
+    allExtractedRows.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // 2. Build month groups for target months
+    const monthGroups = targetMonths.map(mIdx => {
+      const monthHeaderStr = formatMonthHeader(yrNum, mIdx);
+      const rows = allExtractedRows.filter(r => r.date.getFullYear() === yrNum && r.date.getMonth() === mIdx);
+      return {
+        monthHeader: monthHeaderStr,
+        monthIdx: mIdx,
+        rows
+      };
+    });
+
+    // In Custom or Weekly mode, filter out empty months
+    if (filterMode === 'Custom' || filterMode === 'Weekly') {
+      return monthGroups.filter(g => g.rows.length > 0);
+    }
+
+    return monthGroups;
   };
 
   const groupedData = getGroupedReportData();
@@ -273,7 +263,7 @@ export default function ReportsTab({ isLoggedIn }) {
           {/* DocType / Form Selector */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1', minWidth: '260px' }}>
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Form Name / DocType Name
+              Form Name
             </label>
             <select
               className="form-input"
@@ -482,13 +472,13 @@ export default function ReportsTab({ isLoggedIn }) {
                   Parameters (per 100ml sample)
                 </div>
 
-                {/* Parameters Table */}
+                {/* Parameters Table - Exactly 5 Required Columns */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textTransform: 'lowercase' }}>
                   <thead>
                     <tr style={{ borderBottom: '1.5px solid #000000', textAlign: 'center', fontWeight: '800' }}>
-                      <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', width: '100px', textTransform: 'capitalize' }}>Date</th>
-                      <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', width: '130px', textTransform: 'none' }}>Ref Document</th>
-                      <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', width: '120px', textTransform: 'capitalize' }}>Vessel / Size</th>
+                      <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', width: '140px', textTransform: 'capitalize' }}>
+                        Date
+                      </th>
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', textTransform: 'uppercase', fontSize: '10px' }}>
                         TOTAL COLIFORM<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 100ml sample)</span>
                       </th>
@@ -496,39 +486,41 @@ export default function ReportsTab({ isLoggedIn }) {
                         E.COLI<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 100ml sample)</span>
                       </th>
                       <th style={{ padding: '8px 10px', borderRight: '1px solid #000000', textTransform: 'uppercase', fontSize: '10px' }}>
-                        HPC<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(Per 1ml sample) sample 1</span>
+                        HPC Sample 1<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 1ml sample)</span>
                       </th>
                       <th style={{ padding: '8px 10px', textTransform: 'uppercase', fontSize: '10px' }}>
-                        HPC<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(Per 1ml sample) sample 2</span>
+                        HPC Sample 2<br /><span style={{ textTransform: 'lowercase', fontWeight: '400' }}>(per 1ml sample)</span>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {group.rows.map((row, rIdx) => (
-                      <tr key={rIdx} style={{ borderBottom: rIdx === group.rows.length - 1 ? 'none' : '1px solid #000000', textAlign: 'center' }}>
-                        <td style={{ padding: '6px 10px', borderRight: '1px solid #000000', textTransform: 'capitalize' }}>
-                          {formatDateDisplay(row.date_of_analysis)}
-                        </td>
-                        <td style={{ padding: '6px 10px', borderRight: '1px solid #000000', fontWeight: '600', fontFamily: 'monospace' }}>
-                          {row.name}
-                        </td>
-                        <td style={{ padding: '6px 10px', borderRight: '1px solid #000000', textTransform: 'capitalize' }}>
-                          {row.vessel !== '—' || row.product_size !== '—' ? `${row.vessel !== '—' ? row.vessel : ''} ${row.product_size !== '—' ? `(${row.product_size})` : ''}`.trim() : '—'}
-                        </td>
-                        <td style={{ padding: '6px 10px', borderRight: '1px solid #000000' }}>
-                          {row.total_coliform || 'absent'}
-                        </td>
-                        <td style={{ padding: '6px 10px', borderRight: '1px solid #000000' }}>
-                          {row.ecoli || 'absent'}
-                        </td>
-                        <td style={{ padding: '6px 10px', borderRight: '1px solid #000000' }}>
-                          {row.hpc1 ?? 0}
-                        </td>
-                        <td style={{ padding: '6px 10px' }}>
-                          {row.hpc2 ?? 0}
+                    {group.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" style={{ padding: '12px', textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>
+                          No records recorded for {group.monthHeader}
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      group.rows.map((row, rIdx) => (
+                        <tr key={rIdx} style={{ borderBottom: rIdx === group.rows.length - 1 ? 'none' : '1px solid #000000', textAlign: 'center' }}>
+                          <td style={{ padding: '6px 10px', borderRight: '1px solid #000000', textTransform: 'capitalize' }}>
+                            {formatDateDisplay(row.dateStr)}
+                          </td>
+                          <td style={{ padding: '6px 10px', borderRight: '1px solid #000000' }}>
+                            {row.total_coliform}
+                          </td>
+                          <td style={{ padding: '6px 10px', borderRight: '1px solid #000000' }}>
+                            {row.ecoli}
+                          </td>
+                          <td style={{ padding: '6px 10px', borderRight: '1px solid #000000' }}>
+                            {row.hpc1}
+                          </td>
+                          <td style={{ padding: '6px 10px' }}>
+                            {row.hpc2}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
