@@ -35,52 +35,34 @@ export default function Sidebar({
 
   return (
     <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-      <div>
-        <div className="sidebar-brand" style={{ gap: '8px', paddingBottom: '16px' }}>
-          <img src={logo} alt="Island Chill Logo" style={{ height: '40px', width: 'auto' }} />
-          <div>
-            <div className="brand-text">Island Chill</div>
-            <div className="brand-subtext">Carpenters Water Fiji</div>
-          </div>
+      <div className="sidebar-brand" style={{ gap: '8px', paddingBottom: '16px' }}>
+        <img src={logo} alt="Island Chill Logo" style={{ height: '40px', width: 'auto' }} />
+        <div>
+          <div className="brand-text">Island Chill</div>
+          <div className="brand-subtext">Carpenters Water Fiji</div>
         </div>
-
-        <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-item ${currentTab === item.id ? 'active' : ''}`}
-              onClick={() => {
-                setCurrentTab(item.id);
-                setMobileMenuOpen(false);
-                // Reset selected WO when navigating to Dashboard
-                if (item.id === 'dashboard' && setSelectedWOId) {
-                  setSelectedWOId(null);
-                }
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
       </div>
 
-      <div className="sidebar-footer">
-        <div className="system-status">
-          <div className="status-indicator">
-            <span className="status-dot pulse"></span>
-            <span>All Systems Operational</span>
-          </div>
-          <div className="status-chart">
-            <div className="status-chart-bar" style={{ height: '40%' }}></div>
-            <div className="status-chart-bar" style={{ height: '60%' }}></div>
-            <div className="status-chart-bar" style={{ height: '55%' }}></div>
-            <div className="status-chart-bar" style={{ height: '70%' }}></div>
-            <div className="status-chart-bar" style={{ height: '90%' }}></div>
-            <div className="status-chart-bar" style={{ height: '80%' }}></div>
-            <div className="status-chart-bar" style={{ height: '85%' }}></div>
-          </div>
-        </div>
+      <nav className="sidebar-nav">
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            className={`nav-item ${currentTab === item.id ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentTab(item.id);
+              setMobileMenuOpen(false);
+              // Reset selected WO when navigating to Dashboard
+              if (item.id === 'dashboard' && setSelectedWOId) {
+                setSelectedWOId(null);
+              }
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
+      <div className="sidebar-footer">
         <div className="user-profile" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="avatar">{currentUser.substring(0, 2).toUpperCase()}</div>
