@@ -400,9 +400,12 @@ class FrappeService {
         throw new Error('Login failed: Invalid username or password.');
       }
 
-      // Try fetching profile details
+      // Try fetching profile details & roles
       let fullName = userEmail;
       let islandchill_user_type = '';
+      let userRoles = [];
+      let isAdmin = false;
+
       try {
         const profileRes = await fetch(`${baseUrl}/api/resource/User/${encodeURIComponent(userEmail)}`, {
           method: 'GET',
@@ -415,11 +418,39 @@ class FrappeService {
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           fullName = profileData.data.full_name || userEmail;
-          islandchill_user_type = profileData?.data?.islandchill_user_type;
+          islandchill_user_type = profileData?.data?.islandchill_user_type || '';
+          if (Array.isArray(profileData?.data?.roles)) {
+            userRoles = profileData.data.roles.map(r => r.role || r);
+          }
         }
       } catch (err) {
         console.warn('Profile fetch failed, using email instead', err);
       }
+
+      // If roles not in User resource, fetch via get_roles or fallback
+      if (userRoles.length === 0) {
+        try {
+          const rolesRes = await fetch(`${baseUrl}/api/method/frappe.core.doctype.user.user.get_roles`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ uid: userEmail })
+          });
+          if (rolesRes.ok) {
+            const rolesData = await rolesRes.json();
+            if (Array.isArray(rolesData.message)) {
+              userRoles = rolesData.message;
+            }
+          }
+        } catch (e) {
+          console.warn('get_roles method fallback:', e);
+        }
+      }
+
+      isAdmin = userEmail === 'Administrator' || userRoles.includes('System Manager') || userRoles.includes('Administrator');
 
       const settings = {
         isLive: true,
@@ -430,13 +461,22 @@ class FrappeService {
         apiSecret: '',
         connected: true,
         user: fullName,
-        role: 'ERPNext Administrator',
+        role: isAdmin ? 'ERPNext Administrator' : (userRoles[0] || 'Operations User'),
+        roles: userRoles,
+        isAdmin,
         defaultCompany
       };
 
       this.setConnectionSettings(settings);
 
-      return { success: true, user: fullName, role: settings.role, islandchill_user_type: islandchill_user_type };
+      return {
+        success: true,
+        user: fullName,
+        role: settings.role,
+        roles: userRoles,
+        isAdmin,
+        islandchill_user_type
+      };
     } catch (error) {
       console.error('ERPNext login error:', error);
       return { success: false, message: error.message };

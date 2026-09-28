@@ -1,0 +1,213 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "CT-.YYYY.-.#####",
+ "creation": "2026-06-01 21:29:02.027372",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "analyst",
+  "verified_by",
+  "raw_material_section",
+  "ph_level",
+  "time",
+  "tds_level",
+  "time_2",
+  "sanitation_and_cip_check",
+  "section_break_aeda",
+  "alocohol__check_after_change_from_rtd_to_csd",
+  "brix_check_after_change_over_rtd_to_water",
+  "product_water_section",
+  "type_of_water",
+  "table_tncp",
+  "taste_and_particle_check",
+  "section_break_imng",
+  "reagents",
+  "section_break_xfwh",
+  "comments",
+  "amended_from",
+  "signature",
+  "section_break_yyls",
+  "work_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "analyst",
+   "fieldtype": "Link",
+   "label": "Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "raw_material_section",
+   "fieldtype": "Section Break",
+   "label": "Raw Material"
+  },
+  {
+   "fieldname": "ph_level",
+   "fieldtype": "Float",
+   "label": "Raw Water pH Level"
+  },
+  {
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "label": "Raw Water Time"
+  },
+  {
+   "fieldname": "sanitation_and_cip_check",
+   "fieldtype": "Table",
+   "label": "Sanitation and CIP Check",
+   "options": "Sanitation and CIP Check"
+  },
+  {
+   "fieldname": "tds_level",
+   "fieldtype": "Float",
+   "label": "Raw Water TDS Level"
+  },
+  {
+   "fieldname": "time_2",
+   "fieldtype": "Time",
+   "label": "Raw Water TDS Time"
+  },
+  {
+   "fieldname": "section_break_aeda",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "alocohol__check_after_change_from_rtd_to_csd",
+   "fieldtype": "Percent",
+   "label": "Alcohol % After Changeover RTD \u2192 CSD"
+  },
+  {
+   "fieldname": "brix_check_after_change_over_rtd_to_water",
+   "fieldtype": "Float",
+   "label": "Brix After Changeover RTD \u2192 Water"
+  },
+  {
+   "fieldname": "product_water_section",
+   "fieldtype": "Section Break",
+   "label": "Product Water"
+  },
+  {
+   "fieldname": "type_of_water",
+   "fieldtype": "Select",
+   "label": "Type of Water",
+   "options": "\nPET\nBIB"
+  },
+  {
+   "fieldname": "table_tncp",
+   "fieldtype": "Table",
+   "label": "Product Water - PET/BIB",
+   "options": "Product Water PET BIB"
+  },
+  {
+   "fieldname": "taste_and_particle_check",
+   "fieldtype": "Table",
+   "label": "Taste & Particle Check",
+   "options": "Taste and Particle Table"
+  },
+  {
+   "fieldname": "section_break_imng",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "reagents",
+   "fieldtype": "Table",
+   "label": "Reagents",
+   "options": "Reagents and Instruments"
+  },
+  {
+   "fieldname": "section_break_xfwh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Chemical Test",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_yyls",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Work Order"
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Signature",
+   "label": "Signature"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-28 20:34:02.924470",
+ "modified_by": "sushmita@anantdv.com",
+ "module": "Islandchill",
+ "name": "Chemical Test",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Operation Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

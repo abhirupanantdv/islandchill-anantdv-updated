@@ -165,11 +165,13 @@ export default function LoginPage({
 
       <div className="login-card">
         <div className="login-header">
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-            <img src={logo} alt="Island Chill Logo" style={{ height: '48px', width: 'auto' }} />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+            <img src={logo} alt="Island Chill Logo" style={{ height: '52px', width: 'auto' }} />
           </div>
-          <h2 style={{ textAlign: 'center' }}>Island Chill</h2>
-          <p style={{ textAlign: 'center' }}>Sign in to manage bottling and warehouse production</p>
+          <h2 style={{ textAlign: 'center', fontSize: '24px', fontWeight: '800' }}>Island Chill</h2>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
+            Manufacturing Execution System & Plant Operations
+          </p>
         </div>
 
         {loginError && (
@@ -186,11 +188,12 @@ export default function LoginPage({
               <input
                 type="text"
                 className="form-input-icon"
-                placeholder="administrator"
+                placeholder="administrator or operator email"
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 disabled={loginLoading}
                 required
+                autoFocus
               />
             </div>
           </div>
@@ -202,6 +205,7 @@ export default function LoginPage({
               <input
                 type="password"
                 className="form-input-icon"
+                placeholder="••••••••"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 disabled={loginLoading}
@@ -210,14 +214,51 @@ export default function LoginPage({
             </div>
           </div>
 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            backgroundColor: 'rgba(245, 158, 11, 0.08)',
+            border: '1px solid rgba(245, 158, 11, 0.2)',
+            fontSize: '11.5px',
+            color: 'var(--text-main)',
+            margin: '4px 0 12px 0'
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>⚡</span>
+              <span><strong>Auto Portal Routing</strong>: Admin to Desk (/app) • Operators to MES (/islandchill)</span>
+            </span>
+          </div>
 
-
-          <button type="submit" className="btn-primary-login" disabled={loginLoading} style={{ marginTop: '16px' }}>
-            {loginLoading ? 'Authenticating...' : 'Sign In'}
+          <button type="submit" className="btn-primary-login" disabled={loginLoading} style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: '700' }}>
+            {loginLoading ? 'Authenticating...' : 'Sign In to Operations'}
           </button>
         </form>
 
-
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          paddingTop: '16px',
+          borderTop: '1px solid var(--border-color)',
+          fontSize: '12px',
+          color: 'var(--text-muted)'
+        }}>
+          <span>Need ERPNext Desk directly?</span>
+          <a
+            href="/login"
+            style={{
+              color: 'var(--primary, #2563eb)',
+              fontWeight: '700',
+              textDecoration: 'none'
+            }}
+          >
+            Go to Admin Login ›
+          </a>
+        </div>
       </div>
     </div>
   );

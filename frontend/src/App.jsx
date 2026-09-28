@@ -1643,35 +1643,61 @@ function App() {
             return match ? match[1] : val;
           };
 
-          // 1. Map to table_aqat (Microbiological sample table)
-          const table_aqat = (data.sampleRows || []).map(row => ({
-            doctype: 'Microbiological sample table',
-            sample: row.sample,
-            tcc: row.tcc,
-            e_coli: row.ecoli,
-            hpc_count: `${row.hpc1 || 0} / ${row.hpc2 || 0}`
-          }));
+          const formatDateTime = (val) => {
+            if (!val) return null;
+            let str = String(val).trim();
+            if (!str) return null;
+            str = str.replace('T', ' ');
+            if (str.length === 16) str += ':00';
+            return str;
+          };
+
+          const rawRows = data.table_aqat || data.water_micro_details || data.sampleRows || [];
+          const table_aqat = rawRows.map(row => {
+            const parseNum = (val1, val2) => {
+              if (val1 !== undefined && val1 !== null && val1 !== '' && String(val1) !== '0') return parseInt(val1, 10);
+              if (val2 !== undefined && val2 !== null && val2 !== '' && String(val2) !== '0') return parseInt(val2, 10);
+              const fallback = val1 !== undefined && val1 !== null && val1 !== '' ? val1 : (val2 !== undefined && val2 !== null ? val2 : 0);
+              const res = parseInt(fallback, 10);
+              return isNaN(res) ? 0 : res;
+            };
+
+            const finalHpc1 = parseNum(row.hpc_count, row.hpc1);
+            const finalHpc2 = parseNum(row.hpc_count_2, row.hpc2);
+
+            return {
+              doctype: 'Microbiological sample table',
+              sample: row.sample || '',
+              tcc: row.tcc || 'Absent',
+              e_coli: row.ecoli || row.e_coli || 'Absent',
+              ecoli: row.ecoli || row.e_coli || 'Absent',
+              hpc_count: finalHpc1,
+              hpc_count_2: finalHpc2,
+              hpc1: String(finalHpc1),
+              hpc2: String(finalHpc2),
+              analyst: extractEmployeeId(row.analyst)
+            };
+          });
 
           const erpPayload = {
             work_order: data.work_order || data.workOrder || '',
-            date_of_analysis: data.date,
-            date_of_product: data.dateOfProduct,
-            product_size: data.productSize,
-            market: data.market,
+            date_of_analysis: data.date_of_analysis || data.date || new Date().toISOString().slice(0, 10),
+            date_of_product: data.date_of_product || data.dateOfProduct || new Date().toISOString().slice(0, 10),
+            product_size: data.product_size || data.productSize || '',
+            market: data.market || data.market_area || 'Local',
             table_aqat: table_aqat,
-            compact_dry_ec: data.compactDryEC,
-            pipette_lot: data.pipetteLot,
-            vessel: data.vessel,
-            spc_agar_date: data.spcAgarDate,
-            analyst: extractEmployeeId(data.analyst),
-            incubator_test_type: data.incubatorTestType || 'TCC',
-            incubator_no_tcc_and_hpc: data.incubatorNo,
-            tcc_incubation_in: data.incubatorTestType === 'TCC' && data.tccIncubationIn ? `${data.tccIncubationIn.replace('T', ' ')}:00` : null,
-            tcc_incubation_out: data.incubatorTestType === 'TCC' && data.tccIncubationOut ? `${data.tccIncubationOut.replace('T', ' ')}:00` : null,
-            hpc_incubation_in: data.incubatorTestType === 'HPC' && data.hpcIncubationIn ? `${data.hpcIncubationIn.replace('T', ' ')}:00` : null,
-            hpc_incubation_out: data.incubatorTestType === 'HPC' && data.hpcIncubationOut ? `${data.hpcIncubationOut.replace('T', ' ')}:00` : null,
-            comments: data.comments || '',
-            approved_by: extractEmployeeId(data.approvedBy)
+            compact_dry_ec: data.compact_dry_ec || data.compact_dry_ec_batch || data.compactDryEC || '',
+            pipette_lot: data.pipette_lot || data.pipette_lot_no || data.pipetteLot || '',
+            vessel: data.vessel || data.vessel_number || '',
+            spc_agar_date: data.spc_agar_date || data.spc_agar_prep_date || data.spcAgarDate || '',
+            analyst: extractEmployeeId(data.analyst || data.analyst_name),
+            incubator_no_tcc_and_hpc: String(data.incubator_no_tcc_and_hpc || data.incubator_no || data.incubatorNo || '1'),
+            tcc_incubation_in_date_and_time: formatDateTime(data.tcc_incubation_in_date_and_time || data.tcc_incubation_in || data.tccIncubationIn),
+            tcc_incubation_out_date_and_time: formatDateTime(data.tcc_incubation_out_date_and_time || data.tcc_incubation_out || data.tccIncubationOut),
+            hpc_incubation_in_date_and_time: formatDateTime(data.hpc_incubation_in_date_and_time || data.hpc_incubation_in || data.hpcIncubationIn),
+            hpc_incubation_out_date: formatDateTime(data.hpc_incubation_out_date || data.hpc_incubation_out || data.hpcIncubationOut),
+            comments: data.comments || data.general_observations || '',
+            approved_by: extractEmployeeId(data.approved_by || data.approvedBy)
           };
 
           const response = await frappe.createWaterMicroRecord(erpPayload);
@@ -3509,10 +3535,23 @@ function App() {
         setCurrentUserRole(result.role);
         setIsLoggedIn(true);
 
+        // Intelligently route based on user permissions:
+        // 1. If user has explicit islandchill_user_type === 'Islandchill', stay in MES
+        // 2. If user is Admin / System Manager and user type is not strictly Islandchill, redirect to ERPNext Desk (/app)
+        // 3. Operational / Shop-floor / Lab / Maintenance users stay on Island Chill operations (/islandchill)
         if (result.islandchill_user_type === 'Islandchill') {
-          window.location.href = `/islandchill`
+          // Operations MES view
+          if (window.location.pathname !== '/islandchill') {
+            window.location.href = '/islandchill';
+          }
+        } else if (result.isAdmin) {
+          // Admin portal -> ERPNext default Desk (/app)
+          window.location.href = '/app';
         } else {
-          window.location.href = `/app`
+          // Operational users -> stay in Island Chill Operations (/islandchill)
+          if (window.location.pathname !== '/islandchill') {
+            window.location.href = '/islandchill';
+          }
         }
       } else {
         setLoginError(result.message || 'Failed to connect to ERPNext.');

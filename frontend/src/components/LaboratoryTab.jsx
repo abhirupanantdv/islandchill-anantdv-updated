@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
+import { LabMetadataFields, LabFieldControl, LabTableSections } from './LabMetadataFields';
+import { getLabTableFields, getLabRowDefaults, normalizeLabField } from './labFieldMetadata';
+import { LabSignatureValue } from './LabSignatureField';
+import { createLabLinkLoader } from './labLinkOptions';
+
+const loadLabLinkOptions = createLabLinkLoader(frappe);
 
 // Helper to safely parse Select field options from Frappe metadata string, array, or object
 const parseSelectOptions = (rawOptions) => {
@@ -19,25 +25,6 @@ const parseSelectOptions = (rawOptions) => {
       .filter(Boolean);
   }
   return [];
-};
-
-const isDatetimeField = (fieldtype, fieldname, label) => {
-  if (!fieldtype && !fieldname && !label) return false;
-  const ft = (fieldtype || '').toLowerCase();
-  const fn = (fieldname || '').toLowerCase();
-  const lb = (label || '').toLowerCase();
-  return (
-    ft === 'datetime' ||
-    ft === 'date time' ||
-    ft.includes('datetime') ||
-    lb.includes('date & time') ||
-    lb.includes('date and time') ||
-    lb.includes('datetime') ||
-    fn.endsWith('_datetime') ||
-    fn.endsWith('_date_time') ||
-    fn.includes('incubation_in') ||
-    fn.includes('incubation_out')
-  );
 };
 
 const resolveLinkValue = (val, targetDoctype, linkOptionsMap) => {
@@ -84,7 +71,7 @@ const fetchLinkOptionsMap = async (fields, childMetasObj) => {
   await Promise.all(
     Array.from(linkDoctypes).map(async (dt) => {
       try {
-        const res = await frappe.getLinkOptions(dt, 100);
+        const res = await loadLabLinkOptions(dt);
         optsMap[dt] = (res || []).map(r => (typeof r === 'object' ? (r.name || r.title || String(r)) : String(r)));
       } catch (err) {
         console.warn(`Failed to fetch link options for ${dt}:`, err);
@@ -146,7 +133,7 @@ export function FormFootnote({ doctype, defaultFormNo, formTitle }) {
 }
 
 
-export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm1Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -195,17 +182,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
         }
 
         // Clean label formatting (remove bracketed descriptors & resolve missing labels)
-        fields = fields.map(f => {
-          let lbl = f.label;
-          if (!lbl || lbl === f.fieldname) {
-            lbl = f.options || f.fieldname;
-          }
-          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-          return {
-            ...f,
-            label: lbl
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -224,7 +201,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -257,10 +234,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
           }
 
           // Clean child field labels too (remove brackets)
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -319,6 +293,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
     newRow.out_date = newRow.out_date || new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     newRow.out_time = newRow.out_time || '10:00';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -347,167 +322,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={field.reqd === 1}
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${field.label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -523,33 +338,16 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Microbiological Analysis of Primary Raw Materials"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `form1_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Microbiological Analysis Detail';
-              const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -563,7 +361,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       ➕ Add Row
                     </button>
                   </div>
@@ -571,6 +369,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                   <div style={{ overflowX: 'auto' }}>
                     <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                           {childFields.map(cf => (
@@ -592,12 +391,9 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                               <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  {renderControlInput(
-                                    cf,
-                                    row[cf.fieldname],
-                                    (v) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, v),
-                                    `form1_tbl_${tf.fieldname}_${rIdx}_${cf.fieldname}`
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ textAlign: 'center' }}>
@@ -606,7 +402,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
                                   title="Remove row"
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   🗑️
                                 </button>
                               </td>
@@ -618,26 +414,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                   </div>
                 </div>
               );
-            })}
-
-            {/* Signature Fields (Rendered at the END of the form) */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                <h4 style={{ color: 'var(--accent)', marginTop: 0, marginBottom: '12px', fontSize: '13px' }}>
-                  ✍️ Signatures & Approvals
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(f => (
-                    <div key={f.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `form1_sig_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Microbiological Analysis of Primary Raw Materials" defaultFormNo="Form 1" formTitle="Microbiological Analysis of Primary Raw Materials" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -653,7 +430,7 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, handleSearchEmp
 }
 
 
-export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm9Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -718,17 +495,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
         }
 
         // Clean label formatting (remove bracketed descriptors & resolve missing labels)
-        fields = fields.map(f => {
-          let lbl = f.label;
-          if (!lbl || lbl === f.fieldname) {
-            lbl = f.options || f.fieldname;
-          }
-          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-          return {
-            ...f,
-            label: lbl
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -747,7 +514,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -779,10 +546,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
           }
 
           // Clean child field labels too (remove brackets)
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -840,6 +604,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
     newRow.taste_check = newRow.taste_check || 'Pass';
     newRow.particle_check = newRow.particle_check || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -866,167 +631,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={field.reqd === 1}
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${field.label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -1042,33 +647,16 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Chemical Test"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `chem_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Product Water Test Detail';
-              const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -1082,7 +670,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       ➕ Add Row
                     </button>
                   </div>
@@ -1090,6 +678,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                   <div style={{ overflowX: 'auto' }}>
                     <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                           {childFields.map(cf => (
@@ -1111,12 +700,9 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                               <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  {renderControlInput(
-                                    cf,
-                                    row[cf.fieldname],
-                                    (v) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, v),
-                                    `chem_tbl_${tf.fieldname}_${rIdx}_${cf.fieldname}`
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ textAlign: 'center' }}>
@@ -1125,7 +711,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
                                   title="Remove row"
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   🗑️
                                 </button>
                               </td>
@@ -1137,27 +723,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
                   </div>
                 </div>
               );
-            })}
-
-            {/* Signature Fields (Rendered at the END of the form) */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                <h4 style={{ color: 'var(--accent)', marginTop: 0, marginBottom: '12px', fontSize: '13px' }}>
-                  ✍️ Signatures & Approvals
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(f => (
-                    <div key={f.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `chem_sig_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            }} />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -1172,7 +738,7 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, handleSearchEmp
 }
 
 
-export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm11Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -1185,28 +751,44 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
     date_of_product: new Date().toISOString().slice(0, 10),
     analyst: '',
     approved_by: '',
+    market: 'Local',
     market_area: 'Local',
     product_size: '1.5L PET',
+    vessel: 'Vessel A',
     vessel_number: 'Vessel A',
+    compact_dry_ec: 'CD-EC-901',
     compact_dry_ec_batch: 'CD-EC-901',
+    pipette_lot: 'PL-9988',
     pipette_lot_no: 'PL-9988',
+    spc_agar_date: new Date().toISOString().slice(0, 10),
     spc_agar_prep_date: new Date().toISOString().slice(0, 10),
+    incubator_no_tcc_and_hpc: '1',
     incubator_no: '1',
     incubator_test_type: 'TCC',
+    tcc_incubation_in_date_and_time: new Date().toISOString().slice(0, 16),
+    tcc_incubation_out_date_and_time: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+    hpc_incubation_in_date_and_time: new Date().toISOString().slice(0, 16),
+    hpc_incubation_out_date: new Date(Date.now() + 172800000).toISOString().slice(0, 16),
     tcc_incubation_in: new Date().toISOString().slice(0, 16),
     tcc_incubation_out: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
     hpc_incubation_in: new Date().toISOString().slice(0, 16),
     hpc_incubation_out: new Date(Date.now() + 172800000).toISOString().slice(0, 16),
+    comments: '',
     general_observations: '',
     signature: ''
   });
 
   // Dynamic state for child table fields (fieldname -> array of row objects)
   const [tableData, setTableData] = useState({
+    table_aqat: [
+      { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' },
+      { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' },
+      { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' }
+    ],
     water_micro_details: [
-      { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-      { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-      { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' }
+      { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' },
+      { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' },
+      { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' }
     ]
   });
 
@@ -1245,17 +827,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
         }
 
         // Clean label formatting (remove bracketed descriptors & resolve missing labels)
-        fields = fields.map(f => {
-          let lbl = f.label;
-          if (!lbl || lbl === f.fieldname) {
-            lbl = f.options || f.fieldname;
-          }
-          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-          return {
-            ...f,
-            label: lbl
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -1274,7 +846,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -1305,18 +877,15 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
           }
 
           // Clean child field labels too (remove brackets)
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
           // Initial default rows if not populated
           newTableDataInit[tf.fieldname] = [
-            { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-            { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' },
-            { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', hpc1: '0', hpc2: '0', analyst: '' }
+            { sample: 'Silver Ion', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' },
+            { sample: 'BH', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' },
+            { sample: '0.45um Filter', tcc: 'Absent', ecoli: 'Absent', e_coli: 'Absent', hpc1: '0', hpc2: '0', hpc_count: 0, hpc_count_2: 0, analyst: '' }
           ];
         }
 
@@ -1347,9 +916,21 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
   const handleTableRowChange = (tableFieldName, rowIdx, fieldname, val) => {
     setTableData(prev => ({
       ...prev,
-      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) =>
-        rIdx === rowIdx ? { ...row, [fieldname]: val } : row
-      )
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, rIdx) => {
+        if (rIdx !== rowIdx) return row;
+        const updatedRow = { ...row, [fieldname]: val };
+        if (fieldname === 'hpc_count' || fieldname === 'hpc1') {
+          updatedRow.hpc_count = val;
+          updatedRow.hpc1 = val;
+        } else if (fieldname === 'hpc_count_2' || fieldname === 'hpc2') {
+          updatedRow.hpc_count_2 = val;
+          updatedRow.hpc2 = val;
+        } else if (fieldname === 'ecoli' || fieldname === 'e_coli') {
+          updatedRow.ecoli = val;
+          updatedRow.e_coli = val;
+        }
+        return updatedRow;
+      })
     }));
   };
 
@@ -1364,6 +945,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
         newRow[f.fieldname] = '';
       }
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -1380,270 +962,50 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
   const handleSubmitForm = (e) => {
     e.preventDefault();
     const primaryTableKey = Object.keys(tableData)[0] || 'water_micro_details';
-    const sampleRows = tableData[primaryTableKey] || [];
+    const sampleRows = tableData.table_aqat || tableData[primaryTableKey] || [];
 
     onSubmit({
       ...formData,
       ...tableData,
-      // Backward-compatible properties
+      table_aqat: sampleRows,
+      // Backward-compatible properties & exact schema mappings
       analyst: formData.analyst || formData.analyst_name || '',
       approvedBy: formData.approved_by || formData.manager || formData.approvedBy || '',
+      approved_by: formData.approved_by || formData.manager || formData.approvedBy || '',
       date: formData.date_of_analysis || formData.date || new Date().toISOString().slice(0, 10),
-      dateOfProduct: formData.date_of_product || new Date().toISOString().slice(0, 10),
-      market: formData.market_area || formData.market || 'Local',
-      productSize: formData.product_size || '1.5L PET',
-      vessel: formData.vessel_number || formData.vessel || 'Vessel A',
-      compactDryEC: formData.compact_dry_ec_batch || formData.compact_dry_ec || 'CD-EC-901',
-      pipetteLot: formData.pipette_lot_no || formData.pipette_lot || 'PL-9988',
-      spcAgarDate: formData.spc_agar_prep_date || formData.spc_agar_date || new Date().toISOString().slice(0, 10),
-      incubatorNo: formData.incubator_no || '1',
+      date_of_analysis: formData.date_of_analysis || formData.date || new Date().toISOString().slice(0, 10),
+      dateOfProduct: formData.date_of_product || formData.dateOfProduct || new Date().toISOString().slice(0, 10),
+      date_of_product: formData.date_of_product || formData.dateOfProduct || new Date().toISOString().slice(0, 10),
+      market: formData.market || formData.market_area || 'Local',
+      productSize: formData.product_size || formData.productSize || '1.5L PET',
+      product_size: formData.product_size || formData.productSize || '1.5L PET',
+      vessel: formData.vessel || formData.vessel_number || 'Vessel A',
+      vessel_number: formData.vessel || formData.vessel_number || 'Vessel A',
+      compactDryEC: formData.compact_dry_ec || formData.compact_dry_ec_batch || 'CD-EC-901',
+      compact_dry_ec: formData.compact_dry_ec || formData.compact_dry_ec_batch || 'CD-EC-901',
+      pipetteLot: formData.pipette_lot || formData.pipette_lot_no || 'PL-9988',
+      pipette_lot: formData.pipette_lot || formData.pipette_lot_no || 'PL-9988',
+      spcAgarDate: formData.spc_agar_date || formData.spc_agar_prep_date || new Date().toISOString().slice(0, 10),
+      spc_agar_date: formData.spc_agar_date || formData.spc_agar_prep_date || new Date().toISOString().slice(0, 10),
+      incubatorNo: formData.incubator_no_tcc_and_hpc || formData.incubator_no || '1',
+      incubator_no_tcc_and_hpc: formData.incubator_no_tcc_and_hpc || formData.incubator_no || '1',
       incubatorTestType: formData.incubator_test_type || 'TCC',
-      tccIncubationIn: formData.tcc_incubation_in || '',
-      tccIncubationOut: formData.tcc_incubation_out || '',
-      hpcIncubationIn: formData.hpc_incubation_in || '',
-      hpcIncubationOut: formData.hpc_incubation_out || '',
+      tcc_incubation_in_date_and_time: formData.tcc_incubation_in_date_and_time || formData.tcc_incubation_in || '',
+      tcc_incubation_out_date_and_time: formData.tcc_incubation_out_date_and_time || formData.tcc_incubation_out || '',
+      hpc_incubation_in_date_and_time: formData.hpc_incubation_in_date_and_time || formData.hpc_incubation_in || '',
+      hpc_incubation_out_date: formData.hpc_incubation_out_date || formData.hpc_incubation_out || '',
+      tccIncubationIn: formData.tcc_incubation_in_date_and_time || formData.tcc_incubation_in || '',
+      tccIncubationOut: formData.tcc_incubation_out_date_and_time || formData.tcc_incubation_out || '',
+      hpcIncubationIn: formData.hpc_incubation_in_date_and_time || formData.hpc_incubation_in || '',
+      hpcIncubationOut: formData.hpc_incubation_out_date || formData.hpc_incubation_out || '',
       sampleRows,
-      comments: formData.general_observations || formData.comments || ''
+      comments: formData.comments || formData.general_observations || ''
     });
   };
 
-  const renderControlInput = (field, value, onChange, searchFieldKey = '') => {
-    const { fieldtype, fieldname, options, label, reqd } = field;
-
-    // Filter hidden fields
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fieldtype === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={Boolean(reqd)}
-            value={value || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fieldtype === 'Date') {
-      return (
-        <input
-          type="date"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Time') {
-      return (
-        <input
-          type="time"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Datetime' || fieldtype === 'Date Time') {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return (
-        <input
-          type="datetime-local"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || localDT}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Select') {
-      const selectOpts = parseSelectOptions(options);
-      return (
-        <select
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        >
-          <option value="">-- Select {label || 'Option'} --</option>
-          {selectOpts.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      );
-    }
-
-    if (fieldtype === 'Check') {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={e => onChange(e.target.checked ? 1 : 0)}
-          />
-          <span style={{ fontSize: '12px' }}>{label}</span>
-        </div>
-      );
-    }
-
-    if (fieldtype === 'Small Text' || fieldtype === 'Text' || fieldtype === 'Long Text') {
-      return (
-        <textarea
-          className="form-input"
-          style={{ minHeight: searchFieldKey?.includes('tbl') ? '32px' : '50px', padding: '6px' }}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder={`Enter ${label}...`}
-        />
-      );
-    }
-
-    if (fieldtype === 'Float' || fieldtype === 'Int' || fieldtype === 'Currency' || fieldtype === 'Percent') {
-      return (
-        <input
-          type="number"
-          step={fieldtype === 'Int' ? '1' : 'any'}
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value !== undefined ? value : ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder="0"
-        />
-      );
-    }
-
-    if (fieldtype === 'Signature') {
-      return (
-        <div style={{ border: '1px dashed var(--border-color)', padding: '12px', borderRadius: '8px', background: 'var(--bg-light)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>✍️ Digital Signature Input</span>
-            {value && (
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
-                onClick={() => onChange('')}
-              >
-                Clear Signature
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            className="form-input"
-            style={{
-              fontFamily: '"Caveat", "Brush Script MT", cursive',
-              fontSize: '22px',
-              color: '#1e3a8a',
-              letterSpacing: '1px',
-              padding: '8px 12px',
-              background: '#fff'
-            }}
-            placeholder="Type your full name to sign dynamically..."
-            value={value || ''}
-            onChange={e => onChange(e.target.value)}
-          />
-          {value && (
-            <div style={{ marginTop: '6px', fontSize: '11px', color: '#166534', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              ✓ Digitally Signed by: {value}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Default Fallback (Data, Read Only, etc.)
-    return (
-      <input
-        type="text"
-        className="form-input"
-        required={Boolean(reqd)}
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        placeholder={`Enter ${label}...`}
-      />
-    );
-  };
 
   const fieldsList = meta?.fields || [];
-  const normalFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    !f.fieldname?.includes('signature') &&
-    f.hidden !== 1
-  );
 
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
-  const signatureFields = fieldsList.filter(f => (f.fieldtype === 'Signature' || f.fieldname?.includes('signature')) && f.hidden !== 1);
 
   return (
     <div className="modal-backdrop">
@@ -1657,34 +1019,16 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta ? (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Microbiologiocal Analysis Raw and Product Water"...
               </div>
             ) : (
-              <>
-                {/* Dynamic Top-Level Fields */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                  {normalFields.map(field => (
-                    <div key={field.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {field.label} {field.reqd ? '*' : ''}
-                      </label>
-                      {renderControlInput(
-                        field,
-                        formData[field.fieldname],
-                        (val) => handleFieldChange(field.fieldname, val),
-                        `form11_${field.fieldname}`
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Dynamic Child Tables */}
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options || 'Microbiological Analysis Detail';
-                  const childFields = childMetas[childDoctype] || [];
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
 
                   return (
@@ -1696,7 +1040,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                        >
+                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -1704,6 +1048,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -1718,13 +1063,10 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                    {renderControlInput(
-                                      cf,
-                                      row[cf.fieldname],
-                                      (val) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, val),
-                                      `form11_tbl_${tf.fieldname}_${cf.fieldname}_${rIdx}`
-                                    )}
-                                  </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -1732,7 +1074,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  >
+                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -1743,25 +1085,8 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       </div>
                     </div>
                   );
-                })}
-
-                {/* SIGNATURE FIELDS - ALWAYS AT THE VERY END OF THE FORM */}
-                {signatureFields.map(sigField => (
-                  <div key={sigField.fieldname} style={{ marginTop: '12px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                      {sigField.label} {sigField.reqd ? '*' : ''}
-                    </label>
-                    {renderControlInput(
-                      sigField,
-                      formData[sigField.fieldname],
-                      (val) => handleFieldChange(sigField.fieldname, val),
-                      `form11_${sigField.fieldname}`
-                    )}
-                  </div>
-                ))}
-              </>
+                }} />
             )}
-
             <FormFootnote doctype="Microbiologiocal Analysis Raw and Product Water" defaultFormNo="Form 11" formTitle="Raw and Product Water Analysis" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -1777,7 +1102,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, handleSearchEm
 }
 
 
-export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm21Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -1824,17 +1149,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
         }
 
         // Clean label formatting (remove bracketed descriptors & resolve missing labels)
-        fields = fields.map(f => {
-          let lbl = f.label;
-          if (!lbl || lbl === f.fieldname) {
-            lbl = f.options || f.fieldname;
-          }
-          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-          return {
-            ...f,
-            label: lbl
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -1853,7 +1168,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -1901,10 +1216,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
           }
 
           // Clean child field labels too
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -1968,6 +1280,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
     if ('d10_particle' in newRow || childFields.some(cf => cf.fieldname === 'd10_particle')) newRow.d10_particle = 'Nil';
     if ('d30_particle' in newRow || childFields.some(cf => cf.fieldname === 'd30_particle')) newRow.d30_particle = 'Nil';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -1993,167 +1306,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={field.reqd === 1}
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${field.label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -2169,33 +1322,16 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Taste Test and Visual Inspection"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `taste_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Taste Test Detail';
-              const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -2209,7 +1345,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       ➕ Add Row
                     </button>
                   </div>
@@ -2217,6 +1353,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   <div style={{ overflowX: 'auto' }}>
                     <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                           {childFields.map(cf => (
@@ -2238,12 +1375,9 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                               <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  {renderControlInput(
-                                    cf,
-                                    row[cf.fieldname],
-                                    (v) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, v),
-                                    `taste_tbl_${tf.fieldname}_${rIdx}_${cf.fieldname}`
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ textAlign: 'center' }}>
@@ -2252,7 +1386,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
                                   title="Remove row"
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   🗑️
                                 </button>
                               </td>
@@ -2264,27 +1398,7 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   </div>
                 </div>
               );
-            })}
-
-            {/* Signature Fields (Rendered at the END of the form) */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                <h4 style={{ color: 'var(--accent)', marginTop: 0, marginBottom: '12px', fontSize: '13px' }}>
-                  ✍️ Signatures & Approval
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(f => (
-                    <div key={f.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `taste_sig_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            }} />
             <FormFootnote doctype="Taste Test and Visual Inspection" defaultFormNo="Form 21" formTitle="Taste & Visual Inspection Log" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -2558,7 +1672,7 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
           sections.push(currentSection);
         }
         currentSection = {
-          title: f.label || 'Section Details',
+          title: f.label || '',
           description: f.description || '',
           standardFields: [],
           tableFields: []
@@ -2615,9 +1729,9 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
           ) : sections.length > 0 ? (
             sections.map((sec, sIdx) => (
               <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px', backgroundColor: '#ffffff' }}>
-                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: 'var(--accent)', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                {sec.title && <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: 'var(--accent)', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
                   📌 {sec.title}
-                </h4>
+                </h4>}
                 {sec.description && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sec.description}</div>}
 
                 {/* Standard Fields Grid */}
@@ -2631,7 +1745,7 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
                             {field.label || field.fieldname}
                           </span>
                           <span style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a', wordBreak: 'break-word' }}>
-                            {field.fieldtype === 'Check' ? (val ? 'Yes (✓)' : 'No (✗)') : String(val)}
+                            {field.fieldtype === 'Signature' ? <LabSignatureValue value={val} label={field.label} /> : field.fieldtype === 'Check' ? (val ? 'Yes (✓)' : 'No (✗)') : String(val)}
                           </span>
                         </div>
                       );
@@ -2648,7 +1762,7 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
                   // Headers
                   let headers = [];
                   if (childFields.length > 0) {
-                    headers = childFields.map(cf => ({ key: cf.fieldname, label: cf.label }));
+                    headers = childFields.map(cf => ({ key: cf.fieldname, label: cf.label, fieldtype: cf.fieldtype }));
                   } else if (rows.length > 0) {
                     headers = Object.keys(rows[0]).filter(k => k !== 'name' && k !== 'owner' && k !== 'parent' && k !== 'parentfield' && k !== 'parenttype' && k !== 'docstatus' && k !== 'idx').map(k => ({ key: k, label: k.replace(/_/g, ' ').toUpperCase() }));
                   }
@@ -2685,7 +1799,7 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
 
                                     return (
                                       <td key={h.key} style={{ padding: '6px' }}>
-                                        {isPass ? (
+                                        {h.fieldtype === 'Signature' ? <LabSignatureValue value={cellVal} label={h.label} /> : isPass ? (
                                           <span style={{ color: 'var(--success)', fontWeight: '600' }}>{strVal}</span>
                                         ) : isFail ? (
                                           <span style={{ color: 'var(--danger)', fontWeight: '600' }}>{strVal}</span>
@@ -2739,7 +1853,7 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
             <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '12px' }}>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✍️ Signature Verification:</span>
               <div style={{ fontFamily: '"Caveat", cursive', fontSize: '20px', color: '#1e3a8a', marginTop: '2px' }}>
-                {sig}
+                <LabSignatureValue value={sig} />
               </div>
             </div>
           )}
@@ -2757,7 +1871,7 @@ export function LabReportViewerModal({ record, onClose, setEmailModal }) {
 }
 
 
-export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, prefilledWorkOrder }) {
+export function LabForm36Modal({ onClose, onSubmit, employeeList, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -2826,23 +1940,13 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        fields = fields.map(f => {
-          let lbl = f.label;
-          if (!lbl || lbl === f.fieldname) {
-            lbl = f.options || f.fieldname;
-          }
-          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-          return {
-            ...f,
-            label: lbl
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -2875,10 +1979,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
             }
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
         }
@@ -2923,6 +2024,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
         newRow[f.fieldname] = '';
       }
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -2978,236 +2080,9 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
     onSubmit(submissionData);
   };
 
-  const renderControlInput = (field, value, onChange, searchFieldKey = '') => {
-    const { fieldtype, fieldname, options, label, reqd } = field;
-
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    if (fieldtype === 'Link') {
-      const targetDoctype = options || 'Employee';
-      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
-      const sKey = searchFieldKey || fieldname;
-
-      if (isEmpTarget) {
-        return (
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={Boolean(reqd)}
-              value={value || ''}
-              onFocus={(e) => {
-                if (handleSearchEmployees) {
-                  handleSearchEmployees(e.target.value || '', sKey);
-                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                }
-              }}
-              onChange={(e) => {
-                onChange(e.target.value);
-                if (handleSearchEmployees) {
-                  handleSearchEmployees(e.target.value, sKey);
-                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                }
-              }}
-              placeholder={`Select / Search ${label || targetDoctype}...`}
-            />
-            {showEmployeeDropdown && activeSearchField === sKey && employeeList && (
-              <div className="autocomplete-dropdown">
-                {employeeList.map(emp => (
-                  <div key={emp.name} className="dropdown-item" onMouseDown={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
-                    👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const datalistId = `dl_${sKey}`;
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            className="form-input"
-            required={Boolean(reqd)}
-            value={value || ''}
-            onChange={(e) => onChange(e.target.value)}
-            list={datalistId}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          <datalist id={datalistId}>
-            {fetchedOpts.map((opt, i) => (
-              <option key={i} value={opt} />
-            ))}
-          </datalist>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fieldtype, fieldname, label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return (
-        <input
-          type="datetime-local"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || localDT}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Date') {
-      return (
-        <input
-          type="date"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Time') {
-      return (
-        <input
-          type="time"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || new Date().toTimeString().slice(0, 5)}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Select') {
-      const selectOpts = parseSelectOptions(options);
-      return (
-        <select
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        >
-          <option value="">-- Select {label || 'Option'} --</option>
-          {selectOpts.map((opt, i) => (
-            <option key={i} value={opt}>{opt}</option>
-          ))}
-        </select>
-      );
-    }
-
-    if (fieldtype === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={e => onChange(e.target.checked ? 1 : 0)}
-          />
-          <span>{label}</span>
-        </label>
-      );
-    }
-
-    if (['Small Text', 'Text', 'Long Text'].includes(fieldtype)) {
-      return (
-        <textarea
-          className="form-input"
-          rows="2"
-          style={{ resize: 'vertical' }}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder={`Enter ${label}...`}
-        />
-      );
-    }
-
-    if (['Float', 'Int', 'Currency', 'Percent'].includes(fieldtype)) {
-      return (
-        <input
-          type="number"
-          step="any"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder={`Enter ${label}...`}
-        />
-      );
-    }
-
-    if (fieldtype === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>✍️ Digital Signature Input</span>
-            {value && (
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
-                onClick={() => onChange('')}
-              >
-                Clear Signature
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            className="form-input"
-            style={{
-              fontFamily: '"Caveat", "Brush Script MT", cursive',
-              fontSize: '22px',
-              color: '#1e3a8a',
-              letterSpacing: '1px',
-              padding: '8px 12px',
-              background: '#fff'
-            }}
-            placeholder="Type your full name to sign dynamically..."
-            value={value || ''}
-            onChange={e => onChange(e.target.value)}
-          />
-          {value && (
-            <div style={{ marginTop: '6px', fontSize: '11px', color: '#166534', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              ✓ Digitally Signed by: {value}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <input
-        type="text"
-        className="form-input"
-        required={Boolean(reqd)}
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        placeholder={`Enter ${label}...`}
-      />
-    );
-  };
 
   const fieldsList = meta?.fields || [];
-  const normalFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    !f.fieldname?.includes('signature') &&
-    f.hidden !== 1
-  );
 
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
-  const signatureFields = fieldsList.filter(f => (f.fieldtype === 'Signature' || f.fieldname?.includes('signature')) && f.hidden !== 1);
 
   return (
     <div className="modal-backdrop">
@@ -3221,32 +2096,16 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta ? (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Bourbon Whiskey And Cola Product Tank Record"...
               </div>
             ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  {normalFields.map(field => (
-                    <div key={field.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {field.label} {field.reqd ? '*' : ''}
-                      </label>
-                      {renderControlInput(
-                        field,
-                        formData[field.fieldname],
-                        (val) => handleFieldChange(field.fieldname, val),
-                        `form36_${field.fieldname}`
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options || 'Bourbon Whiskey and Cola Recipe Item';
-                  const childFields = childMetas[childDoctype] || [];
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
 
                   return (
@@ -3258,7 +2117,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                        >
+                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -3266,6 +2125,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -3280,13 +2140,10 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                    {renderControlInput(
-                                      cf,
-                                      row[cf.fieldname],
-                                      (val) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, val),
-                                      `form36_tbl_${tf.fieldname}_${cf.fieldname}_${rIdx}`
-                                    )}
-                                  </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -3294,7 +2151,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  >
+                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -3305,24 +2162,8 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       </div>
                     </div>
                   );
-                })}
-
-                {signatureFields.map(sf => (
-                  <div key={sf.fieldname} style={{ marginTop: '12px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                      {sf.label}
-                    </label>
-                    {renderControlInput(
-                      sf,
-                      formData[sf.fieldname],
-                      (val) => handleFieldChange(sf.fieldname, val),
-                      `form36_${sf.fieldname}`
-                    )}
-                  </div>
-                ))}
-              </>
+                }} />
             )}
-
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
             <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
@@ -3790,7 +2631,7 @@ export function LabForm35Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm86Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -3840,17 +2681,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
         }
 
         // Clean label formatting (remove bracketed descriptors and resolve auto-generated fieldnames like table_wahj)
-        fields = fields.map(f => {
-          let lbl = f.label;
-          if (!lbl || lbl === f.fieldname) {
-            lbl = f.options || f.fieldname;
-          }
-          lbl = lbl.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
-          return {
-            ...f,
-            label: lbl
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -3869,7 +2700,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -3899,10 +2730,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
           }
 
           // Clean child field labels too (remove brackets)
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -3959,6 +2787,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
     newRow.thermometer_reading = newRow.thermometer_reading || 37.0;
     newRow.unit = newRow.unit || '°C';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -3985,167 +2814,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={field.reqd === 1}
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${field.label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -4161,33 +2830,16 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Incubator Temperature Record"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `inc_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Incubator Temperature Check';
-              const childFields = (childMetas[childDoctype] || childMetas['Incubator Temperature Check'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Incubator Temperature Check'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -4201,7 +2853,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       ➕ Add Row
                     </button>
                   </div>
@@ -4209,6 +2861,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   <div style={{ overflowX: 'auto' }}>
                     <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                           {childFields.map(cf => (
@@ -4230,12 +2883,9 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
                               <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  {renderControlInput(
-                                    cf,
-                                    row[cf.fieldname],
-                                    (v) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, v),
-                                    `inc_tbl_${tf.fieldname}_${rIdx}_${cf.fieldname}`
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ textAlign: 'center' }}>
@@ -4244,7 +2894,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
                                   title="Remove row"
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   🗑️
                                 </button>
                               </td>
@@ -4256,27 +2906,7 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   </div>
                 </div>
               );
-            })}
-
-            {/* Signature Fields (Rendered at the END of the form) */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                <h4 style={{ color: 'var(--accent)', marginTop: 0, marginBottom: '12px', fontSize: '13px' }}>
-                  ✍️ Signatures & Approvals
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(f => (
-                    <div key={f.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `inc_sig_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            }} />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>Island Chill - Form no. 86</span>
@@ -4460,9 +3090,7 @@ export function LabForm88Modal({ onClose, onSubmit, employeeList, handleSearchEm
 export { LabForm88Modal as MaintWeightCheckModal };
 
 
-
-
-export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm103Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -4515,19 +3143,8 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
           ];
         }
 
-        // Clean label formatting and ensure technician/analyst/verifier fields are treated as Employee Link fields
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('verified by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        // Preserve the labels and field types declared by the DocType.
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -4546,7 +3163,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -4575,10 +3192,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
           }
 
           // Clean child field labels too (remove brackets)
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -4636,6 +3250,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
     newRow.status = newRow.status || 'Pass';
     newRow.calibration_status = newRow.calibration_status || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -4670,167 +3285,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={field.reqd === 1}
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${field.label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -4846,43 +3301,24 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Silver Photometer Log"...
               </div>
             )}
-
             <div style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderLeft: '4px solid var(--accent)', color: 'var(--text-heading)' }}>
               <strong>Acceptance specification bounds:</strong> Reading of Silver Ion should be **above 10ppb**.
             </div>
-
             {checkSpecFailure() && (
               <div style={{ padding: '10px 14px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', fontWeight: '700', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
                 ⚠️ Warning: One or more readings are below the minimum required 10ppb silver concentration!
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `photo_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Silver Photometer Readings';
-              const childFields = (childMetas[childDoctype] || childMetas['Silver Photometer Readings'] || childMetas['Photometer Reading Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Silver Photometer Readings'] || childMetas['Photometer Reading Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -4896,7 +3332,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       ➕ Add Row
                     </button>
                   </div>
@@ -4904,6 +3340,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
                   <div style={{ overflowX: 'auto' }}>
                     <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                           {childFields.map(cf => (
@@ -4925,12 +3362,9 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
                               <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  {renderControlInput(
-                                    cf,
-                                    row[cf.fieldname],
-                                    (v) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, v),
-                                    `photo_tbl_${tf.fieldname}_${rIdx}_${cf.fieldname}`
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ textAlign: 'center' }}>
@@ -4939,7 +3373,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
                                   title="Remove row"
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   🗑️
                                 </button>
                               </td>
@@ -4951,8 +3385,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
                   </div>
                 </div>
               );
-            })}
-
+            }} />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -4966,7 +3399,7 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, handleSearchE
   );
 }
 
-export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm104Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -5037,7 +3470,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+        const tableFieldsList = fields.filter(f => (f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect') && f.options);
         const childMetasObj = {};
         for (const tf of tableFieldsList) {
           try {
@@ -5105,6 +3538,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
     if (!newRow.head_no) newRow.head_no = String((tableData[tableFieldName] || []).length + 1);
     if (!newRow.status) newRow.status = 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -5130,169 +3564,10 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
+
 
   // Helper renderer for dynamic control inputs
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
 
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={field.reqd === 1}
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${field.label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    // Default Data / Link / Read Only
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -5315,25 +3590,11 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Seam Checklist Form"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                {nonTableFields.map(f => (
-                  <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                      {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                    </label>
-                    {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `seam_${f.fieldname}`)}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Dynamic Table Fields (e.g. seam_checks -> Seam Check Detail) */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options;
-              const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -5347,7 +3608,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       ➕ Add Row
                     </button>
                   </div>
@@ -5355,6 +3616,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
                   <div style={{ overflowX: 'auto' }}>
                     <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                           {childFields.map(cf => (
@@ -5369,13 +3631,10 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
                             <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
                             {childFields.map(cf => (
                               <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                {renderControlInput(
-                                  cf,
-                                  row[cf.fieldname],
-                                  (v) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, v),
-                                  `seam_tbl_${tf.fieldname}_${rIdx}_${cf.fieldname}`
-                                )}
-                              </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                             ))}
                             <td style={{ textAlign: 'center' }}>
                               <button
@@ -5383,7 +3642,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                 onClick={() => removeTableRow(tf.fieldname, rIdx)}
                                 title="Remove row"
-                              >
+                               disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                 🗑️
                               </button>
                             </td>
@@ -5394,27 +3653,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
                   </div>
                 </div>
               );
-            })}
-
-            {/* Signature Fields (Rendered at the END of the form) */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                <h4 style={{ color: 'var(--accent)', marginTop: 0, marginBottom: '12px', fontSize: '13px' }}>
-                  ✍️ Signatures & Approvals
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(f => (
-                    <div key={f.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `seam_sig_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            }} />
           </div>
 
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -5429,7 +3668,7 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, handleSearchE
   );
 }
 
-export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm83Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -5474,10 +3713,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        fields = fields.map(f => ({
-          ...f,
-          label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-        }));
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -5488,7 +3724,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -5517,10 +3753,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -5571,6 +3804,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
         newRow[f.fieldname] = '';
       }
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -5601,248 +3835,9 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
     });
   };
 
-  const renderControlInput = (field, value, onChange, searchFieldKey = '') => {
-    const { fieldtype, fieldname, options, label, reqd } = field;
-
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fieldtype === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={Boolean(reqd)}
-            value={value || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div key={emp.name} className="dropdown-item" onMouseDown={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fieldtype, fieldname, label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return (
-        <input
-          type="datetime-local"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || localDT}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Date') {
-      return (
-        <input
-          type="date"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Time') {
-      return (
-        <input
-          type="time"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || new Date().toTimeString().slice(0, 5)}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Datetime' || fieldtype === 'Date Time') {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return (
-        <input
-          type="datetime-local"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || localDT}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Select') {
-      const selectOpts = parseSelectOptions(options);
-      return (
-        <select
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        >
-          <option value="">-- Select {label || 'Option'} --</option>
-          {selectOpts.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      );
-    }
-
-    if (fieldtype === 'Check') {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={e => onChange(e.target.checked ? 1 : 0)}
-          />
-          <span style={{ fontSize: '12px' }}>{label}</span>
-        </div>
-      );
-    }
-
-    if (fieldtype === 'Small Text' || fieldtype === 'Text' || fieldtype === 'Long Text') {
-      return (
-        <textarea
-          className="form-input"
-          style={{ minHeight: searchFieldKey?.includes('tbl') ? '32px' : '50px', padding: '6px' }}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder={`Enter ${label}...`}
-        />
-      );
-    }
-
-    if (fieldtype === 'Float' || fieldtype === 'Int' || fieldtype === 'Currency' || fieldtype === 'Percent') {
-      return (
-        <input
-          type="number"
-          step={fieldtype === 'Int' ? '1' : 'any'}
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value !== undefined ? value : ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder="0"
-        />
-      );
-    }
-
-    if (fieldtype === 'Signature') {
-      return (
-        <div style={{ border: '1px dashed var(--border-color)', padding: '12px', borderRadius: '8px', background: 'var(--bg-light)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>✍️ Digital Signature Input</span>
-            {value && (
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
-                onClick={() => onChange('')}
-              >
-                Clear Signature
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            className="form-input"
-            style={{
-              fontFamily: '"Caveat", "Brush Script MT", cursive',
-              fontSize: '22px',
-              color: '#1e3a8a',
-              letterSpacing: '1px',
-              padding: '8px 12px',
-              background: '#fff'
-            }}
-            placeholder="Type your full name to sign dynamically..."
-            value={value || ''}
-            onChange={e => onChange(e.target.value)}
-          />
-          {value && (
-            <div style={{ marginTop: '6px', fontSize: '11px', color: '#166534', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              ✓ Digitally Signed by: {value}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <input
-        type="text"
-        className="form-input"
-        required={Boolean(reqd)}
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        placeholder={`Enter ${label}...`}
-      />
-    );
-  };
 
   const fieldsList = meta?.fields || [];
-  const normalFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    !f.fieldname?.includes('signature') &&
-    f.hidden !== 1
-  );
 
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
-  const signatureFields = fieldsList.filter(f => (f.fieldtype === 'Signature' || f.fieldname?.includes('signature')) && f.hidden !== 1);
 
   return (
     <div className="modal-backdrop">
@@ -5856,34 +3851,16 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta ? (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Microbiological Analysis"...
               </div>
             ) : (
-              <>
-                {/* Dynamic Top-Level Fields */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                  {normalFields.map(field => (
-                    <div key={field.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {field.label} {field.reqd ? '*' : ''}
-                      </label>
-                      {renderControlInput(
-                        field,
-                        formData[field.fieldname],
-                        (val) => handleFieldChange(field.fieldname, val),
-                        `form83_${field.fieldname}`
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Dynamic Child Tables */}
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options || 'Microbiological Analysis Detail';
-                  const childFields = childMetas[childDoctype] || [];
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
 
                   return (
@@ -5895,7 +3872,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                        >
+                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -5903,6 +3880,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -5917,13 +3895,10 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                    {renderControlInput(
-                                      cf,
-                                      row[cf.fieldname],
-                                      (val) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, val),
-                                      `form83_tbl_${tf.fieldname}_${cf.fieldname}_${rIdx}`
-                                    )}
-                                  </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -5931,7 +3906,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  >
+                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -5942,25 +3917,8 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       </div>
                     </div>
                   );
-                })}
-
-                {/* SIGNATURE FIELDS - ALWAYS AT THE VERY END OF THE FORM */}
-                {signatureFields.map(sigField => (
-                  <div key={sigField.fieldname} style={{ marginTop: '12px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                      {sigField.label} {sigField.reqd ? '*' : ''}
-                    </label>
-                    {renderControlInput(
-                      sigField,
-                      formData[sigField.fieldname],
-                      (val) => handleFieldChange(sigField.fieldname, val),
-                      `form83_${sigField.fieldname}`
-                    )}
-                  </div>
-                ))}
-              </>
+                }} />
             )}
-
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -5974,7 +3932,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm84Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -6024,10 +3982,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        fields = fields.map(f => ({
-          ...f,
-          label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-        }));
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           console.log('=============================================================');
@@ -6038,7 +3993,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
         const newTableDataInit = {};
 
@@ -6066,10 +4021,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -6120,6 +4072,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
         newRow[f.fieldname] = '';
       }
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -6150,249 +4103,9 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
     });
   };
 
-  const renderControlInput = (field, value, onChange, searchFieldKey = '') => {
-    const { fieldtype, fieldname, options, label, reqd } = field;
-
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    if (fieldtype === 'Link') {
-      const targetDoctype = options || 'Employee';
-      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
-      const sKey = searchFieldKey || fieldname;
-
-      if (isEmpTarget) {
-        return (
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              className="form-input"
-              required={Boolean(reqd)}
-              value={value || ''}
-              onFocus={(e) => {
-                if (handleSearchEmployees) {
-                  handleSearchEmployees(e.target.value || '', sKey);
-                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                }
-              }}
-              onChange={(e) => {
-                onChange(e.target.value);
-                if (handleSearchEmployees) {
-                  handleSearchEmployees(e.target.value, sKey);
-                  if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                }
-              }}
-              placeholder={`Select / Search ${label || targetDoctype}...`}
-            />
-            {showEmployeeDropdown && activeSearchField === sKey && employeeList && (
-              <div className="autocomplete-dropdown">
-                {employeeList.map(emp => (
-                  <div key={emp.name} className="dropdown-item" onMouseDown={() => { onChange(`${emp.employee_name || emp.name} (${emp.name})`); if (setShowEmployeeDropdown) setShowEmployeeDropdown(false); }}>
-                    👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const datalistId = `dl_${sKey}`;
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={datalistId}
-            className="form-input"
-            required={Boolean(reqd)}
-            value={value || ''}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          <datalist id={datalistId}>
-            {fetchedOpts.map((opt, i) => (
-              <option key={i} value={opt} />
-            ))}
-          </datalist>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fieldtype, fieldname, label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return (
-        <input
-          type="datetime-local"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || localDT}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Date') {
-      return (
-        <input
-          type="date"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Time') {
-      return (
-        <input
-          type="time"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || new Date().toTimeString().slice(0, 5)}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Datetime' || fieldtype === 'Date Time') {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return (
-        <input
-          type="datetime-local"
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || localDT}
-          onChange={e => onChange(e.target.value)}
-        />
-      );
-    }
-
-    if (fieldtype === 'Select') {
-      const selectOpts = parseSelectOptions(options);
-      return (
-        <select
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-        >
-          <option value="">-- Select {label || 'Option'} --</option>
-          {selectOpts.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      );
-    }
-
-    if (fieldtype === 'Check') {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={e => onChange(e.target.checked ? 1 : 0)}
-          />
-          <span style={{ fontSize: '12px' }}>{label}</span>
-        </div>
-      );
-    }
-
-    if (fieldtype === 'Small Text' || fieldtype === 'Text' || fieldtype === 'Long Text') {
-      return (
-        <textarea
-          className="form-input"
-          style={{ minHeight: searchFieldKey?.includes('tbl') ? '32px' : '50px', padding: '6px' }}
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder={`Enter ${label}...`}
-        />
-      );
-    }
-
-    if (fieldtype === 'Float' || fieldtype === 'Int' || fieldtype === 'Currency' || fieldtype === 'Percent') {
-      return (
-        <input
-          type="number"
-          step={fieldtype === 'Int' ? '1' : 'any'}
-          className="form-input"
-          required={Boolean(reqd)}
-          value={value !== undefined ? value : ''}
-          onChange={e => onChange(e.target.value)}
-          placeholder="0"
-        />
-      );
-    }
-
-    if (fieldtype === 'Signature') {
-      return (
-        <div style={{ border: '1px dashed var(--border-color)', padding: '12px', borderRadius: '8px', background: 'var(--bg-light)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>✍️ Digital Signature Input</span>
-            {value && (
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
-                onClick={() => onChange('')}
-              >
-                Clear Signature
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            className="form-input"
-            style={{
-              fontFamily: '"Caveat", "Brush Script MT", cursive',
-              fontSize: '22px',
-              color: '#1e3a8a',
-              letterSpacing: '1px',
-              padding: '8px 12px',
-              background: '#fff'
-            }}
-            placeholder="Type your full name to sign dynamically..."
-            value={value || ''}
-            onChange={e => onChange(e.target.value)}
-          />
-          {value && (
-            <div style={{ marginTop: '6px', fontSize: '11px', color: '#166534', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              ✓ Digitally Signed by: {value}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <input
-        type="text"
-        className="form-input"
-        required={Boolean(reqd)}
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        placeholder={`Enter ${label}...`}
-      />
-    );
-  };
 
   const fieldsList = meta?.fields || [];
-  const normalFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    !f.fieldname?.includes('signature') &&
-    f.hidden !== 1
-  );
 
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
-  const signatureFields = fieldsList.filter(f => (f.fieldtype === 'Signature' || f.fieldname?.includes('signature')) && f.hidden !== 1);
 
   return (
     <div className="modal-backdrop">
@@ -6406,34 +4119,16 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta ? (
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Sanitation Record"...
               </div>
             ) : (
-              <>
-                {/* Dynamic Top-Level Fields */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                  {normalFields.map(field => (
-                    <div key={field.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {field.label} {field.reqd ? '*' : ''}
-                      </label>
-                      {renderControlInput(
-                        field,
-                        formData[field.fieldname],
-                        (val) => handleFieldChange(field.fieldname, val),
-                        `form84_${field.fieldname}`
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Dynamic Child Tables */}
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options || 'Sanitation Detail';
-                  const childFields = childMetas[childDoctype] || [];
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
 
                   return (
@@ -6445,7 +4140,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                        >
+                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -6453,6 +4148,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -6467,13 +4163,10 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                    {renderControlInput(
-                                      cf,
-                                      row[cf.fieldname],
-                                      (val) => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, val),
-                                      `form84_tbl_${tf.fieldname}_${cf.fieldname}_${rIdx}`
-                                    )}
-                                  </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -6481,7 +4174,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  >
+                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -6492,25 +4185,8 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       </div>
                     </div>
                   );
-                })}
-
-                {/* SIGNATURE FIELDS - ALWAYS AT THE VERY END OF THE FORM */}
-                {signatureFields.map(sigField => (
-                  <div key={sigField.fieldname} style={{ marginTop: '12px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                      {sigField.label} {sigField.reqd ? '*' : ''}
-                    </label>
-                    {renderControlInput(
-                      sigField,
-                      formData[sigField.fieldname],
-                      (val) => handleFieldChange(sigField.fieldname, val),
-                      `form84_${sigField.fieldname}`
-                    )}
-                  </div>
-                ))}
-              </>
+                }} />
             )}
-
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -6524,7 +4200,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm34Modal({ onClose, onSubmit, employeeList, setShowEmployeeDropdown, saving, prefilledWorkOrder }) {
   const [formData, setFormData] = useState({
     work_order: prefilledWorkOrder || '',
     date: new Date().toISOString().slice(0, 10),
@@ -6562,7 +4238,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
         if (isMounted) {
           console.log('📋 MONITORING DYNAMIC META:', doctypeMeta);
           setMeta({ ...(doctypeMeta || {}), fields });
-          const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+          const tableFieldsList = fields.filter(f => (f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect') && f.options);
           const childMetasObj = {};
           for (const tf of tableFieldsList) {
             try {
@@ -6609,6 +4285,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
     childFields.forEach(f => {
       newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -6632,17 +4309,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
+
 
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown(false)}>
@@ -6663,227 +4330,18 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Monitoring"...
               </div>
             ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {nonTableFields.map(field => {
-                    if (field.fieldtype === 'Select') {
-                      const opts = parseSelectOptions(field.options);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <select
-                            className="text-input"
-                            value={formData[field.fieldname] ?? opts[0] ?? ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          >
-                            <option value="">-- Select {field.label} --</option>
-                            {opts.map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Check') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input
-                            type="checkbox"
-                            id={`m34_${field.fieldname}`}
-                            checked={!!formData[field.fieldname]}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
-                          />
-                          <label htmlFor={`m34_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
-                            {field.label}
-                          </label>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 2' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <textarea
-                            className="text-input"
-                            style={{ minHeight: '60px' }}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Date') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="date"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Time') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="time"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Link') {
-                      const targetDoctype = field.options || 'Employee';
-                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
-                      const sKey = field.fieldname;
-
-                      if (isEmpTarget) {
-                        return (
-                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                            <label className="input-label" style={{ fontWeight: '600' }}>
-                              {field.label} {field.reqd ? '*' : ''}
-                            </label>
-                            <input
-                              type="text"
-                              className="text-input"
-                              placeholder={`Select or type ${field.label}...`}
-                              value={formData[field.fieldname] || ''}
-                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                              onFocus={() => {
-                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
-                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                              }}
-                            />
-                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                                {employeeList.map(emp => {
-                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
-                                  return (
-                                    <div
-                                      key={emp.name}
-                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                      onMouseDown={() => {
-                                        handleFieldChange(field.fieldname, empVal);
-                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                      }}
-                                    >
-                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const datalistId = `dl_m34_${sKey}`;
-
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="text"
-                            list={datalistId}
-                            className="text-input"
-                            placeholder={`Select or type ${field.label}...`}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                          <datalist id={datalistId}>
-                            {fetchedOpts.map((opt, idx) => (
-                              <option key={idx} value={opt} />
-                            ))}
-                          </datalist>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={field.fieldname} className="form-group">
-                        <label className="input-label" style={{ fontWeight: '600' }}>
-                          {field.label} {field.reqd ? '*' : ''}
-                        </label>
-                        <input
-                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
-                          className="text-input"
-                          value={formData[field.fieldname] || ''}
-                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Table Fields (Child Tables) */}
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options;
-                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const currentRows = tableData[tf.fieldname] || [];
 
                   return (
                     <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
-                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           + Add Row
                         </button>
                       </div>
@@ -6896,6 +4354,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -6908,47 +4367,13 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                      {cf.fieldtype === 'Select' ? (
-                                        <select
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        >
-                                          <option value="">-- Select --</option>
-                                          {parseSelectOptions(cf.options).map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      ) : cf.fieldtype === 'Link' ? (
-                                        <>
-                                          <input
-                                            type="text"
-                                            list={`dl_m34_tbl_${cf.fieldname}_${rIdx}`}
-                                            className="text-input"
-                                            style={{ padding: '4px', fontSize: '11px' }}
-                                            value={row[cf.fieldname] || ''}
-                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                          />
-                                          <datalist id={`dl_m34_tbl_${cf.fieldname}_${rIdx}`}>
-                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
-                                              <option key={opt} value={opt} />
-                                            ))}
-                                          </datalist>
-                                        </>
-                                      ) : (
-                                        <input
-                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        />
-                                      )}
-                                    </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                       🗑️
                                     </button>
                                   </td>
@@ -6960,8 +4385,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       )}
                     </div>
                   );
-                })}
-              </>
+                }} />
             )}
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -6976,7 +4400,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm100Modal({ onClose, onSubmit, employeeList, setShowEmployeeDropdown, saving, prefilledWorkOrder }) {
   const [formData, setFormData] = useState({
     work_order: prefilledWorkOrder || '',
     date: new Date().toISOString().slice(0, 10),
@@ -7019,7 +4443,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
         if (isMounted) {
           console.log('📋 PRODUCTION RECORD DYNAMIC META:', doctypeMeta);
           setMeta({ ...(doctypeMeta || {}), fields });
-          const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+          const tableFieldsList = fields.filter(f => (f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect') && f.options);
           const childMetasObj = {};
           for (const tf of tableFieldsList) {
             try {
@@ -7066,6 +4490,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
     childFields.forEach(f => {
       newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -7089,17 +4514,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
+
 
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown && setShowEmployeeDropdown(false)}>
@@ -7120,226 +4535,18 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Production Record"...
               </div>
             ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {nonTableFields.map(field => {
-                    if (field.fieldtype === 'Select') {
-                      const opts = parseSelectOptions(field.options);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <select
-                            className="text-input"
-                            value={formData[field.fieldname] ?? opts[0] ?? ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          >
-                            <option value="">-- Select {field.label} --</option>
-                            {opts.map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Check') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input
-                            type="checkbox"
-                            id={`p100_${field.fieldname}`}
-                            checked={!!formData[field.fieldname]}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
-                          />
-                          <label htmlFor={`p100_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
-                            {field.label}
-                          </label>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 2' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <textarea
-                            className="text-input"
-                            style={{ minHeight: '60px' }}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Date') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="date"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Time') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="time"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Link') {
-                      const targetDoctype = field.options || 'Employee';
-                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
-                      const sKey = field.fieldname;
-
-                      if (isEmpTarget) {
-                        return (
-                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                            <label className="input-label" style={{ fontWeight: '600' }}>
-                              {field.label} {field.reqd ? '*' : ''}
-                            </label>
-                            <input
-                              type="text"
-                              className="text-input"
-                              placeholder={`Select or type ${field.label}...`}
-                              value={formData[field.fieldname] || ''}
-                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                              onFocus={() => {
-                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
-                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                              }}
-                            />
-                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                                {employeeList.map(emp => {
-                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
-                                  return (
-                                    <div
-                                      key={emp.name}
-                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                      onMouseDown={() => {
-                                        handleFieldChange(field.fieldname, empVal);
-                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                      }}
-                                    >
-                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const datalistId = `dl_m100_${sKey}`;
-
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="text"
-                            list={datalistId}
-                            className="text-input"
-                            placeholder={`Select or type ${field.label}...`}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                          <datalist id={datalistId}>
-                            {fetchedOpts.map((opt, idx) => (
-                              <option key={idx} value={opt} />
-                            ))}
-                          </datalist>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={field.fieldname} className="form-group">
-                        <label className="input-label" style={{ fontWeight: '600' }}>
-                          {field.label} {field.reqd ? '*' : ''}
-                        </label>
-                        <input
-                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
-                          className="text-input"
-                          value={formData[field.fieldname] || ''}
-                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options;
-                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const currentRows = tableData[tf.fieldname] || [];
 
                   return (
                     <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
-                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           + Add Row
                         </button>
                       </div>
@@ -7352,6 +4559,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -7364,31 +4572,13 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                      {cf.fieldtype === 'Select' ? (
-                                        <select
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        >
-                                          <option value="">-- Select --</option>
-                                          {parseSelectOptions(cf.options).map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <input
-                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        />
-                                      )}
-                                    </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                       🗑️
                                     </button>
                                   </td>
@@ -7400,8 +4590,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
                       )}
                     </div>
                   );
-                })}
-              </>
+                }} />
             )}
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -7416,7 +4605,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, handleSearchE
   );
 }
 
-export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm69Modal({ onClose, onSubmit, employeeList, setShowEmployeeDropdown, saving, prefilledWorkOrder }) {
   const [formData, setFormData] = useState({
     work_order: prefilledWorkOrder || '',
     date: new Date().toISOString().slice(0, 10),
@@ -7460,7 +4649,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
         if (isMounted) {
           console.log('📋 MOCK PRODUCT RECALL DYNAMIC META:', doctypeMeta);
           setMeta({ ...(doctypeMeta || {}), fields });
-          const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' && f.options);
+          const tableFieldsList = fields.filter(f => (f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect') && f.options);
           const childMetasObj = {};
           for (const tf of tableFieldsList) {
             try {
@@ -7507,6 +4696,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
     childFields.forEach(f => {
       newRow[f.fieldname] = f.fieldtype === 'Select' ? (parseSelectOptions(f.options)[0] || '') : '';
     });
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -7530,16 +4720,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
+
 
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown && setShowEmployeeDropdown(false)}>
@@ -7560,208 +4741,18 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Mock Product Recall"...
               </div>
             ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {nonTableFields.map(field => {
-                    if (field.fieldtype === 'Select') {
-                      const opts = parseSelectOptions(field.options);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <select
-                            className="text-input"
-                            value={formData[field.fieldname] ?? opts[0] ?? ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          >
-                            <option value="">-- Select {field.label} --</option>
-                            {opts.map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Check') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input
-                            type="checkbox"
-                            id={`r69_${field.fieldname}`}
-                            checked={!!formData[field.fieldname]}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
-                          />
-                          <label htmlFor={`r69_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
-                            {field.label}
-                          </label>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 2' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <textarea
-                            className="text-input"
-                            style={{ minHeight: '60px' }}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Date') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="date"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Time') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="time"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Link') {
-                      const targetDoctype = field.options || 'Employee';
-                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
-                      const sKey = field.fieldname;
-
-                      if (isEmpTarget) {
-                        return (
-                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                            <label className="input-label" style={{ fontWeight: '600' }}>
-                              {field.label} {field.reqd ? '*' : ''}
-                            </label>
-                            <input
-                              type="text"
-                              className="text-input"
-                              placeholder={`Select or type ${field.label}...`}
-                              value={formData[field.fieldname] || ''}
-                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                              onFocus={() => {
-                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
-                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                              }}
-                            />
-                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                                {employeeList.map(emp => {
-                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
-                                  return (
-                                    <div
-                                      key={emp.name}
-                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                      onMouseDown={() => {
-                                        handleFieldChange(field.fieldname, empVal);
-                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                      }}
-                                    >
-                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const datalistId = `dl_m69_${sKey}`;
-
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="text"
-                            list={datalistId}
-                            className="text-input"
-                            placeholder={`Select or type ${field.label}...`}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                          <datalist id={datalistId}>
-                            {fetchedOpts.map((opt, idx) => (
-                              <option key={idx} value={opt} />
-                            ))}
-                          </datalist>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={field.fieldname} className="form-group">
-                        <label className="input-label" style={{ fontWeight: '600' }}>
-                          {field.label} {field.reqd ? '*' : ''}
-                        </label>
-                        <input
-                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
-                          className="text-input"
-                          value={formData[field.fieldname] || ''}
-                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options;
-                  const childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const currentRows = tableData[tf.fieldname] || [];
 
                   return (
                     <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
-                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           + Add Row
                         </button>
                       </div>
@@ -7774,6 +4765,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -7786,31 +4778,13 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                      {cf.fieldtype === 'Select' ? (
-                                        <select
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        >
-                                          <option value="">-- Select --</option>
-                                          {parseSelectOptions(cf.options).map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <input
-                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        />
-                                      )}
-                                    </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                       🗑️
                                     </button>
                                   </td>
@@ -7822,8 +4796,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       )}
                     </div>
                   );
-                })}
-              </>
+                }} />
             )}
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -7838,7 +4811,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm70Modal({ onClose, onSubmit, employeeList, setShowEmployeeDropdown, saving, prefilledWorkOrder }) {
   const [formData, setFormData] = useState({
     work_order: prefilledWorkOrder || '',
     why_was_there_a_recall: '',
@@ -7934,6 +4907,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
       newRow.employee = '';
       newRow.employee_name = '';
     }
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -7957,17 +4931,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Table MultiSelect' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
+
 
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown && setShowEmployeeDropdown(false)}>
@@ -7988,219 +4952,11 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Recall Review"...
               </div>
             ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {nonTableFields.map(field => {
-                    if (field.fieldtype === 'Select') {
-                      const opts = parseSelectOptions(field.options);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <select
-                            className="text-input"
-                            value={formData[field.fieldname] ?? opts[0] ?? ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          >
-                            <option value="">-- Select {field.label} --</option>
-                            {opts.map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Check') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input
-                            type="checkbox"
-                            id={`rr70_${field.fieldname}`}
-                            checked={!!formData[field.fieldname]}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.checked ? 1 : 0)}
-                          />
-                          <label htmlFor={`rr70_${field.fieldname}`} className="input-label" style={{ margin: 0, cursor: 'pointer', fontWeight: '600' }}>
-                            {field.label}
-                          </label>
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Small Text' || field.fieldtype === 'Text') {
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ gridColumn: 'span 2' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <textarea
-                            className="text-input"
-                            style={{ minHeight: '60px' }}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (isDatetimeField(field.fieldtype, field.fieldname, field.label)) {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Date') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="date"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toISOString().slice(0, 10)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Time') {
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="time"
-                            className="text-input"
-                            value={formData[field.fieldname] || new Date().toTimeString().slice(0, 5)}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Datetime' || field.fieldtype === 'Date Time') {
-                      const now = new Date();
-                      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                      return (
-                        <div key={field.fieldname} className="form-group">
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="text-input"
-                            value={formData[field.fieldname] || localDT}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (field.fieldtype === 'Link') {
-                      const targetDoctype = field.options || 'Employee';
-                      const isEmpTarget = targetDoctype === 'Employee' || targetDoctype === 'User';
-                      const sKey = field.fieldname;
-
-                      if (isEmpTarget) {
-                        return (
-                          <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                            <label className="input-label" style={{ fontWeight: '600' }}>
-                              {field.label} {field.reqd ? '*' : ''}
-                            </label>
-                            <input
-                              type="text"
-                              className="text-input"
-                              placeholder={`Select or type ${field.label}...`}
-                              value={formData[field.fieldname] || ''}
-                              onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                              onFocus={() => {
-                                handleSearchEmployees(formData[field.fieldname] || '', sKey);
-                                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-                              }}
-                            />
-                            {showEmployeeDropdown && activeSearchField === sKey && employeeList?.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', zIndex: 1200, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                                {employeeList.map(emp => {
-                                  const empVal = `${emp.employee_name || emp.name} (${emp.name})`;
-                                  return (
-                                    <div
-                                      key={emp.name}
-                                      style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                      onMouseDown={() => {
-                                        handleFieldChange(field.fieldname, empVal);
-                                        if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                                      }}
-                                    >
-                                      <strong>{emp.employee_name}</strong> <span style={{ color: '#64748b' }}>({emp.name})</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const datalistId = `dl_m70_${sKey}`;
-
-                      return (
-                        <div key={field.fieldname} className="form-group" style={{ position: 'relative' }}>
-                          <label className="input-label" style={{ fontWeight: '600' }}>
-                            {field.label} {field.reqd ? '*' : ''}
-                          </label>
-                          <input
-                            type="text"
-                            list={datalistId}
-                            className="text-input"
-                            placeholder={`Select or type ${field.label}...`}
-                            value={formData[field.fieldname] || ''}
-                            onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                          />
-                          <datalist id={datalistId}>
-                            {fetchedOpts.map((opt, idx) => (
-                              <option key={idx} value={opt} />
-                            ))}
-                          </datalist>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={field.fieldname} className="form-group">
-                        <label className="input-label" style={{ fontWeight: '600' }}>
-                          {field.label} {field.reqd ? '*' : ''}
-                        </label>
-                        <input
-                          type={field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text'}
-                          className="text-input"
-                          value={formData[field.fieldname] || ''}
-                          onChange={e => handleFieldChange(field.fieldname, e.target.value)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {tableFields.map(tf => {
+              <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
                   const childDoctype = tf.options;
-                  let childFields = (childMetas[childDoctype] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.hidden !== 1);
+                  let childFields = getLabTableFields(childMetas[childDoctype] || []);
                   if (childFields.length === 0) {
                     childFields = [
                       { fieldname: 'employee', label: 'Employee ID / Name', fieldtype: 'Link', options: 'Employee' }
@@ -8212,7 +4968,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div key={tf.fieldname} className="form-group" style={{ marginTop: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <label className="input-label" style={{ fontWeight: '700', fontSize: '13px' }}>📋 {tf.label}</label>
-                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)}>
+                        <button type="button" className="secondary-btn" style={{ fontSize: '11px', padding: '4px 8px' }} onClick={() => addTableRow(tf.fieldname, childDoctype)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           + Add Row
                         </button>
                       </div>
@@ -8225,6 +4981,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -8237,49 +4994,13 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                      {cf.fieldtype === 'Select' ? (
-                                        <select
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        >
-                                          <option value="">-- Select --</option>
-                                          {parseSelectOptions(cf.options).map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </select>
-                                      ) : cf.fieldtype === 'Link' ? (
-                                        <>
-                                          <input
-                                            type="text"
-                                            list={`dl_m70_tbl_${cf.fieldname}_${rIdx}`}
-                                            className="text-input"
-                                            style={{ padding: '4px', fontSize: '11px' }}
-                                            placeholder={`Enter ${cf.label}...`}
-                                            value={row[cf.fieldname] || ''}
-                                            onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                          />
-                                          <datalist id={`dl_m70_tbl_${cf.fieldname}_${rIdx}`}>
-                                            {(linkOptionsMap[cf.options || 'Employee'] || []).map(opt => (
-                                              <option key={opt} value={opt} />
-                                            ))}
-                                          </datalist>
-                                        </>
-                                      ) : (
-                                        <input
-                                          type={cf.fieldtype === 'Date' ? 'date' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Float' || cf.fieldtype === 'Int' ? 'number' : 'text'}
-                                          className="text-input"
-                                          style={{ padding: '4px', fontSize: '11px' }}
-                                          placeholder={`Enter ${cf.label}...`}
-                                          value={row[cf.fieldname] || ''}
-                                          onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                        />
-                                      )}
-                                    </td>
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                       🗑️
                                     </button>
                                   </td>
@@ -8291,8 +5012,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       )}
                     </div>
                   );
-                })}
-              </>
+                }} />
             )}
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -8307,7 +5027,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm12Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -8364,25 +5084,14 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -8453,6 +5162,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
     newRow.pressure = newRow.pressure || 15.0;
     newRow.status = newRow.status || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -8479,167 +5189,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('operator') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -8655,35 +5205,16 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Autoclave Record"...
               </div>
             )}
-
-
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `auto_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Autoclave Log Detail';
-              const childFields = (childMetas[childDoctype] || childMetas['Autoclave Log Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Autoclave Log Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -8697,7 +5228,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       + Add Row
                     </button>
                   </div>
@@ -8710,6 +5241,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                           <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                             {childFields.map(cf => (
                               <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -8722,34 +5254,9 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             <tr key={rIdx}>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  {cf.fieldtype === 'Select' ? (
-                                    <select
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    >
-                                      <option value="">-- Select --</option>
-                                      {parseSelectOptions(cf.options).map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
-                                  ) : cf.fieldtype === 'Check' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(row[cf.fieldname])}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
-                                    />
-                                  ) : (
-                                    <input
-                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
-                                      step="any"
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    />
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
@@ -8757,7 +5264,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   type="button"
                                   style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   ✕
                                 </button>
                               </td>
@@ -8769,22 +5276,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   )}
                 </div>
               );
-            })}
-
-            {/* Signature Fields Section */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(sf => (
-                    <div key={sf.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
-                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `auto_meta_sig_${sf.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Autoclave Record" defaultFormNo="Form 12" formTitle="Autoclave Sterilization Record Sheet" />
           </div>
 
@@ -8800,7 +5292,7 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm13Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -8861,25 +5353,14 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('prepared by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -8908,10 +5389,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -8965,6 +5443,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
     newRow.media_name = newRow.media_name || 'Standard Culture Agar';
     newRow.status = newRow.status || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -8991,167 +5470,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('prepared by') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -9167,33 +5486,16 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Media Preparation Record"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `mpr_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Media Preparation Detail';
-              const childFields = (childMetas[childDoctype] || childMetas['Media Preparation Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Media Preparation Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -9207,7 +5509,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       + Add Row
                     </button>
                   </div>
@@ -9220,6 +5522,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                           <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                             {childFields.map(cf => (
                               <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -9232,34 +5535,9 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             <tr key={rIdx}>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  {cf.fieldtype === 'Select' ? (
-                                    <select
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    >
-                                      <option value="">-- Select --</option>
-                                      {parseSelectOptions(cf.options).map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
-                                  ) : cf.fieldtype === 'Check' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(row[cf.fieldname])}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
-                                    />
-                                  ) : (
-                                    <input
-                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
-                                      step="any"
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    />
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
@@ -9267,7 +5545,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   type="button"
                                   style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   ✕
                                 </button>
                               </td>
@@ -9279,22 +5557,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   )}
                 </div>
               );
-            })}
-
-            {/* Signature Fields Section */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(sf => (
-                    <div key={sf.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
-                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `mpr_meta_sig_${sf.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Media Preparation Record" defaultFormNo="Form 13" formTitle="Media Preparation Record Sheet" />
           </div>
 
@@ -9310,7 +5573,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm64Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -9373,25 +5636,14 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('tested by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -9419,10 +5671,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -9476,6 +5725,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
     newRow.sample_id = newRow.sample_id || `SAMPLE-0${(tableData[tableFieldName] || []).length + 1}`;
     newRow.status = newRow.status || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -9502,167 +5752,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('tested by') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -9678,33 +5768,16 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Rinse-Off Test for Raw Materials"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `rot_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Rinse Off Test Detail';
-              const childFields = (childMetas[childDoctype] || childMetas['Rinse Off Test Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Rinse Off Test Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -9718,7 +5791,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       + Add Row
                     </button>
                   </div>
@@ -9731,6 +5804,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                           <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                             {childFields.map(cf => (
                               <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -9743,34 +5817,9 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             <tr key={rIdx}>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  {cf.fieldtype === 'Select' ? (
-                                    <select
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    >
-                                      <option value="">-- Select --</option>
-                                      {parseSelectOptions(cf.options).map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
-                                  ) : cf.fieldtype === 'Check' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(row[cf.fieldname])}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
-                                    />
-                                  ) : (
-                                    <input
-                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
-                                      step="any"
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    />
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
@@ -9778,7 +5827,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   type="button"
                                   style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   ✕
                                 </button>
                               </td>
@@ -9790,22 +5839,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   )}
                 </div>
               );
-            })}
-
-            {/* Signature Fields Section */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(sf => (
-                    <div key={sf.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
-                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `rot_meta_sig_${sf.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Rinse-Off Test for Raw Materials" defaultFormNo="Form 64" formTitle="Rinse-Off Test for Raw Materials" />
           </div>
 
@@ -9821,7 +5855,7 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm72Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -9880,25 +5914,14 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('recorded by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -9926,10 +5949,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -9983,6 +6003,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
     newRow.sample_code = newRow.sample_code || `LS-0${(tableData[tableFieldName] || []).length + 1}`;
     newRow.status = newRow.status || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -10009,167 +6030,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('recorded by') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="dropdown-item"
-                  onMouseDown={() => {
-                    onChange(`${emp.employee_name || emp.name} (${emp.name})`);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  👤 {emp.employee_name || emp.name} ({emp.designation || 'Staff'})
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (fType === 'Signature') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              value={val || ''}
-              onChange={e => onChange(e.target.value)}
-              placeholder={`Digital signature (${label})...`}
-              style={{ fontFamily: 'cursive, sans-serif', fontSize: '13px', fontStyle: 'italic', flex: 1 }}
-            />
-            {val && (
-              <button
-                type="button"
-                className="secondary-btn"
-                style={{ fontSize: '10px', padding: '4px 8px' }}
-                onClick={() => onChange('')}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -10185,33 +6046,16 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Library Sample Record"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `lsr_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Library Sample Detail';
-              const childFields = (childMetas[childDoctype] || childMetas['Library Sample Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Library Sample Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -10225,7 +6069,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       + Add Row
                     </button>
                   </div>
@@ -10238,6 +6082,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                           <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                             {childFields.map(cf => (
                               <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -10250,34 +6095,9 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             <tr key={rIdx}>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  {cf.fieldtype === 'Select' ? (
-                                    <select
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    >
-                                      <option value="">-- Select --</option>
-                                      {parseSelectOptions(cf.options).map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
-                                  ) : cf.fieldtype === 'Check' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(row[cf.fieldname])}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
-                                    />
-                                  ) : (
-                                    <input
-                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
-                                      step="any"
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    />
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
@@ -10285,7 +6105,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   type="button"
                                   style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                   onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   ✕
                                 </button>
                               </td>
@@ -10297,22 +6117,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   )}
                 </div>
               );
-            })}
-
-            {/* Signature Fields Section */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(sf => (
-                    <div key={sf.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
-                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `lsr_meta_sig_${sf.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Library Sample Record" defaultFormNo="Form 72" formTitle="Library Sample Record" />
           </div>
 
@@ -10328,7 +6133,7 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm47Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -10399,25 +6204,14 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('operator') || lbl.includes('verified by') || lbl.includes('recorded by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -10444,10 +6238,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -10500,6 +6291,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
     });
     newRow.status = newRow.status || 'Pass';
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -10526,141 +6318,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'recorded_by', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('recorded by') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="autocomplete-item"
-                  onClick={() => {
-                    onChange(emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{emp.employee_name || emp.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.designation || emp.name}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -10676,33 +6334,16 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Traceability of products"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `top_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Traceability Detail';
-              const childFields = (childMetas[childDoctype] || childMetas['Traceability Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Traceability Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -10716,7 +6357,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       + Add Row
                     </button>
                   </div>
@@ -10729,6 +6370,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                           <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                             {childFields.map(cf => (
                               <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -10741,34 +6383,9 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             <tr key={rIdx}>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  {cf.fieldtype === 'Select' ? (
-                                    <select
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    >
-                                      <option value="">-- Select --</option>
-                                      {parseSelectOptions(cf.options).map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
-                                  ) : cf.fieldtype === 'Check' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(row[cf.fieldname])}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
-                                    />
-                                  ) : (
-                                    <input
-                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
-                                      step="any"
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    />
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
@@ -10776,7 +6393,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   type="button"
                                   style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                   onClick={() => removeTableRow(tf.fieldname, rowIdx)}
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   ✕
                                 </button>
                               </td>
@@ -10788,22 +6405,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   )}
                 </div>
               );
-            })}
-
-            {/* Signature Fields Section */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(sf => (
-                    <div key={sf.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
-                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `top_meta_sig_${sf.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Traceability of products" defaultFormNo="Form 47" formTitle="Traceability of products" />
           </div>
 
@@ -10819,7 +6421,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, handleSearchEm
   );
 }
 
-export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, prefilledWorkOrder }) {
+export function LabForm39Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
   const [meta, setMeta] = useState(null);
   const [childMetas, setChildMetas] = useState({});
   const [linkOptionsMap, setLinkOptionsMap] = useState({});
@@ -10884,25 +6486,14 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
           ];
         }
 
-        const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'conducted_by', 'trainer', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-        fields = fields.map(f => {
-          const fn = (f.fieldname || '').toLowerCase();
-          const lbl = (f.label || '').toLowerCase();
-          const isEmp = EMP_NAMES.includes(fn) || lbl.includes('technician') || lbl.includes('analyst') || lbl.includes('trainer') || lbl.includes('conducted by') || lbl.includes('verified by') || lbl.includes('checked by');
-          return {
-            ...f,
-            fieldtype: isEmp ? 'Link' : f.fieldtype,
-            options: isEmp ? 'Employee' : f.options,
-            label: (f.label || f.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          };
-        });
+        fields = fields.map(normalizeLabField);
 
         if (isMounted) {
           setMeta({ ...(doctypeMeta || {}), fields });
         }
 
         // Fetch child table metas for any Table fields
-        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table');
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
         const childMetasObj = {};
 
         for (const tf of tableFieldsList) {
@@ -10927,10 +6518,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
             ];
           }
 
-          childFields = childFields.map(cf => ({
-            ...cf,
-            label: (cf.label || cf.fieldname).replace(/\s*\([^)]*\)\s*/g, ' ').trim()
-          }));
+          childFields = childFields.map(normalizeLabField);
 
           childMetasObj[childOption] = childFields;
 
@@ -10984,6 +6572,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
       }
     });
 
+    Object.assign(newRow, getLabRowDefaults(childFields));
     setTableData(prev => ({
       ...prev,
       [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
@@ -11010,142 +6599,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
   };
 
   const fieldsList = meta?.fields || [];
-  const nonTableFields = fieldsList.filter(f =>
-    f.fieldtype !== 'Table' &&
-    f.fieldtype !== 'Signature' &&
-    f.fieldtype !== 'Section Break' &&
-    f.fieldtype !== 'Column Break' &&
-    f.fieldtype !== 'Fold' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const tableFields = fieldsList.filter(f =>
-    f.fieldtype === 'Table' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
-  const signatureFields = fieldsList.filter(f =>
-    f.fieldtype === 'Signature' &&
-    f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
-    f.hidden !== 1
-  );
 
-  const renderControlInput = (field, val, onChange, searchFieldKey) => {
-    const { fieldtype: fType, fieldname, options, label, reqd } = field;
-    if (fieldname === 'amended_from' || fieldname === 'work_order' || field.hidden === 1) return null;
-
-    const EMP_NAMES = ['technician', 'tech1', 'analyst', 'analyst_name', 'conducted_by', 'trainer', 'operator', 'verified_by', 'verifier1', 'performed_by', 'checked_by', 'approved_by', 'received_by', 'endorsed_by', 'prepared_by', 'tested_by'];
-    const isEmpTarget = (options === 'Employee' || options === 'User') ||
-      EMP_NAMES.includes((fieldname || '').toLowerCase()) ||
-      (label || '').toLowerCase().includes('technician') ||
-      (label || '').toLowerCase().includes('analyst') ||
-      (label || '').toLowerCase().includes('trainer') ||
-      (label || '').toLowerCase().includes('conducted by') ||
-      (label || '').toLowerCase().includes('verified by');
-
-    if (fType === 'Link' || isEmpTarget) {
-      const targetDoctype = options || 'Employee';
-      const sKey = searchFieldKey || fieldname;
-      const datalistId = `dl_${sKey}`;
-
-      const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-      const empOpts = (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`);
-      const combinedOpts = Array.from(new Set([
-        ...empOpts,
-        ...fetchedOpts
-      ])).filter(Boolean);
-
-      return (
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            list={isEmpTarget ? undefined : datalistId}
-            className="form-input"
-            required={reqd === 1}
-            value={val || ''}
-            onFocus={(e) => {
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value || '', sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            onChange={(e) => {
-              onChange(e.target.value);
-              if (isEmpTarget && handleSearchEmployees) {
-                handleSearchEmployees(e.target.value, sKey);
-                if (setShowEmployeeDropdown) setShowEmployeeDropdown(true);
-              }
-            }}
-            placeholder={`Select / Search ${label || targetDoctype}...`}
-          />
-          {!isEmpTarget && (
-            <datalist id={datalistId}>
-              {combinedOpts.map((opt, i) => (
-                <option key={i} value={opt} />
-              ))}
-            </datalist>
-          )}
-
-          {isEmpTarget && showEmployeeDropdown && activeSearchField === sKey && employeeList && employeeList.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {employeeList.map(emp => (
-                <div
-                  key={emp.name}
-                  className="autocomplete-item"
-                  onClick={() => {
-                    onChange(emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name);
-                    if (setShowEmployeeDropdown) setShowEmployeeDropdown(false);
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{emp.employee_name || emp.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.designation || emp.name}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (isDatetimeField(fType, field.fieldname, field.label)) {
-      const now = new Date();
-      const localDT = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-      return <input type="datetime-local" className="form-input" required={field.reqd === 1} value={val || localDT} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Date') {
-      return <input type="date" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Time') {
-      return <input type="time" className="form-input" required={field.reqd === 1} value={val || new Date().toTimeString().slice(0, 5)} onChange={e => onChange(e.target.value)} />;
-    }
-    if (fType === 'Select') {
-      const opts = parseSelectOptions(field.options);
-      return (
-        <select className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">-- Select {field.label || 'Option'} --</option>
-          {opts.map((op, i) => <option key={i} value={op}>{op}</option>)}
-        </select>
-      );
-    }
-    if (fType === 'Check') {
-      return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
-          <input type="checkbox" checked={Boolean(val)} onChange={e => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
-      );
-    }
-    if (['Small Text', 'Text', 'Long Text'].includes(fType)) {
-      return <textarea className="form-input" rows="2" style={{ resize: 'vertical' }} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    if (['Int', 'Float', 'Currency', 'Percent'].includes(fType)) {
-      return <input type="number" step="any" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-    }
-    return <input type="text" className="form-input" required={field.reqd === 1} value={val || ''} onChange={e => onChange(e.target.value)} placeholder={field.label} />;
-  };
 
   return (
     <div className="modal-backdrop">
@@ -11161,33 +6615,16 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
         </div>
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-
             {loadingMeta && (
               <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 ⏳ Syncing meta fields dynamically from ERPNext DocType "Induction"...
               </div>
             )}
-
-            {/* Dynamic Top-Level Fields Grid */}
-            {nonTableFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  {nonTableFields.map(f => (
-                    <div key={f.fieldname} style={{ gridColumn: ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype) ? 'span 3' : 'span 1' }}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
-                        {f.label} {f.reqd === 1 && <span style={{ color: 'var(--danger)' }}>*</span>}
-                      </label>
-                      {renderControlInput(f, formData[f.fieldname], (v) => handleFieldChange(f.fieldname, v), `ind_meta_${f.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dynamic Child Table Fields */}
-            {tableFields.map(tf => {
+            <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
+                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                  renderTable={tf => {
               const childDoctype = tf.options || 'Induction Item Detail';
-              const childFields = (childMetas[childDoctype] || childMetas['Induction Item Detail'] || []).filter(cf => cf.fieldtype !== 'Section Break' && cf.fieldtype !== 'Column Break' && cf.fieldtype !== 'Fold' && cf.fieldname !== 'amended_from' && cf.fieldname !== 'work_order' && cf.hidden !== 1);
+              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Induction Item Detail'] || []);
               const rows = tableData[tf.fieldname] || [];
 
               return (
@@ -11201,7 +6638,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
                       className="secondary-btn"
                       style={{ fontSize: '11px', padding: '4px 10px' }}
                       onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                    >
+                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                       + Add Row
                     </button>
                   </div>
@@ -11214,6 +6651,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
+                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                           <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                             {childFields.map(cf => (
                               <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -11226,34 +6664,9 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
                             <tr key={rIdx}>
                               {childFields.map(cf => (
                                 <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  {cf.fieldtype === 'Select' ? (
-                                    <select
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    >
-                                      <option value="">-- Select --</option>
-                                      {parseSelectOptions(cf.options).map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
-                                  ) : cf.fieldtype === 'Check' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(row[cf.fieldname])}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.checked)}
-                                    />
-                                  ) : (
-                                    <input
-                                      type={['Int', 'Float', 'Currency', 'Percent'].includes(cf.fieldtype) ? 'number' : cf.fieldtype === 'Time' ? 'time' : cf.fieldtype === 'Date' ? 'date' : 'text'}
-                                      step="any"
-                                      className="form-input"
-                                      style={{ padding: '4px', fontSize: '11px' }}
-                                      value={row[cf.fieldname] || ''}
-                                      onChange={e => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, e.target.value)}
-                                    />
-                                  )}
+                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
                               ))}
                               <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
@@ -11261,7 +6674,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
                                   type="button"
                                   style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                   onClick={() => removeTableRow(tf.fieldname, rowIdx)}
-                                >
+                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                   ✕
                                 </button>
                               </td>
@@ -11273,22 +6686,7 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, handleSearchEm
                   )}
                 </div>
               );
-            })}
-
-            {/* Signature Fields Section */}
-            {signatureFields.length > 0 && (
-              <div style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                <h4 style={{ color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '13px' }}>✍️ Digital Signatures</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                  {signatureFields.map(sf => (
-                    <div key={sf.fieldname}>
-                      <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>{sf.label}</label>
-                      {renderControlInput(sf, formData[sf.fieldname], (v) => handleFieldChange(sf.fieldname, v), `ind_meta_sig_${sf.fieldname}`)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            }} />
             <FormFootnote doctype="Induction" defaultFormNo="Form 39" formTitle="Induction" />
           </div>
 
