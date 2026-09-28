@@ -167,8 +167,8 @@ export default function ReportsTab({ isLoggedIn }) {
             dateStr: rDateStr,
             total_coliform: formatColiform(det.tcc || det.total_coliform || det.tcc_result || rec.total_coliform || rec.tcc),
             ecoli: formatColiform(det.ecoli || det.e_coli || det.ecoli_result || rec.ecoli || rec.e_coli),
-            hpc1: formatHPCValue(det.hpc1 ?? det.hpc_count1 ?? det.hpc_1 ?? rec.hpc1 ?? rec.hpc_count1),
-            hpc2: formatHPCValue(det.hpc2 ?? det.hpc_count2 ?? det.hpc_2 ?? rec.hpc2 ?? rec.hpc_count2)
+            hpc1: formatHPCValue(det.hpc_count ?? det.hpc1 ?? det.hpc_count1 ?? det.hpc_1 ?? rec.hpc_count ?? rec.hpc1 ?? rec.hpc_count1),
+            hpc2: formatHPCValue(det.hpc_count_2 ?? det.hpc2 ?? det.hpc_count2 ?? det.hpc_2 ?? rec.hpc_count_2 ?? rec.hpc2 ?? rec.hpc_count2)
           });
         });
       } else {
@@ -177,8 +177,8 @@ export default function ReportsTab({ isLoggedIn }) {
           dateStr: rDateStr,
           total_coliform: formatColiform(rec.total_coliform || rec.tcc),
           ecoli: formatColiform(rec.ecoli || rec.e_coli),
-          hpc1: formatHPCValue(rec.hpc1 ?? rec.hpc_count1),
-          hpc2: formatHPCValue(rec.hpc2 ?? rec.hpc_count2)
+          hpc1: formatHPCValue(rec.hpc_count ?? rec.hpc1 ?? rec.hpc_count1),
+          hpc2: formatHPCValue(rec.hpc_count_2 ?? rec.hpc2 ?? rec.hpc_count2)
         });
       }
     });
@@ -220,9 +220,7 @@ export default function ReportsTab({ isLoggedIn }) {
             <h2 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: 'var(--text-heading)' }}>
               📊 Periodic Compliance & Quality Reports
             </h2>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              Dynamic report viewer & filter for ERPNext DocTypes
-            </p>
+
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
@@ -234,14 +232,7 @@ export default function ReportsTab({ isLoggedIn }) {
             >
               {loading ? '⟳ Syncing Data...' : '⟳ Refresh Data'}
             </button>
-            <button
-              type="button"
-              className="primary-btn"
-              style={{ fontSize: '12px', padding: '6px 16px', backgroundColor: '#1e3a8a', borderColor: '#1e3a8a' }}
-              onClick={handlePrintReport}
-            >
-              🖨️ Print Report / Export PDF
-            </button>
+
           </div>
         </div>
 
@@ -529,14 +520,7 @@ export default function ReportsTab({ isLoggedIn }) {
         )}
 
         {/* Footer Approval & Footnote */}
-        <div style={{ marginTop: '36px', paddingTop: '16px', borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#475569' }}>
-          <div>
-            <strong>Island Chill QA Department</strong> • Dynamic Reports Module
-          </div>
-          <div>
-            Approved By: <u>QC Manager / Analyst</u>
-          </div>
-        </div>
+
       </div>
 
       {/* Print Media Styling */}

@@ -1,0 +1,225 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "MARPW-.YYYY.-.#####",
+ "creation": "2026-06-01 20:30:37.713297",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sample_and_analyst_info_section",
+  "date_of_analysis",
+  "date_of_product",
+  "column_break_uzzh",
+  "product_size",
+  "market",
+  "media_and_material_info_section",
+  "compact_dry_ec",
+  "pipette_lot",
+  "vessel",
+  "spc_agar_date",
+  "incubator_information_section",
+  "incubator_no_tcc_and_hpc",
+  "tcc_incubation_in_date_and_time",
+  "tcc_incubation_out_date_and_time",
+  "hpc_incubation_in_date_and_time",
+  "hpc_incubation_out_date",
+  "sample_analysis_and_results_section",
+  "table_aqat",
+  "analyst",
+  "notes_and_validity_section",
+  "comments",
+  "approved_by",
+  "amended_from",
+  "section_break_aptf",
+  "work_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "sample_and_analyst_info_section",
+   "fieldtype": "Section Break",
+   "label": "Sample & Analyst Info"
+  },
+  {
+   "fieldname": "date_of_analysis",
+   "fieldtype": "Date",
+   "label": "Date of Analysis"
+  },
+  {
+   "fieldname": "date_of_product",
+   "fieldtype": "Date",
+   "label": "Date of Product"
+  },
+  {
+   "fieldname": "column_break_uzzh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "product_size",
+   "fieldtype": "Data",
+   "label": "Product Size"
+  },
+  {
+   "fieldname": "market",
+   "fieldtype": "Select",
+   "label": "Market",
+   "options": "\nLocal\nExport"
+  },
+  {
+   "fieldname": "media_and_material_info_section",
+   "fieldtype": "Section Break",
+   "label": "Media and Material Info"
+  },
+  {
+   "fieldname": "compact_dry_ec",
+   "fieldtype": "Data",
+   "label": "Compact Dry EC"
+  },
+  {
+   "fieldname": "pipette_lot",
+   "fieldtype": "Data",
+   "label": "Pipette Lot"
+  },
+  {
+   "fieldname": "vessel",
+   "fieldtype": "Data",
+   "label": "Vessel/Lot No."
+  },
+  {
+   "fieldname": "spc_agar_date",
+   "fieldtype": "Date",
+   "label": "SPC Agar Date"
+  },
+  {
+   "fieldname": "incubator_information_section",
+   "fieldtype": "Section Break",
+   "label": "Incubator Information"
+  },
+  {
+   "fieldname": "incubator_no_tcc_and_hpc",
+   "fieldtype": "Select",
+   "label": "Incubator No TCC and HPC",
+   "options": "\n1\n2\n3"
+  },
+  {
+   "fieldname": "tcc_incubation_in_date_and_time",
+   "fieldtype": "Datetime",
+   "label": "TCC Incubation In Date and Time"
+  },
+  {
+   "fieldname": "tcc_incubation_out_date_and_time",
+   "fieldtype": "Datetime",
+   "label": "TCC Incubation Out Date and Time"
+  },
+  {
+   "fieldname": "hpc_incubation_in_date_and_time",
+   "fieldtype": "Datetime",
+   "label": "HPC Incubation In Date and Time"
+  },
+  {
+   "fieldname": "hpc_incubation_out_date",
+   "fieldtype": "Datetime",
+   "label": "HPC Incubation Out Date and Time"
+  },
+  {
+   "fieldname": "sample_analysis_and_results_section",
+   "fieldtype": "Section Break",
+   "label": "Sample, Analysis and Results"
+  },
+  {
+   "fieldname": "table_aqat",
+   "fieldtype": "Table",
+   "options": "Microbiological sample table"
+  },
+  {
+   "fieldname": "analyst",
+   "fieldtype": "Link",
+   "label": "Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "notes_and_validity_section",
+   "fieldtype": "Section Break",
+   "label": "Notes and Validity"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Microbiologiocal Analysis Raw and Product Water",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_aptf",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Work Order"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-26 17:13:30.595381",
+ "modified_by": "sushmita@anantdv.com",
+ "module": "Islandchill",
+ "name": "Microbiologiocal Analysis Raw and Product Water",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Operation Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
