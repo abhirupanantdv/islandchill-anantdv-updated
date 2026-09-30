@@ -87,25 +87,35 @@ def send_daily_user_activity_email(report_date=None):
 		+ ".xlsx"
 	)
 
-	frappe.sendmail(
-		recipients=recipients,
-		subject=subject,
-		message=message,
-		attachments=[
-			{
-				"fname": filename,
-				"fcontent": xlsx_content,
-			}
-		],
-		now=True,
-	)
-
-	frappe.db.commit()
-
-	return {
-		"status": "success",
-		"report_date": str(report_date),
-	}
+	try:
+		frappe.sendmail(
+			recipients=recipients,
+			subject=subject,
+			message=message,
+			attachments=[
+				{
+					"fname": filename,
+					"fcontent": xlsx_content,
+				}
+			],
+			now=True,
+		)
+		frappe.db.commit()
+		return {
+			"status": "success",
+			"report_date": str(report_date),
+			"recipients": recipients,
+		}
+	except Exception as e:
+		frappe.log_error(
+			title="User Activity Summary Email Error",
+			message=f"Failed to send email: {str(e)}",
+		)
+		return {
+			"status": "failed",
+			"error": str(e),
+			"report_date": str(report_date),
+		}
 
 
 def get_user_activity_recipients():

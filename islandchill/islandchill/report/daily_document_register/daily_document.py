@@ -87,22 +87,34 @@ def send_daily_document_register_email(report_date=None):
 		+ ".xlsx"
 	)
 
-	frappe.sendmail(
-		recipients=recipients,
-		subject=subject,
-		message=message,
-		attachments=[
-			{
-				"fname": filename,
-				"fcontent": xlsx_content,
-			}
-		],
-	)
-
-	return {
-		"status": "success",
-		"report_date": str(report_date),
-	}
+	try:
+		frappe.sendmail(
+			recipients=recipients,
+			subject=subject,
+			message=message,
+			attachments=[
+				{
+					"fname": filename,
+					"fcontent": xlsx_content,
+				}
+			],
+		)
+		frappe.db.commit()
+		return {
+			"status": "success",
+			"report_date": str(report_date),
+			"recipients": recipients,
+		}
+	except Exception as e:
+		frappe.log_error(
+			title="Daily Document Register Email Error",
+			message=f"Failed to send email: {str(e)}",
+		)
+		return {
+			"status": "failed",
+			"error": str(e),
+			"report_date": str(report_date),
+		}
 
 
 def get_daily_document_register_recipients():
