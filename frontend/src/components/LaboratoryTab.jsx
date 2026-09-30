@@ -6702,6 +6702,568 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, saving, prefil
   );
 }
 
+export function LabForm16Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  const [formData, setFormData] = useState({
+    work_order: prefilledWorkOrder || '',
+    date: new Date().toISOString().slice(0, 10),
+    time: new Date().toTimeString().slice(0, 5),
+    container_number: '',
+    seal_number: '',
+    shipping_line: '',
+    product_description: '',
+    inspector: '',
+    approved_by: '',
+    cleanliness_status: 'Pass',
+    odor_status: 'Pass',
+    physical_condition: 'Pass',
+    overall_status: 'Passed',
+    comments: ''
+  });
+
+  const [tableData, setTableData] = useState({
+    loading_inspection_items: [
+      { check_item: 'Container Floor & Wall Cleanliness', result: 'Pass', remarks: 'Clean and dry' },
+      { check_item: 'Odor & Foreign Contamination Check', result: 'Pass', remarks: 'No abnormal odor detected' },
+      { check_item: 'Door Lock & Seal Integrity', result: 'Pass', remarks: 'Seal intact and verified' }
+    ]
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm16Modal] Fetching DocType meta for "Container Loading Inspection"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('Container Loading Inspection');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Inspection Date', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'container_number', label: 'Container Number', fieldtype: 'Data' },
+            { idx: 3, fieldname: 'seal_number', label: 'Seal Number', fieldtype: 'Data' },
+            { idx: 4, fieldname: 'shipping_line', label: 'Vessel / Shipping Line', fieldtype: 'Data' },
+            { idx: 5, fieldname: 'product_description', label: 'Product Description', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'inspector', label: 'Inspector Name', fieldtype: 'Link', options: 'Employee' },
+            { idx: 7, fieldname: 'approved_by', label: 'Approved By', fieldtype: 'Link', options: 'Employee' },
+            { idx: 8, fieldname: 'overall_status', label: 'Overall Inspection Result', fieldtype: 'Select', options: 'Passed\nFailed\nHold' },
+            { idx: 9, fieldname: 'loading_inspection_items', label: 'Container Inspection Details', fieldtype: 'Table', options: 'Container Loading Detail' },
+            { idx: 10, fieldname: 'comments', label: 'Remarks / Comments', fieldtype: 'Small Text' }
+          ];
+        }
+
+        fields = fields.map(normalizeLabField);
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Container Loading Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'check_item', label: 'Inspection Item', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'result', label: 'Status', fieldtype: 'Select', options: 'Pass\nFail' },
+              { idx: 3, fieldname: 'remarks', label: 'Remarks', fieldtype: 'Data' }
+            ];
+          }
+
+          childFields = childFields.map(normalizeLabField);
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { check_item: 'Container Floor & Wall Cleanliness', result: 'Pass', remarks: 'Clean and dry' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
+        }
+      } catch (err) {
+        console.error('[LabForm16Modal] Error fetching meta fields for Container Loading Inspection:', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Container Loading Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+    Object.assign(newRow, getLabRowDefaults(childFields));
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'Container Loading Inspection',
+      ...formData,
+      ...tableData,
+      analyst: formData.inspector || formData.operator || 'Inspector',
+      verifiedBy: formData.approved_by || 'Supervisor',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 16: Container Loading Inspection
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "Container Loading Inspection"...
+              </div>
+            )}
+            <LabMetadataFields
+              fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)}
+              formData={formData}
+              onChange={handleFieldChange}
+              linkOptionsMap={linkOptionsMap}
+              employeeList={employeeList}
+              loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Container Loading Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || []);
+                const rows = tableData[tf.fieldname] || [];
+
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}
+                      >
+                        + Add Row
+                      </button>
+                    </div>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No inspection details added yet. Click "+ Add Row" above to record details.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                              {childFields.map(cf => (
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                              ))}
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl
+                                      field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }}
+                                      value={row[cf.fieldname]}
+                                      doc={row}
+                                      parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap}
+                                      employeeList={employeeList}
+                                      loadLinkOptions={loadLabLinkOptions}
+                                    />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+            <FormFootnote doctype="Container Loading Inspection" defaultFormNo="Form 16" formTitle="Container Loading Inspection" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Container Loading Inspection'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function LabForm105Modal({ onClose, onSubmit, employeeList, saving, prefilledWorkOrder }) {
+  const [meta, setMeta] = useState(null);
+  const [childMetas, setChildMetas] = useState({});
+  const [linkOptionsMap, setLinkOptionsMap] = useState({});
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  const [formData, setFormData] = useState({
+    work_order: prefilledWorkOrder || '',
+    date: new Date().toISOString().slice(0, 10),
+    time: new Date().toTimeString().slice(0, 5),
+    flavour_product: 'Bourbon & Cola 335ml',
+    production_line: 'Line 1',
+    evaluator: '',
+    approved_by: '',
+    appearance_status: 'Acceptable',
+    aroma_status: 'Acceptable',
+    taste_status: 'Acceptable',
+    carbonation_status: 'Acceptable',
+    overall_result: 'Pass',
+    comments: ''
+  });
+
+  const [tableData, setTableData] = useState({
+    sensory_eval_details: [
+      { sample_name: 'Line Start Sample 1', appearance: 'Pass', aroma: 'Pass', taste: 'Pass', carbonation: 'Pass', remarks: 'Good sensory balance' },
+      { sample_name: 'Line Start Sample 2', appearance: 'Pass', aroma: 'Pass', taste: 'Pass', carbonation: 'Pass', remarks: 'Acceptable' }
+    ]
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMeta() {
+      try {
+        setLoadingMeta(true);
+        console.log('[LabForm105Modal] Fetching DocType meta for "CSD RTD Line Start Sensory Evaluation"...');
+        const doctypeMeta = await frappe.getDocTypeMeta('CSD RTD Line Start Sensory Evaluation');
+
+        let fields = doctypeMeta?.fields;
+        if (!fields || fields.length === 0) {
+          fields = [
+            { idx: 1, fieldname: 'date', label: 'Evaluation Date', fieldtype: 'Date' },
+            { idx: 2, fieldname: 'time', label: 'Evaluation Time', fieldtype: 'Time' },
+            { idx: 3, fieldname: 'flavour_product', label: 'Flavour / Product Name', fieldtype: 'Data' },
+            { idx: 4, fieldname: 'production_line', label: 'Production Line', fieldtype: 'Select', options: 'Line 1\nLine 2' },
+            { idx: 5, fieldname: 'evaluator', label: 'Evaluator Name', fieldtype: 'Link', options: 'Employee' },
+            { idx: 6, fieldname: 'approved_by', label: 'Approved By', fieldtype: 'Link', options: 'Employee' },
+            { idx: 7, fieldname: 'overall_result', label: 'Overall Evaluation Result', fieldtype: 'Select', options: 'Pass\nFail\nHold' },
+            { idx: 8, fieldname: 'sensory_eval_details', label: 'Sensory Evaluation Details', fieldtype: 'Table', options: 'Sensory Evaluation Detail' },
+            { idx: 9, fieldname: 'comments', label: 'Remarks / Comments', fieldtype: 'Small Text' }
+          ];
+        }
+
+        fields = fields.map(normalizeLabField);
+
+        if (isMounted) {
+          setMeta({ ...(doctypeMeta || {}), fields });
+        }
+
+        const tableFieldsList = fields.filter(f => f.fieldtype === 'Table' || f.fieldtype === 'Table MultiSelect');
+        const childMetasObj = {};
+
+        for (const tf of tableFieldsList) {
+          const childOption = tf.options || 'Sensory Evaluation Detail';
+          let childFields = [];
+          if (tf.options) {
+            try {
+              const childMeta = await frappe.getDocTypeMeta(tf.options);
+              if (childMeta?.fields && childMeta.fields.length > 0) {
+                childFields = childMeta.fields;
+              }
+            } catch (err) {
+              console.error(`Error fetching child meta for ${tf.options}:`, err);
+            }
+          }
+
+          if (!childFields || childFields.length === 0) {
+            childFields = [
+              { idx: 1, fieldname: 'sample_name', label: 'Sample Description', fieldtype: 'Data' },
+              { idx: 2, fieldname: 'appearance', label: 'Appearance', fieldtype: 'Select', options: 'Pass\nFail' },
+              { idx: 3, fieldname: 'aroma', label: 'Aroma / Odour', fieldtype: 'Select', options: 'Pass\nFail' },
+              { idx: 4, fieldname: 'taste', label: 'Taste', fieldtype: 'Select', options: 'Pass\nFail' },
+              { idx: 5, fieldname: 'carbonation', label: 'Carbonation / Effervescence', fieldtype: 'Select', options: 'Pass\nFail' },
+              { idx: 6, fieldname: 'remarks', label: 'Remarks', fieldtype: 'Data' }
+            ];
+          }
+
+          childFields = childFields.map(normalizeLabField);
+          childMetasObj[childOption] = childFields;
+
+          if (!tableData[tf.fieldname]) {
+            tableData[tf.fieldname] = [
+              { sample_name: 'Line Start Sample 1', appearance: 'Pass', aroma: 'Pass', taste: 'Pass', carbonation: 'Pass', remarks: 'Good sensory balance' }
+            ];
+          }
+        }
+
+        if (isMounted) {
+          setChildMetas(childMetasObj);
+          fetchLinkOptionsMap(fields, childMetasObj).then(map => {
+            if (isMounted) setLinkOptionsMap(map);
+          });
+        }
+      } catch (err) {
+        console.error('[LabForm105Modal] Error fetching meta fields for CSD RTD Line Start Sensory Evaluation:', err);
+      } finally {
+        if (isMounted) setLoadingMeta(false);
+      }
+    }
+    fetchMeta();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFieldChange = (fieldname, val) => {
+    setFormData(prev => ({ ...prev, [fieldname]: val }));
+  };
+
+  const handleTableInputChange = (tableFieldName, rowIdx, fieldname, val) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).map((row, idx) =>
+        idx === rowIdx ? { ...row, [fieldname]: val } : row
+      )
+    }));
+  };
+
+  const addTableRow = (tableFieldName, childDoctype) => {
+    const childFields = (childMetas[childDoctype] || childMetas['Sensory Evaluation Detail'] || []);
+    const newRow = {};
+    childFields.forEach(cf => {
+      if (cf.fieldtype === 'Select') {
+        const opts = parseSelectOptions(cf.options);
+        newRow[cf.fieldname] = opts[0] || '';
+      } else {
+        newRow[cf.fieldname] = '';
+      }
+    });
+    Object.assign(newRow, getLabRowDefaults(childFields));
+
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: [...(prev[tableFieldName] || []), newRow]
+    }));
+  };
+
+  const removeTableRow = (tableFieldName, rowIdx) => {
+    setTableData(prev => ({
+      ...prev,
+      [tableFieldName]: (prev[tableFieldName] || []).filter((_, rIdx) => rIdx !== rowIdx)
+    }));
+  };
+
+  const handleSubmitForm = (e) => {
+    e.preventDefault();
+    onSubmit({
+      doctype: 'CSD RTD Line Start Sensory Evaluation',
+      ...formData,
+      ...tableData,
+      analyst: formData.evaluator || formData.operator || 'Evaluator',
+      verifiedBy: formData.approved_by || 'Supervisor',
+      date: formData.date
+    });
+  };
+
+  const fieldsList = meta?.fields || [];
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-panel" style={{ width: '960px', maxWidth: '95%' }}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Carpenters Waters (Fiji) Limited</h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Standard Form 105: CSD RTD Line Start Sensory Evaluation
+            </span>
+          </div>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmitForm}>
+          <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
+            {loadingMeta && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-muted, #f3f4f6)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                ⏳ Syncing meta fields dynamically from ERPNext DocType "CSD RTD Line Start Sensory Evaluation"...
+              </div>
+            )}
+            <LabMetadataFields
+              fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)}
+              formData={formData}
+              onChange={handleFieldChange}
+              linkOptionsMap={linkOptionsMap}
+              employeeList={employeeList}
+              loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Sensory Evaluation Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || []);
+                const rows = tableData[tf.fieldname] || [];
+
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}
+                      >
+                        + Add Row
+                      </button>
+                    </div>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No sensory details added yet. Click "+ Add Row" above to record details.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                              {childFields.map(cf => (
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
+                              ))}
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl
+                                      field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }}
+                                      value={row[cf.fieldname]}
+                                      doc={row}
+                                      parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap}
+                                      employeeList={employeeList}
+                                      loadLinkOptions={loadLabLinkOptions}
+                                    />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+            <FormFootnote doctype="CSD RTD Line Start Sensory Evaluation" defaultFormNo="Form 105" formTitle="CSD RTD Line Start Sensory Evaluation" />
+          </div>
+
+          <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-btn" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Sensory Evaluation'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export const LabForm85Modal = LabForm12Modal;
 
 const LAB_STATUS_COLOR = {
@@ -6747,7 +7309,7 @@ export function LabWOSelectorPopup({ workOrders, onSelect, onClose }) {
         <div className="modal-header">
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Select Work Order for Laboratory QA</h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Choose an active Work Order to automatically pre-fill into all 22 QA test forms</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Choose an active Work Order to automatically pre-fill into all 24 QA test forms</span>
           </div>
           {onClose && <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }} onClick={onClose}>✕</button>}
         </div>
@@ -6890,6 +7452,8 @@ const LAB_FORM_TYPE_MAP = {
   form21: 'Form 21 (Taste/Visual)',
   form35: 'Form 35: Gold Stone Rum & Cola',
   form36: 'Form 36 (Bourbon/Cola)',
+  form16: 'Form 16 (Container Loading Inspection)',
+  form105: 'Form 105 (CSD RTD Line Start Sensory Evaluation)',
   form86: 'Form 86: Incubator Temperature Record',
   form88: 'Form 88: Weight Check Checklist',
   form103: 'Form 103 (Silver Log)',
@@ -7001,6 +7565,8 @@ export default function LaboratoryTab({
     { id: 'form21', icon: '👁️', name: 'Form 21: Taste & Visual', desc: 'Log 4h/36h/72h taste properties and 5d/10d/30d visual particle shelf-life checks.' },
     { id: 'form35', icon: '🍹', name: 'Form 35: Gold Stone Rum & Cola', desc: 'Tank batch records, ingredients checklist (Ethanol, Rum/Lemon/Cola flavours), Brix mixer %, alcohol test, and pH levels.' },
     { id: 'form36', icon: '🥃', name: 'Form 36: Bourbon Whiskey & Cola', desc: 'Tank batch records, ingredients checklist, Brix % checks, alcohol test, and gas pressure.' },
+    { id: 'form16', icon: '🚛', name: 'Form 16: Container Loading Inspection', desc: 'Container loading inspection log, cleanliness, damage, seals, shipping line, and cargo verification.' },
+    { id: 'form105', icon: '🧪', name: 'Form 105: CSD RTD Line Start Sensory Evaluation', desc: 'CSD & RTD line start sensory evaluation log, appearance, aroma, taste, carbonation, and overall quality check.' },
     { id: 'form83', icon: '🧫', name: 'Form 83: Microbiological Analysis', desc: 'Microbiological analysis log sheet for raw materials, water, and finished products.' },
     { id: 'form84', icon: '🧽', name: 'Form 84: Sanitation', desc: 'Sanitation check log sheet for equipment, line CIP, and plant cleanliness.' },
     { id: 'form12', icon: '♨️', name: 'Form 12: Autoclave Record', desc: 'Autoclave sterilization log, pressure, temperature, cycle duration, and indicator checks.' },
@@ -7476,6 +8042,8 @@ export default function LaboratoryTab({
               <option value="Form 9 (Chemical)">Form 9 (Chemical)</option>
               <option value="Form 11 (Micro water)">Form 11 (Micro water)</option>
               <option value="Form 21 (Taste/Visual)">Form 21 (Taste/Visual)</option>
+              <option value="Form 16 (Container Loading Inspection)">Form 16 (Container Loading Inspection)</option>
+              <option value="Form 105 (CSD RTD Line Start Sensory Evaluation)">Form 105 (CSD RTD Line Start Sensory Evaluation)</option>
               <option value="Form 104 (Seam Checklist Form)">Form 104 (Seam Checklist Form)</option>
             </select>
           </div>

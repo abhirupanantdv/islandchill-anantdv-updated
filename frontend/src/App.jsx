@@ -20,7 +20,7 @@ import BOMTab from './components/BOMTab';
 import SalesTab, { SalesInvoiceFormModal, DeliveryNoteFormModal } from './components/SalesTab';
 import MaintenanceTab, { MaintWeightCheckModal, MaintBreakdownModal, MaintForm107Modal, MaintForm88DynamicModal, MaintPMRequestModal } from './components/MaintenanceTab';
 import SafetyTab, { SafetyIncidentFormModal, SafetyFirstAidFormModal, SafetySwabFormModal, SafetyReportViewerModal, SafetyForm37Modal } from './components/SafetyTab';
-import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm12Modal, LabForm13Modal, LabForm64Modal, LabForm72Modal, LabForm47Modal, LabForm39Modal, LabForm85Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal } from './components/LaboratoryTab';
+import LaboratoryTab, { LabForm1Modal, LabForm9Modal, LabForm11Modal, LabForm21Modal, LabReportViewerModal, LabForm35Modal, LabForm36Modal, LabForm83Modal, LabForm84Modal, LabForm12Modal, LabForm13Modal, LabForm64Modal, LabForm72Modal, LabForm47Modal, LabForm39Modal, LabForm85Modal, LabForm86Modal, LabForm88Modal, LabForm103Modal, LabForm104Modal, LabForm34Modal, LabForm100Modal, LabForm69Modal, LabForm70Modal, LabForm16Modal, LabForm105Modal } from './components/LaboratoryTab';
 import CleaningTab, { CleaningFormModal, CleaningRecordDetailModal, CLEANING_TEMPLATES } from './components/CleaningTab';
 import ReportsTab from './components/ReportsTab';
 import line1 from "../public/line1.png"
@@ -2416,6 +2416,43 @@ function App() {
         }
       } catch (err) {
         console.error('Failed to sync Induction to ERPNext:', err);
+      }
+    }
+    if (type === 'Form 16 (Container Loading Inspection)' || type?.includes('16')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'Container Loading Inspection'
+          };
+          const response = await frappe.saveDocRecord('Container Loading Inspection', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync Container Loading Inspection to ERPNext:', err);
+      }
+    }
+
+    if (type === 'Form 105 (CSD RTD Line Start Sensory Evaluation)' || type?.includes('105')) {
+      try {
+        const conn = frappe.getConnectionSettings();
+        if (conn.isLive && conn.connected) {
+          const erpPayload = {
+            ...data,
+            work_order: data.work_order || data.workOrder || '',
+            doctype: 'CSD RTD Line Start Sensory Evaluation'
+          };
+          const response = await frappe.saveDocRecord('CSD RTD Line Start Sensory Evaluation', erpPayload);
+          if (response && (response.name || response.data?.name)) {
+            newId = response.name || response.data?.name;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync CSD RTD Line Start Sensory Evaluation to ERPNext:', err);
       }
     }
 
@@ -7977,6 +8014,36 @@ function App() {
         <LabForm70Modal
           onClose={() => setActiveLabForm(null)}
           onSubmit={(data) => handleSaveLaboratory('Form 70: Recall Review', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 16 Container Loading Inspection */}
+      {activeLabForm === 'form16' && (
+        <LabForm16Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 16 (Container Loading Inspection)', data)}
+          saving={labSaving}
+          employeeList={employeeList}
+          handleSearchEmployees={handleSearchEmployees}
+          showEmployeeDropdown={showEmployeeDropdown}
+          setShowEmployeeDropdown={setShowEmployeeDropdown}
+          activeSearchField={activeSearchField}
+          prefilledWorkOrder={selectedLabWO ? selectedLabWO.id : ''}
+        />
+      )}
+
+      {/* Modal: Laboratory Form 105 CSD RTD Line Start Sensory Evaluation */}
+      {activeLabForm === 'form105' && (
+        <LabForm105Modal
+          onClose={() => setActiveLabForm(null)}
+          onSubmit={(data) => handleSaveLaboratory('Form 105 (CSD RTD Line Start Sensory Evaluation)', data)}
           saving={labSaving}
           employeeList={employeeList}
           handleSearchEmployees={handleSearchEmployees}

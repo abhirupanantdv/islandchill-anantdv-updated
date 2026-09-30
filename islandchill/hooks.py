@@ -276,4 +276,13 @@ fixtures = [
 	},
 	"Equipment List",
 	"Maintenance Checklist Master"
-]
+]
+
+scheduler_events = {
+	"cron": {
+		"0 23 * * *": [
+			"islandchill.islandchill.report.daily_document_register.daily_document.send_daily_document_register_email",
+			"islandchill.islandchill.report.user_activity_summary.daily_user_activity.send_daily_user_activity_email",
+		]
+	}
+}
