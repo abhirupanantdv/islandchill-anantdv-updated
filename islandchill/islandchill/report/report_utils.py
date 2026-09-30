@@ -7,24 +7,26 @@ from frappe import _
 from frappe.utils import cint, get_datetime, strip_html, time_diff_in_seconds
 
 
-DOCUMENT_TYPES = (
-	"Sales Invoice",
-	"Purchase Order",
-	"Purchase Receipt",
-	"Purchase Invoice",
-	"Payment Entry",
-	"Journal Entry",
-	"Stock Entry",
-	"Delivery Note",
-	"Quotation",
-	"Sales Order",
-	"Material Request",
-	"Work Order",
-	"Job Card",
-	"Item",
-	"Customer",
-	"Supplier",
-)
+SYSTEM_INTERNAL_DOCTYPES = {
+	"Error Log",
+	"Activity Log",
+	"Route History",
+	"Prepared Report",
+	"Access Log",
+	"Version",
+	"DocType",
+	"DocField",
+	"DocPerm",
+	"Custom Field",
+	"Property Setter",
+	"Scheduled Job Type",
+	"Scheduled Job Log",
+	"Installed Application",
+	"Installed Applications",
+	"Patch Log",
+	"System Settings",
+	"Website Settings",
+}
 
 TYPE_FIELDS = ("purchase_type", "payment_type", "stock_entry_type", "purpose", "material_request_type")
 PARTY_FIELDS = ("customer_name", "customer", "supplier_name", "supplier", "party_name", "party")
@@ -43,20 +45,100 @@ NOISY_FIELDS = {
 
 
 def validate_filters(filters):
-	if not filters.from_date or not filters.to_date:
+	from_date = filters.get("from_date") if hasattr(filters, "get") else getattr(filters, "from_date", None)
+	to_date = filters.get("to_date") if hasattr(filters, "get") else getattr(filters, "to_date", None)
+	if not from_date or not to_date:
 		frappe.throw(_("From Date and To Date are required."))
-	if get_datetime(filters.from_date) > get_datetime(filters.to_date):
+	if get_datetime(from_date) > get_datetime(to_date):
 		frappe.throw(_("From Date cannot be after To Date."))
 
 
 def get_period(filters):
-	return f"{filters.from_date} 00:00:00", f"{filters.to_date} 23:59:59.999999"
+	from_date = filters.get("from_date") if hasattr(filters, "get") else getattr(filters, "from_date", None)
+	to_date = filters.get("to_date") if hasattr(filters, "get") else getattr(filters, "to_date", None)
+	return f"{from_date} 00:00:00", f"{to_date} 23:59:59.999999"
 
 
 def get_doctypes(filters):
+	"""Dynamically discover all DocTypes that had activity (created, modified, versioned, workflow)
+
+	in the filtered period, or return the explicitly selected document_type filter.
+	Eliminates the need to hardcode DocType lists anywhere in code.
+	"""
 	if filters.get("document_type"):
 		return [filters.document_type] if frappe.db.exists("DocType", filters.document_type) else []
-	return [dt for dt in DOCUMENT_TYPES if frappe.db.exists("DocType", dt)]
+
+	start, end = get_period(filters)
+	discovered = set()
+
+	# 1. Discover from Version logs (edits, submits, cancels, status changes)
+	try:
+		versions_dt = frappe.db.sql(
+			"""
+			SELECT DISTINCT ref_doctype
+			FROM `tabVersion`
+			WHERE creation BETWEEN %s AND %s AND ref_doctype IS NOT NULL
+			""",
+			(start, end),
+			as_list=True,
+		)
+		discovered.update(r[0] for r in versions_dt if r[0])
+	except Exception:
+		pass
+
+	# 2. Discover from Workflow Action & Comments
+	try:
+		wf_dt = frappe.db.sql(
+			"""
+			SELECT DISTINCT reference_doctype
+			FROM `tabComment`
+			WHERE comment_type = 'Workflow' AND creation BETWEEN %s AND %s AND reference_doctype IS NOT NULL
+			""",
+			(start, end),
+			as_list=True,
+		)
+		discovered.update(r[0] for r in wf_dt if r[0])
+	except Exception:
+		pass
+
+	# 3. Discover standard transactional/master doctypes created or modified
+	# Get list of normal non-table, non-single DocTypes in system
+	try:
+		valid_doctypes = frappe.get_all(
+			"DocType",
+			filters={
+				"istable": 0,
+				"issingle": 0,
+				"is_virtual": 0,
+				"name": ["not in", list(SYSTEM_INTERNAL_DOCTYPES)],
+			},
+			pluck="name",
+		)
+		for dt in valid_doctypes:
+			if dt in discovered:
+				continue
+			# Quick check if any record was created or modified in period
+			has_activity = frappe.db.sql(
+				f"SELECT 1 FROM `tab{dt}` WHERE creation BETWEEN %s AND %s OR modified BETWEEN %s AND %s LIMIT 1",
+				(start, end, start, end),
+			)
+			if has_activity:
+				discovered.add(dt)
+	except Exception:
+		pass
+
+	# Filter out deleted, single or internal system doctypes
+	result = []
+	for dt in sorted(discovered):
+		if dt in SYSTEM_INTERNAL_DOCTYPES:
+			continue
+		try:
+			meta = frappe.get_meta(dt)
+			if meta and not meta.issingle and not meta.istable and frappe.db.table_exists(dt):
+				result.append(dt)
+		except Exception:
+			continue
+	return result
 
 
 def get_snapshot_fields(doctype):
@@ -69,7 +151,7 @@ def get_snapshot_fields(doctype):
 
 
 def get_snapshots(doctype, names):
-	if not names or not frappe.db.exists("DocType", doctype):
+	if not names or not frappe.db.exists("DocType", doctype) or not frappe.db.table_exists(doctype):
 		return {}
 	_meta, fields = get_snapshot_fields(doctype)
 	result = {}
@@ -86,7 +168,10 @@ def get_snapshots(doctype, names):
 
 
 def get_period_documents(doctype, start, end):
-	if not frappe.db.exists("DocType", doctype):
+	if not frappe.db.exists("DocType", doctype) or not frappe.db.table_exists(doctype):
+		return []
+	meta = frappe.get_meta(doctype)
+	if meta.issingle or meta.istable:
 		return []
 	_meta, fields = get_snapshot_fields(doctype)
 	by_name = {}

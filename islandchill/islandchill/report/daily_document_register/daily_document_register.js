@@ -25,23 +25,16 @@ frappe.query_reports["Daily Document Register"] = {
 		{
 			fieldname: "document_type",
 			label: __("Document Type"),
-			fieldtype: "Select",
-			options: [
-				"",
-				"Sales Invoice",
-				"Purchase Order",
-				"Purchase Receipt",
-				"Purchase Invoice",
-				"Payment Entry",
-				"Journal Entry",
-				"Stock Entry",
-				"Delivery Note",
-				"Quotation",
-				"Sales Order",
-				"Material Request",
-				"Work Order",
-				"Job Card",
-			].join("\n"),
+			fieldtype: "Link",
+			options: "DocType",
+			get_query: () => {
+				return {
+					filters: {
+						istable: 0,
+						issingle: 0,
+					},
+				};
+			},
 		},
 		{
 			fieldname: "created_by",
