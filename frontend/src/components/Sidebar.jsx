@@ -18,8 +18,9 @@ export default function Sidebar({
   setSelectedWOId
 }) {
   const navItems = [
-    { id: 'workflow', label: '🔄 Business Workflow' },
     { id: 'dashboard', label: '📊 Dashboard', resetSelectedWO: true },
+    { id: 'workflow', label: '🔄 Business Workflow' },
+    { id: 'approvals', label: '✅ Form Approvals' },
     { id: 'work-orders', label: '📋 Work Orders' },
     { id: 'inventory', label: '📦 Stock / Inventory' },
     { id: 'sales', label: '💰 Sales Desk' },

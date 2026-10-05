@@ -19,10 +19,49 @@ export default function BOMTab({
 }) {
   const [recipeSearch, setRecipeSearch] = useState('');
 
-  // Filter only leaf warehouses (is_group === 0)
-  const nonGroupWarehouses = (availableWarehouses || []).filter(
-    w => !w.is_group || w.is_group === 0 || w.is_group === '0'
-  );
+  // Allowed Finished Goods Warehouses: strictly "Finished Goods" and "Extra Goods Warehouse"
+  const fgWarehouseOptions = React.useMemo(() => {
+    const findWh = (keyword, fallback) => {
+      const kw = keyword.toLowerCase();
+      const found = (availableWarehouses || []).find(w =>
+        (w.name || '').toLowerCase().includes(kw) ||
+        (w.warehouse_name || '').toLowerCase().includes(kw)
+      );
+      return found ? found.name : fallback;
+    };
+
+    return [
+      {
+        name: findWh('finished goods', 'Finished Goods - CWFPL'),
+        label: 'Finished Goods'
+      },
+      {
+        name: findWh('extra goods', 'Extra Goods Warehouse - CWFPL'),
+        label: 'Extra Goods Warehouse'
+      }
+    ];
+  }, [availableWarehouses]);
+
+  // Fix Raw Material Source Warehouse strictly to Stores (no selection)
+  React.useEffect(() => {
+    const storesWh = (availableWarehouses || []).find(w =>
+      (w.name || '').toLowerCase().includes('stores') ||
+      (w.warehouse_name || '').toLowerCase().includes('stores')
+    );
+    const targetStores = storesWh ? storesWh.name : 'Stores - CWFPL';
+    if (bomRawMaterialWarehouse !== targetStores) {
+      setBomRawMaterialWarehouse(targetStores);
+    }
+  }, [availableWarehouses, bomRawMaterialWarehouse, setBomRawMaterialWarehouse]);
+
+  // Ensure Finished Goods warehouse is either Finished Goods or Extra Goods Warehouse
+  React.useEffect(() => {
+    if (!bomFgWarehouse || !fgWarehouseOptions.some(w => w.name === bomFgWarehouse)) {
+      if (fgWarehouseOptions.length > 0) {
+        setBomFgWarehouse(fgWarehouseOptions[0].name);
+      }
+    }
+  }, [bomFgWarehouse, fgWarehouseOptions, setBomFgWarehouse]);
 
   // Selected BOM object from list
   const selectedBomObj = (bomList || []).find(b => b.id === selectedBomId || b.name === selectedBomId);
@@ -39,9 +78,9 @@ export default function BOMTab({
     );
   });
 
-  const totalPages = Math.ceil(filteredBoms.length / 8) || 1;
+  const totalPages = Math.ceil(filteredBoms.length / 20) || 1;
   const currentPage = Math.min(Math.max(1, bomPage || 1), totalPages);
-  const paginatedBoms = filteredBoms.slice((currentPage - 1) * 8, currentPage * 8);
+  const paginatedBoms = filteredBoms.slice((currentPage - 1) * 20, currentPage * 20);
 
   React.useEffect(() => {
     if (bomPage > totalPages) {
@@ -80,7 +119,7 @@ export default function BOMTab({
         </div>
       </div>
 
-      {/* Warehouse Selector Toolbar (is_group = 0) */}
+      {/* Warehouse Selector Toolbar */}
       <div
         className="details-card"
         style={{
@@ -92,64 +131,48 @@ export default function BOMTab({
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px'
+          gap: '24px'
         }}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '20px', flex: 1 }}>
-          {/* Raw Material Warehouse Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '240px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>
-              📦 Raw Material Source Warehouse <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}></span>
-            </label>
-            {warehousesLoading ? (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading warehouses...</span>
-            ) : (
-              <select
-                className="form-input"
-                style={{ height: '36px', fontSize: '13px', padding: '4px 10px', fontWeight: '500' }}
-                value={bomRawMaterialWarehouse}
-                onChange={(e) => setBomRawMaterialWarehouse(e.target.value)}
-              >
-                <option value="">-- Select Raw Material Warehouse --</option>
-                {nonGroupWarehouses.map(wh => (
-                  <option key={wh.name} value={wh.name}>
-                    {wh.warehouse_name || wh.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Finished Goods Warehouse Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '240px' }}>
-            <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#10b981' }}>
-              🏭 Finished Goods Warehouse <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Leaf Only)</span>
-            </label>
-            {warehousesLoading ? (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading warehouses...</span>
-            ) : (
-              <select
-                className="form-input"
-                style={{ height: '36px', fontSize: '13px', padding: '4px 10px', fontWeight: '500' }}
-                value={bomFgWarehouse}
-                onChange={(e) => setBomFgWarehouse(e.target.value)}
-              >
-                <option value="">-- Select Finished Goods Warehouse --</option>
-                {nonGroupWarehouses.map(wh => (
-                  <option key={wh.name} value={wh.name}>
-                    {wh.warehouse_name || wh.name}
-                  </option>
-                ))}
-              </select>
-            )}
+        {/* Raw Material Warehouse (Fixed to Stores - No Selection Dropdown) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>
+            📦 Raw Material Source Warehouse
+          </label>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            height: '36px',
+            padding: '0 14px',
+            backgroundColor: 'rgba(245, 158, 11, 0.08)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '6px',
+            fontWeight: '600',
+            fontSize: '13px',
+            color: 'var(--text-main)'
+          }}>
+            <span>Stores</span>
           </div>
         </div>
 
-        {/* Real-time sync badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
-          <span>Live Stock Checked (is_group = 0)</span>
+        {/* Finished Goods Warehouse Selector (Strictly Finished Goods & Extra Goods Warehouse) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '240px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#10b981' }}>
+            🏭 Finished Goods Warehouse
+          </label>
+          <select
+            className="form-input"
+            style={{ height: '36px', fontSize: '13px', padding: '4px 12px', fontWeight: '500' }}
+            value={bomFgWarehouse || fgWarehouseOptions[0]?.name}
+            onChange={(e) => setBomFgWarehouse(e.target.value)}
+          >
+            {fgWarehouseOptions.map(wh => (
+              <option key={wh.name} value={wh.name}>
+                {wh.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -276,7 +299,7 @@ export default function BOMTab({
                     Code: <code>{fgItemCode}</code> • Batch: {bomBatchSize?.toLocaleString()} {bomUom}
                   </div>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#047857', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>In {bomFgWarehouse || 'Finished Goods'}:</span>
+                    <span>In {bomFgWarehouse && bomFgWarehouse.toLowerCase().includes('extra') ? 'Extra Goods Warehouse' : 'Finished Goods'}:</span>
                     <span style={{ backgroundColor: '#d1fae5', color: '#065f46', padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>
                       {fgStockQty?.toLocaleString()} {bomUom}
                     </span>
@@ -296,7 +319,7 @@ export default function BOMTab({
                     📦 Raw Materials Warehouse
                   </div>
                   <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-heading)' }}>
-                    {bomRawMaterialWarehouse || 'Stores - CWFPL'}
+                    Stores
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
                     Monitoring stock levels for {activeBomMaterials.length} raw ingredients

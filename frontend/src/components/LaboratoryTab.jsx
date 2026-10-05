@@ -344,77 +344,77 @@ export function LabForm1Modal({ onClose, onSubmit, employeeList, saving, prefill
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Microbiological Analysis Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Microbiological Analysis Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      ➕ Add Row
-                    </button>
-                  </div>
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        ➕ Add Row
+                      </button>
+                    </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ width: '30px', textAlign: 'center' }}>#</th>
-                          {childFields.map(cf => (
-                            <th key={cf.fieldname}>{cf.label}</th>
-                          ))}
-                          <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
-                              No rows added yet. Click "➕ Add Row" to add entries.
-                            </td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
+                          <tr style={{ backgroundColor: '#f3f4f6' }}>
+                            <th style={{ width: '30px', textAlign: 'center' }}>#</th>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname}>{cf.label}</th>
+                            ))}
+                            <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
                           </tr>
-                        ) : (
-                          rows.map((row, rIdx) => (
-                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
-                              {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
-                              ))}
-                              <td style={{ textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  title="Remove row"
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  🗑️
-                                </button>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
+                                No rows added yet. Click "➕ Add Row" to add entries.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            rows.map((row, rIdx) => (
+                              <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    title="Remove row"
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              );
-            }} />
+                );
+              }} />
             <FormFootnote doctype="Microbiological Analysis of Primary Raw Materials" defaultFormNo="Form 1" formTitle="Microbiological Analysis of Primary Raw Materials" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -653,77 +653,77 @@ export function LabForm9Modal({ onClose, onSubmit, employeeList, saving, prefill
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Product Water Test Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Product Water Test Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      ➕ Add Row
-                    </button>
-                  </div>
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        ➕ Add Row
+                      </button>
+                    </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ width: '30px', textAlign: 'center' }}>#</th>
-                          {childFields.map(cf => (
-                            <th key={cf.fieldname}>{cf.label}</th>
-                          ))}
-                          <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
-                              No rows added yet. Click "➕ Add Row" to add entries.
-                            </td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
+                          <tr style={{ backgroundColor: '#f3f4f6' }}>
+                            <th style={{ width: '30px', textAlign: 'center' }}>#</th>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname}>{cf.label}</th>
+                            ))}
+                            <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
                           </tr>
-                        ) : (
-                          rows.map((row, rIdx) => (
-                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
-                              {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
-                              ))}
-                              <td style={{ textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  title="Remove row"
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  🗑️
-                                </button>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
+                                No rows added yet. Click "➕ Add Row" to add entries.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            rows.map((row, rIdx) => (
+                              <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    title="Remove row"
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              );
-            }} />
+                );
+              }} />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -1025,8 +1025,8 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options || 'Microbiological Analysis Detail';
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
@@ -1040,7 +1040,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, saving, prefil
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                          disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -1048,7 +1048,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, saving, prefil
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -1063,10 +1063,10 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, saving, prefil
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -1074,7 +1074,7 @@ export function LabForm11Modal({ onClose, onSubmit, employeeList, saving, prefil
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -1328,77 +1328,77 @@ export function LabForm21Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Taste Test Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Taste Test Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      ➕ Add Row
-                    </button>
-                  </div>
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        ➕ Add Row
+                      </button>
+                    </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ width: '30px', textAlign: 'center' }}>#</th>
-                          {childFields.map(cf => (
-                            <th key={cf.fieldname}>{cf.label}</th>
-                          ))}
-                          <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
-                              No rows added yet. Click "➕ Add Row" to add entries.
-                            </td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
+                          <tr style={{ backgroundColor: '#f3f4f6' }}>
+                            <th style={{ width: '30px', textAlign: 'center' }}>#</th>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname}>{cf.label}</th>
+                            ))}
+                            <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
                           </tr>
-                        ) : (
-                          rows.map((row, rIdx) => (
-                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
-                              {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
-                              ))}
-                              <td style={{ textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  title="Remove row"
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  🗑️
-                                </button>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
+                                No rows added yet. Click "➕ Add Row" to add entries.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            rows.map((row, rIdx) => (
+                              <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    title="Remove row"
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              );
-            }} />
+                );
+              }} />
             <FormFootnote doctype="Taste Test and Visual Inspection" defaultFormNo="Form 21" formTitle="Taste & Visual Inspection Log" />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -2102,8 +2102,8 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, prefilledWorkO
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options || 'Bourbon Whiskey and Cola Recipe Item';
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
@@ -2117,7 +2117,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, prefilledWorkO
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                          disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -2125,7 +2125,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, prefilledWorkO
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -2140,10 +2140,10 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, prefilledWorkO
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -2151,7 +2151,7 @@ export function LabForm36Modal({ onClose, onSubmit, employeeList, prefilledWorkO
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -2836,77 +2836,77 @@ export function LabForm86Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Incubator Temperature Check';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Incubator Temperature Check'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Incubator Temperature Check';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Incubator Temperature Check'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      ➕ Add Row
-                    </button>
-                  </div>
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        ➕ Add Row
+                      </button>
+                    </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ width: '30px', textAlign: 'center' }}>#</th>
-                          {childFields.map(cf => (
-                            <th key={cf.fieldname}>{cf.label}</th>
-                          ))}
-                          <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
-                              No reading rows added yet. Click "➕ Add Row" to add entries.
-                            </td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
+                          <tr style={{ backgroundColor: '#f3f4f6' }}>
+                            <th style={{ width: '30px', textAlign: 'center' }}>#</th>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname}>{cf.label}</th>
+                            ))}
+                            <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
                           </tr>
-                        ) : (
-                          rows.map((row, rIdx) => (
-                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
-                              {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
-                              ))}
-                              <td style={{ textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  title="Remove row"
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  🗑️
-                                </button>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
+                                No reading rows added yet. Click "➕ Add Row" to add entries.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            rows.map((row, rIdx) => (
+                              <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    title="Remove row"
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              );
-            }} />
+                );
+              }} />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>Island Chill - Form no. 86</span>
@@ -3315,77 +3315,77 @@ export function LabForm103Modal({ onClose, onSubmit, employeeList, saving, prefi
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Silver Photometer Readings';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Silver Photometer Readings'] || childMetas['Photometer Reading Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Silver Photometer Readings';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Silver Photometer Readings'] || childMetas['Photometer Reading Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      ➕ Add Row
-                    </button>
-                  </div>
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        ➕ Add Row
+                      </button>
+                    </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ width: '30px', textAlign: 'center' }}>#</th>
-                          {childFields.map(cf => (
-                            <th key={cf.fieldname}>{cf.label}</th>
-                          ))}
-                          <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
-                              No reading rows added yet. Click "➕ Add Row" to add entries.
-                            </td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
+                          <tr style={{ backgroundColor: '#f3f4f6' }}>
+                            <th style={{ width: '30px', textAlign: 'center' }}>#</th>
+                            {childFields.map(cf => (
+                              <th key={cf.fieldname}>{cf.label}</th>
+                            ))}
+                            <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
                           </tr>
-                        ) : (
-                          rows.map((row, rIdx) => (
-                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
-                              {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
-                              ))}
-                              <td style={{ textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                  title="Remove row"
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  🗑️
-                                </button>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={childFields.length + 2} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-muted)' }}>
+                                No reading rows added yet. Click "➕ Add Row" to add entries.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            rows.map((row, rIdx) => (
+                              <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    title="Remove row"
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              );
-            }} />
+                );
+              }} />
           </div>
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="secondary-btn" disabled={saving} onClick={onClose}>Cancel</button>
@@ -3591,69 +3591,69 @@ export function LabForm104Modal({ onClose, onSubmit, employeeList, saving, prefi
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options;
-              const childFields = getLabTableFields(childMetas[childDoctype] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options;
+                const childFields = getLabTableFields(childMetas[childDoctype] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      ➕ Add Row
-                    </button>
-                  </div>
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        ➕ Add Row
+                      </button>
+                    </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
-                      <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
-                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                          <th style={{ width: '30px', textAlign: 'center' }}>#</th>
-                          {childFields.map(cf => (
-                            <th key={cf.fieldname}>{cf.label}</th>
-                          ))}
-                          <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row, rIdx) => (
-                          <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={1} />
+                          <tr style={{ backgroundColor: '#f3f4f6' }}>
+                            <th style={{ width: '30px', textAlign: 'center' }}>#</th>
                             {childFields.map(cf => (
-                              <td key={cf.fieldname} style={{ padding: '4px' }}>
+                              <th key={cf.fieldname}>{cf.label}</th>
+                            ))}
+                            <th style={{ width: '40px', textAlign: 'center' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ textAlign: 'center', fontWeight: '700' }}>{rIdx + 1}</td>
+                              {childFields.map(cf => (
+                                <td key={cf.fieldname} style={{ padding: '4px' }}>
                                   <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
                                     onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
                                     linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
                                 </td>
-                            ))}
-                            <td style={{ textAlign: 'center' }}>
-                              <button
-                                type="button"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
-                                onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                title="Remove row"
-                               disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                🗑️
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              ))}
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
+                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                  title="Remove row"
+                                  disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                  🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              );
-            }} />
+                );
+              }} />
           </div>
 
           <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -3857,8 +3857,8 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options || 'Microbiological Analysis Detail';
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
@@ -3872,7 +3872,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, saving, prefil
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                          disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -3880,7 +3880,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, saving, prefil
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -3895,10 +3895,10 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, saving, prefil
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -3906,7 +3906,7 @@ export function LabForm83Modal({ onClose, onSubmit, employeeList, saving, prefil
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -4125,8 +4125,8 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options || 'Sanitation Detail';
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const rows = tableData[tf.fieldname] || [];
@@ -4140,7 +4140,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, saving, prefil
                           className="secondary-btn"
                           style={{ fontSize: '11px', padding: '4px 8px' }}
                           onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                         disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                          disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                           ➕ Add Row
                         </button>
                       </div>
@@ -4148,7 +4148,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, saving, prefil
                       <div style={{ overflowX: 'auto' }}>
                         <table className="custom-table" style={{ width: '100%', fontSize: '11px' }}>
                           <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
                               {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                 <th key={cf.fieldname} style={{ padding: '6px', textAlign: 'left' }}>
@@ -4163,10 +4163,10 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, saving, prefil
                               <tr key={rIdx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 {childFields.filter(cf => cf.fieldname !== 'amended_from' && cf.hidden !== 1).map(cf => (
                                   <td key={cf.fieldname} style={{ padding: '4px' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableRowChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
                                 ))}
                                 <td style={{ padding: '4px', textAlign: 'center' }}>
                                   <button
@@ -4174,7 +4174,7 @@ export function LabForm84Modal({ onClose, onSubmit, employeeList, saving, prefil
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '14px' }}
                                     title="Remove Row"
                                     onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                   disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
                                     🗑️
                                   </button>
                                 </td>
@@ -4331,8 +4331,8 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, setShowEmploye
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options;
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const currentRows = tableData[tf.fieldname] || [];
@@ -4354,7 +4354,7 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, setShowEmploye
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                              <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -4367,10 +4367,10 @@ export function LabForm34Modal({ onClose, onSubmit, employeeList, setShowEmploye
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                      <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                        onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                        linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                    </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
                                     <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
@@ -4536,8 +4536,8 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, setShowEmploy
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options;
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const currentRows = tableData[tf.fieldname] || [];
@@ -4559,7 +4559,7 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, setShowEmploy
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                              <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -4572,10 +4572,10 @@ export function LabForm100Modal({ onClose, onSubmit, employeeList, setShowEmploy
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                      <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                        onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                        linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                    </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
                                     <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
@@ -4742,8 +4742,8 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, setShowEmploye
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options;
                   const childFields = getLabTableFields(childMetas[childDoctype] || []);
                   const currentRows = tableData[tf.fieldname] || [];
@@ -4765,7 +4765,7 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, setShowEmploye
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                              <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -4778,10 +4778,10 @@ export function LabForm69Modal({ onClose, onSubmit, employeeList, setShowEmploye
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                      <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                        onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                        linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                    </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
                                     <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
@@ -4953,8 +4953,8 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, setShowEmploye
               </div>
             ) : (
               <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
+                linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+                renderTable={tf => {
                   const childDoctype = tf.options;
                   let childFields = getLabTableFields(childMetas[childDoctype] || []);
                   if (childFields.length === 0) {
@@ -4981,7 +4981,7 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, setShowEmploye
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                              <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
                               <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                                 {childFields.map(cf => (
                                   <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
@@ -4994,10 +4994,10 @@ export function LabForm70Modal({ onClose, onSubmit, employeeList, setShowEmploye
                                 <tr key={rIdx}>
                                   {childFields.map(cf => (
                                     <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                      <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                        onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                        linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                    </td>
                                   ))}
                                   <td style={{ padding: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
                                     <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => removeTableRow(tf.fieldname, rIdx)} disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
@@ -5211,72 +5211,72 @@ export function LabForm12Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Autoclave Log Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Autoclave Log Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Autoclave Log Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Autoclave Log Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      + Add Row
-                    </button>
-                  </div>
-
-                  {rows.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-                      No items added to autoclave log yet. Click "+ Add Row" above to record sterilization items.
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        + Add Row
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
-                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
-                            {childFields.map(cf => (
-                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                            ))}
-                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, rIdx) => (
-                            <tr key={rIdx}>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No items added to autoclave log yet. Click "+ Add Row" above to record sterilization items.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                               {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
                               ))}
-                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  ✕
-                                </button>
-                              </td>
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            }} />
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }} />
             <FormFootnote doctype="Autoclave Record" defaultFormNo="Form 12" formTitle="Autoclave Sterilization Record Sheet" />
           </div>
 
@@ -5319,8 +5319,8 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, saving, prefil
   // Dynamic state for child table fields
   const [tableData, setTableData] = useState({
     media_preparation_details: [
-      { media_name: 'Plate Count Agar (PCA)', brand_manufacturer: 'Oxoid', lot_number: 'LOT-99812', qty_prepared: '23.5g / 1L', expiry_date: new Date(Date.now() + 30*86400000).toISOString().slice(0, 10), ph_check: 7.0, status: 'Pass' },
-      { media_name: 'Violet Red Bile Agar (VRBA)', brand_manufacturer: 'Difco', lot_number: 'LOT-88231', qty_prepared: '41.5g / 1L', expiry_date: new Date(Date.now() + 30*86400000).toISOString().slice(0, 10), ph_check: 7.4, status: 'Pass' }
+      { media_name: 'Plate Count Agar (PCA)', brand_manufacturer: 'Oxoid', lot_number: 'LOT-99812', qty_prepared: '23.5g / 1L', expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), ph_check: 7.0, status: 'Pass' },
+      { media_name: 'Violet Red Bile Agar (VRBA)', brand_manufacturer: 'Difco', lot_number: 'LOT-88231', qty_prepared: '41.5g / 1L', expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), ph_check: 7.4, status: 'Pass' }
     ]
   });
 
@@ -5395,7 +5395,7 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, saving, prefil
 
           if (!tableData[tf.fieldname]) {
             tableData[tf.fieldname] = [
-              { media_name: 'Plate Count Agar (PCA)', brand_manufacturer: 'Oxoid', lot_number: 'LOT-99812', qty_prepared: '23.5g / 1L', expiry_date: new Date(Date.now() + 30*86400000).toISOString().slice(0, 10), ph_check: 7.0, status: 'Pass' }
+              { media_name: 'Plate Count Agar (PCA)', brand_manufacturer: 'Oxoid', lot_number: 'LOT-99812', qty_prepared: '23.5g / 1L', expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), ph_check: 7.0, status: 'Pass' }
             ];
           }
         }
@@ -5492,72 +5492,72 @@ export function LabForm13Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Media Preparation Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Media Preparation Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Media Preparation Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Media Preparation Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      + Add Row
-                    </button>
-                  </div>
-
-                  {rows.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-                      No media batches added yet. Click "+ Add Row" above to record prepared media items.
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        + Add Row
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
-                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
-                            {childFields.map(cf => (
-                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                            ))}
-                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, rIdx) => (
-                            <tr key={rIdx}>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No media batches added yet. Click "+ Add Row" above to record prepared media items.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                               {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
                               ))}
-                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  ✕
-                                </button>
-                              </td>
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            }} />
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }} />
             <FormFootnote doctype="Media Preparation Record" defaultFormNo="Form 13" formTitle="Media Preparation Record Sheet" />
           </div>
 
@@ -5774,72 +5774,72 @@ export function LabForm64Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Rinse Off Test Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Rinse Off Test Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Rinse Off Test Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Rinse Off Test Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      + Add Row
-                    </button>
-                  </div>
-
-                  {rows.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-                      No rinse-off test readings added yet. Click "+ Add Row" above to record sample items.
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        + Add Row
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
-                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
-                            {childFields.map(cf => (
-                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                            ))}
-                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, rIdx) => (
-                            <tr key={rIdx}>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No rinse-off test readings added yet. Click "+ Add Row" above to record sample items.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                               {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
                               ))}
-                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  ✕
-                                </button>
-                              </td>
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            }} />
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }} />
             <FormFootnote doctype="Rinse-Off Test for Raw Materials" defaultFormNo="Form 64" formTitle="Rinse-Off Test for Raw Materials" />
           </div>
 
@@ -6052,72 +6052,72 @@ export function LabForm72Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Library Sample Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Library Sample Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Library Sample Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Library Sample Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      + Add Row
-                    </button>
-                  </div>
-
-                  {rows.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-                      No library samples added yet. Click "+ Add Row" above to record sample items.
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        + Add Row
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
-                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
-                            {childFields.map(cf => (
-                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                            ))}
-                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, rIdx) => (
-                            <tr key={rIdx}>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No library samples added yet. Click "+ Add Row" above to record sample items.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                               {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
                               ))}
-                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rIdx)}
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  ✕
-                                </button>
-                              </td>
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            }} />
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }} />
             <FormFootnote doctype="Library Sample Record" defaultFormNo="Form 72" formTitle="Library Sample Record" />
           </div>
 
@@ -6147,7 +6147,7 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, saving, prefil
     product_name: 'Island Chill Natural Mineral Water',
     batch_code: 'BC-2026-0922',
     production_date: new Date().toISOString().slice(0, 10),
-    expiry_date: new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0, 10),
+    expiry_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     shift: 'Shift A',
     line_no: 'Line 1',
     water_batch_no: 'WB-2026-0922',
@@ -6340,72 +6340,72 @@ export function LabForm47Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Traceability Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Traceability Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Traceability Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Traceability Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      + Add Row
-                    </button>
-                  </div>
-
-                  {rows.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-                      No traceability details added yet. Click "+ Add Row" above to record item details.
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        + Add Row
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
-                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
-                            {childFields.map(cf => (
-                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                            ))}
-                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, rIdx) => (
-                            <tr key={rIdx}>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No traceability details added yet. Click "+ Add Row" above to record item details.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                               {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
                               ))}
-                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rowIdx)}
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  ✕
-                                </button>
-                              </td>
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            }} />
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rowIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }} />
             <FormFootnote doctype="Traceability of products" defaultFormNo="Form 47" formTitle="Traceability of products" />
           </div>
 
@@ -6621,72 +6621,72 @@ export function LabForm39Modal({ onClose, onSubmit, employeeList, saving, prefil
               </div>
             )}
             <LabMetadataFields fields={fieldsList.map(field => field.fieldname === 'work_order' && prefilledWorkOrder ? { ...field, read_only: 1 } : field)} formData={formData} onChange={handleFieldChange}
-                  linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
-                  renderTable={tf => {
-              const childDoctype = tf.options || 'Induction Item Detail';
-              const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Induction Item Detail'] || []);
-              const rows = tableData[tf.fieldname] || [];
+              linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions}
+              renderTable={tf => {
+                const childDoctype = tf.options || 'Induction Item Detail';
+                const childFields = getLabTableFields(childMetas[childDoctype] || childMetas['Induction Item Detail'] || []);
+                const rows = tableData[tf.fieldname] || [];
 
-              return (
-                <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
-                      📊 {tf.label}
-                    </h4>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      style={{ fontSize: '11px', padding: '4px 10px' }}
-                      onClick={() => addTableRow(tf.fieldname, childDoctype)}
-                     disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                      + Add Row
-                    </button>
-                  </div>
-
-                  {rows.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-                      No induction topics added yet. Click "+ Add Row" above to add checklist items.
+                return (
+                  <div key={tf.fieldname} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ color: 'var(--accent)', margin: 0, fontSize: '13px' }}>
+                        📊 {tf.label}
+                      </h4>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: '11px', padding: '4px 10px' }}
+                        onClick={() => addTableRow(tf.fieldname, childDoctype)}
+                        disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                        + Add Row
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                        <thead>
-                        <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
-                          <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
-                            {childFields.map(cf => (
-                              <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
-                            ))}
-                            <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row, rIdx) => (
-                            <tr key={rIdx}>
+
+                    {rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '12px', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
+                        No induction topics added yet. Click "+ Add Row" above to add checklist items.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <LabTableSections fields={childMetas[childDoctype] || childFields} visibleFields={childFields} leadingColumns={0} />
+                            <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
                               {childFields.map(cf => (
-                                <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
-                                  <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
-                                    onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
-                                    linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
-                                </td>
+                                <th key={cf.fieldname} style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>{cf.label}</th>
                               ))}
-                              <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                <button
-                                  type="button"
-                                  style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                                  onClick={() => removeTableRow(tf.fieldname, rowIdx)}
-                                 disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
-                                  ✕
-                                </button>
-                              </td>
+                              <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '40px' }}>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            }} />
+                          </thead>
+                          <tbody>
+                            {rows.map((row, rIdx) => (
+                              <tr key={rIdx}>
+                                {childFields.map(cf => (
+                                  <td key={cf.fieldname} style={{ padding: '4px 6px', border: '1px solid #cbd5e1' }}>
+                                    <LabFieldControl field={{ ...cf, read_only: [1, '1', true].includes(tf.read_only) ? 1 : cf.read_only }} value={row[cf.fieldname]} doc={row} parentDoc={formData}
+                                      onChange={value => handleTableInputChange(tf.fieldname, rIdx, cf.fieldname, value)}
+                                      linkOptionsMap={linkOptionsMap} employeeList={employeeList} loadLinkOptions={loadLabLinkOptions} />
+                                  </td>
+                                ))}
+                                <td style={{ padding: '4px 6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={() => removeTableRow(tf.fieldname, rowIdx)}
+                                    disabled={tf.read_only === 1 || tf.read_only === "1" || tf.read_only === true}>
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }} />
             <FormFootnote doctype="Induction" defaultFormNo="Form 39" formTitle="Induction" />
           </div>
 

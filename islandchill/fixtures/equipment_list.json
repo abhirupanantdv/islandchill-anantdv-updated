@@ -71,8 +71,8 @@
   "doctype": "Equipment List",
   "equipments": "Syrup and CIP Equipment",
   "filling_line_1": 1,
-  "filling_line_2": 0,
-  "modified": "2026-09-25 14:58:40",
+  "filling_line_2": 1,
+  "modified": "2026-09-25 20:59:39.413185",
   "name": "Syrup and CIP Equipment",
   "show_on_app": 0
  },
@@ -104,8 +104,8 @@
   "doctype": "Equipment List",
   "equipments": "Boiler",
   "filling_line_1": 1,
-  "filling_line_2": 0,
-  "modified": "2026-09-25 14:58:40",
+  "filling_line_2": 1,
+  "modified": "2026-09-25 20:59:32.429157",
   "name": "Boiler",
   "show_on_app": 0
  },
@@ -115,8 +115,8 @@
   "doctype": "Equipment List",
   "equipments": "Glycol Chilling Plant & Grasso Refrigerator",
   "filling_line_1": 1,
-  "filling_line_2": 0,
-  "modified": "2026-09-25 14:58:40",
+  "filling_line_2": 1,
+  "modified": "2026-09-25 20:59:27.736121",
   "name": "Glycol Chilling Plant & Grasso Refrigerator",
   "show_on_app": 0
  },

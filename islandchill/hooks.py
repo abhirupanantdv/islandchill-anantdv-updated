@@ -274,6 +274,12 @@ fixtures = [
 			["doc_type", "in", ["Work Order"]]
 		]
 	},
+	{
+		"dt": "Role",
+		"filters": [
+			["role_name", "in", ["IslandChill MES User", "IslandChill Admin User"]]
+		]
+	},
 	"Equipment List",
 	"Maintenance Checklist Master"
 ]

@@ -106,6 +106,10 @@ def save_stock_entry_draft(work_order, company, posting_date, posting_time=None,
         if not item_code or qty <= 0:
             continue
 
+        item_disabled = frappe.db.get_value("Item", item_code, "disabled")
+        if item_disabled:
+            frappe.throw(_("Item {0} is disabled in ERPNext and cannot be included in a Stock Entry").format(item_code))
+
         doc.append("items", {
             "item_code": item_code,
             "qty": qty,
@@ -754,7 +758,8 @@ def get_all_cleaning_records():
         'Cleaning of Lab and Office',
         'Incubator Temperature Record',
         'Balance Check or Callibration',
-        'equipment sanitation and cip'
+        'equipment sanitation and cip',
+        'Outside Perimeter Cleaning'
     ]
     all_records = []
     for dt in doctypes:
@@ -788,10 +793,13 @@ def get_all_cleaning_records():
                     "type": dt,
                     "timestamp": str(r.creation or r.modified or ""),
                     "status": status,
-                    "cleaner": r.get("duties_performed_by") or r.get("performed_by_operator") or r.get("checked_by") or "Staff",
-                    "supervisor": r.get("checked_by") or r.get("verified_by_supervisor") or r.get("verified_by") or "",
-                    "posting_date": str(r.get("date") or (str(r.creation).split(" ")[0] if r.creation else "")),
-                    "posting_time": str(r.get("time") or (str(r.creation).split(" ")[1] if r.creation else "")),
+                    "docstatus": r.get("docstatus", 0),
+                    "workflow_state": r.get("workflow_state", ""),
+                    "work_order": r.get("work_order", "") or "",
+                    "cleaner": r.get("duties_performed_by") or r.get("performed_by_operator") or r.get("checked_by") or r.get("cleaner") or "Staff",
+                    "supervisor": r.get("supervisor") or r.get("checked_by") or r.get("verified_by_supervisor") or r.get("verified_by") or "",
+                    "posting_date": str(r.get("date") or r.get("posting_date") or (str(r.creation).split(" ")[0] if r.creation else "")),
+                    "posting_time": str(r.get("time") or r.get("posting_time") or (str(r.creation).split(" ")[1] if r.creation else "")),
                     "details": r
                 })
     all_records.sort(key=lambda x: x["timestamp"], reverse=True)
@@ -1524,6 +1532,8 @@ def get_bom_details_data(bom_id, source_warehouse=None, fg_warehouse=None):
         fg_avail = frappe.utils.flt(get_stock_balance(doc.item, fg_wh) or 0.0)
 
     for item in doc.items:
+        if frappe.db.get_value("Item", item.item_code, "disabled"):
+            continue
         avail_qty = 0.0
         if src_wh:
             avail_qty = frappe.utils.flt(get_stock_balance(item.item_code, src_wh) or 0.0)
@@ -1567,6 +1577,8 @@ def get_bom_recipe_full_details(bom_id, source_warehouse=None, fg_warehouse=None
 
     materials = []
     for item in doc.items:
+        if frappe.db.get_value("Item", item.item_code, "disabled"):
+            continue
         avail_qty = 0.0
         if src_wh:
             avail_qty = frappe.utils.flt(get_stock_balance(item.item_code, src_wh) or 0.0)
@@ -1601,31 +1613,126 @@ def get_bom_recipe_full_details(bom_id, source_warehouse=None, fg_warehouse=None
 
 
 @frappe.whitelist(allow_guest=True)
-def get_all_inventory_items(limit=200):
-    limit = frappe.utils.cint(limit) or 200
+def get_all_inventory_items(limit=0, warehouse=None):
+    """Fetch all enabled items with stock balances and valuation across active leaf warehouses."""
+    limit = frappe.utils.cint(limit)
+    page_len = limit if limit > 0 else 0
+    # Strictly fetch all enabled items from ERPNext
     items = frappe.get_all(
         "Item",
-        fields=["name", "item_code", "item_name", "stock_uom", "item_group", "safety_stock"],
-        limit_page_length=limit,
+        filters={"disabled": 0},
+        fields=["name", "item_code", "item_name", "stock_uom", "item_group", "safety_stock", "valuation_rate"],
+        limit_page_length=page_len,
         order_by="item_name asc",
         ignore_permissions=True
     )
-    bins = frappe.get_all(
-        "Bin",
-        fields=["item_code", "warehouse", "actual_qty", "reserved_qty"],
-        limit_page_length=1000,
+
+    # Active leaf warehouses only (exclude disabled, group, or orphan warehouses)
+    active_whs = frappe.get_all(
+        "Warehouse",
+        filters={"is_group": 0, "disabled": 0},
+        fields=["name", "warehouse_name", "company"],
+        order_by="warehouse_name asc",
         ignore_permissions=True
     )
+    active_wh_names = {w.name for w in active_whs}
+    wh_name_to_clean = {}
+    clean_to_wh_names = {}
+    for w in active_whs:
+        full_name = w.name
+        clean_name = (w.warehouse_name or w.name).split(" - ")[0].strip()
+        wh_name_to_clean[full_name] = clean_name
+        for alias in [clean_name, clean_name.lower(), full_name, full_name.lower()]:
+            if alias not in clean_to_wh_names:
+                clean_to_wh_names[alias] = []
+            clean_to_wh_names[alias].append(full_name)
+
+    bins = frappe.get_all(
+        "Bin",
+        fields=["item_code", "warehouse", "actual_qty", "reserved_qty", "valuation_rate", "stock_value"],
+        limit_page_length=0,
+        ignore_permissions=True
+    )
+
     bin_map = {}
+    bin_val_map = {}
+    bin_rate_map = {}
+    item_wh_map = {}
+    item_wh_val_map = {}
+
     for b in bins:
+        # Ignore bins from non-active or legacy orphan warehouses (e.g. Stores - AD)
+        if b.warehouse not in active_wh_names:
+            continue
         ic = b.item_code
-        if ic not in bin_map:
-            bin_map[ic] = 0.0
-        bin_map[ic] += frappe.utils.flt(b.actual_qty or 0)
+        wh = b.warehouse
+        clean_wh = wh_name_to_clean.get(wh, wh)
+        qty = frappe.utils.flt(b.actual_qty or 0)
+        val = frappe.utils.flt(b.stock_value or 0)
+        rate = frappe.utils.flt(b.valuation_rate or 0)
+
+        bin_map[ic] = bin_map.get(ic, 0.0) + qty
+        bin_val_map[ic] = bin_val_map.get(ic, 0.0) + val
+        if rate > 0:
+            bin_rate_map[ic] = rate
+
+        if ic not in item_wh_map:
+            item_wh_map[ic] = {}
+            item_wh_val_map[ic] = {}
+
+        # Store stock under full name (e.g. 'Stores - CWFPL') AND clean short name ('Stores')
+        item_wh_map[ic][wh] = item_wh_map[ic].get(wh, 0.0) + qty
+        if clean_wh != wh:
+            item_wh_map[ic][clean_wh] = item_wh_map[ic].get(clean_wh, 0.0) + qty
+
+        item_wh_val_map[ic][wh] = item_wh_val_map[ic].get(wh, 0.0) + val
+        if clean_wh != wh:
+            item_wh_val_map[ic][clean_wh] = item_wh_val_map[ic].get(clean_wh, 0.0) + val
+
+    target_wh = (warehouse or "").strip()
+    is_specific_wh = bool(target_wh and target_wh.lower() != "all")
+
+    # Resolve target warehouse candidates
+    target_wh_keys = []
+    if is_specific_wh:
+        target_wh_keys.append(target_wh)
+        target_wh_lower = target_wh.lower()
+        if target_wh_lower in clean_to_wh_names:
+            for cand in clean_to_wh_names[target_wh_lower]:
+                if cand not in target_wh_keys:
+                    target_wh_keys.append(cand)
+        clean_t = target_wh.split(" - ")[0].strip()
+        if clean_t not in target_wh_keys:
+            target_wh_keys.append(clean_t)
 
     result = []
     for i in items:
         tot_qty = bin_map.get(i.item_code, 0.0)
+        tot_val = bin_val_map.get(i.item_code, 0.0)
+        wh_stocks = item_wh_map.get(i.item_code, {})
+        wh_vals = item_wh_val_map.get(i.item_code, {})
+
+        if is_specific_wh:
+            curr_qty = 0.0
+            curr_val = 0.0
+            for k in target_wh_keys:
+                if k in wh_stocks:
+                    curr_qty = wh_stocks[k]
+                    curr_val = wh_vals.get(k, 0.0)
+                    break
+        else:
+            curr_qty = tot_qty
+            curr_val = tot_val
+
+        # Only list canonical active warehouses that currently hold stock
+        wh_with_stock = [w for w in active_wh_names if wh_stocks.get(w, 0.0) > 0]
+
+        val_rate = bin_rate_map.get(i.item_code)
+        if not val_rate:
+            val_rate = frappe.utils.flt(i.valuation_rate or 0.0)
+        if not val_rate and tot_qty > 0 and tot_val > 0:
+            val_rate = tot_val / tot_qty
+
         result.append({
             "id": i.item_code,
             "code": i.item_code,
@@ -1633,12 +1740,26 @@ def get_all_inventory_items(limit=200):
             "item_code": i.item_code,
             "item_name": i.item_name or i.item_code,
             "category": i.item_group or "Standard",
+            "item_group": i.item_group or "Standard",
             "unit": i.stock_uom or "Nos",
             "stock_uom": i.stock_uom or "Nos",
-            "qty": tot_qty,
+            "qty": curr_qty,
+            "total_qty": tot_qty,
+            "valuation_rate": round(val_rate, 4),
+            "stock_value": round(curr_val, 2),
+            "total_stock_value": round(tot_val, 2),
+            "warehouse_stocks": wh_stocks,
+            "warehouses_with_stock": wh_with_stock,
             "minLevel": frappe.utils.flt(i.safety_stock or 0)
         })
     return result
+
+
+@frappe.whitelist(allow_guest=True)
+def get_all_warehouses():
+    """Return all active leaf warehouses."""
+    return get_warehouses_list()
+
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1761,11 +1882,55 @@ def get_companies_list():
 
 @frappe.whitelist(allow_guest=True)
 def get_warehouses_list(company=None):
-    """Return warehouses ignoring permissions."""
-    filters = {"is_group": 0}
+    """Return active leaf warehouses annotated with stock items count, total quantity, and valuation."""
+    filters = {"is_group": 0, "disabled": 0}
     if company:
         filters["company"] = company
-    return frappe.get_all("Warehouse", filters=filters, fields=["name", "warehouse_name", "company", "is_group"], limit=200, ignore_permissions=True)
+    warehouses = frappe.get_all(
+        "Warehouse",
+        filters=filters,
+        fields=["name", "warehouse_name", "company", "is_group"],
+        limit=200,
+        order_by="warehouse_name asc",
+        ignore_permissions=True
+    )
+
+    # Bin statistics for each warehouse
+    bin_stats = frappe.db.sql("""
+        SELECT warehouse,
+               COUNT(CASE WHEN actual_qty > 0 THEN 1 END) as item_count,
+               SUM(actual_qty) as total_qty,
+               SUM(stock_value) as total_val
+        FROM tabBin
+        GROUP BY warehouse
+    """, as_dict=True)
+    stats_map = {b.warehouse: b for b in bin_stats}
+
+    result = []
+    for wh in warehouses:
+        stat = stats_map.get(wh.name, {})
+        item_cnt = frappe.utils.cint(stat.get("item_count") or 0)
+        tot_qty = frappe.utils.flt(stat.get("total_qty") or 0.0)
+        tot_val = frappe.utils.flt(stat.get("total_val") or 0.0)
+
+        clean = (wh.warehouse_name or wh.name).split(" - ")[0].strip()
+
+        wh_dict = {
+            "name": wh.name,
+            "warehouse_name": wh.warehouse_name or clean,
+            "clean_name": clean,
+            "company": wh.company,
+            "is_group": 0,
+            "item_count": item_cnt,
+            "total_qty": round(tot_qty, 2),
+            "total_value": round(tot_val, 2),
+            "has_stock": tot_qty > 0
+        }
+        result.append(wh_dict)
+
+    # Sort: Warehouses with stock first, then by warehouse name
+    result.sort(key=lambda w: (not w["has_stock"], -w["total_qty"], w["clean_name"]))
+    return result
 
 
 @frappe.whitelist(allow_guest=True)
@@ -2068,3 +2233,42 @@ def get_form_number_configurations():
     except Exception as e:
         frappe.log_error(f"Error fetching Form number configuration: {str(e)}", "Form Number Config")
     return []
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# IslandChill Portal Access Check
+# Two roles control all access:
+#   - IslandChill MES User   → /islandchill (MES Operations)
+#   - IslandChill Admin User → /app         (ERPNext Desk)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@frappe.whitelist()
+def check_mes_access():
+    """
+    Returns the portal routing decision for the currently logged-in user.
+
+    Returns:
+        {
+            "allowed":    bool,   # True if user has either IslandChill role
+            "is_mes":     bool,   # True → redirect to /islandchill
+            "is_admin":   bool,   # True → redirect to /app
+            "roles":      [...],
+            "user":       "email"
+        }
+    """
+    user = frappe.session.user
+    if not user or user == "Guest":
+        return {"allowed": False, "is_mes": False, "is_admin": False, "roles": [], "user": "Guest"}
+
+    user_roles = frappe.get_roles(user)
+    is_mes   = "IslandChill MES User"   in user_roles
+    is_admin = "IslandChill Admin User" in user_roles
+
+    return {
+        "allowed":  is_mes or is_admin,
+        "is_mes":   is_mes,
+        "is_admin": is_admin,
+        "roles":    user_roles,
+        "user":     user,
+    }

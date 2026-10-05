@@ -874,7 +874,7 @@ def build_daily_document_register_email(
 
 		"<p>"
 		"Please find the "
-		"<b>Daily Document Register</b> "
+		"<b>Daily Document Register For IslandChill</b> "
 		"for <b>"
 		+ html.escape(date_label)
 		+ "</b>."

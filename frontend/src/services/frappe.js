@@ -1174,11 +1174,7 @@ class FrappeService {
         return [];
       }
     }
-    // Mock stock entries for local mode
-    return [
-      { name: 'STE-2026-00001', stock_entry_type: 'Material Transfer for Manufacture', work_order: 'MFG-WO-2026-00001', posting_date: '2026-07-12', posting_time: '10:00:00', company: this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited', docstatus: 1 },
-      { name: 'STE-2026-00002', stock_entry_type: 'Manufacture', work_order: 'MFG-WO-2026-00001', posting_date: '2026-07-13', posting_time: '14:30:00', company: this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited', docstatus: 1 }
-    ];
+    return [];
   }
 
   async getAllStockEntries(limit = 200) {
@@ -1200,10 +1196,7 @@ class FrappeService {
         return [];
       }
     }
-    return [
-      { name: 'STE-2026-00001', stock_entry_type: 'Material Transfer for Manufacture', work_order: 'MFG-WO-2026-00001', posting_date: '2026-07-13', posting_time: '10:00:00', company: this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited', docstatus: 1 },
-      { name: 'STE-2026-00002', stock_entry_type: 'Manufacture', work_order: 'MFG-WO-2026-00001', posting_date: '2026-07-13', posting_time: '14:30:00', company: this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited', docstatus: 1 }
-    ];
+    return [];
   }
 
   async getStockEntryDetails(name) {
@@ -1216,20 +1209,7 @@ class FrappeService {
         throw e;
       }
     }
-    // Mock Stock Entry details for local mode
-    return {
-      name: name,
-      stock_entry_type: name.includes('STE-2026-00002') ? 'Manufacture' : 'Material Transfer for Manufacture',
-      work_order: 'MFG-WO-2026-00001',
-      posting_date: '2026-07-12',
-      posting_time: '10:00:00',
-      company: this.connection.defaultCompany || 'Carpenters Waters (Fiji) PTE Limited',
-      docstatus: 1,
-      items: [
-        { item_code: 'WTR-001', qty: 500, s_warehouse: 'Stores - AD', t_warehouse: 'Work In Progress - AD', uom: 'Litres' },
-        { item_code: 'BTL-500', qty: 1000, s_warehouse: 'Stores - AD', t_warehouse: 'Work In Progress - AD', uom: 'Nos' }
-      ]
-    };
+    return null;
   }
 
   async getCompanies() {
@@ -1617,10 +1597,14 @@ class FrappeService {
   }
 
   // Fetch Items / Inventory Balances
-  async getItems(limit = 200, start = 0) {
+  async getItems(limit = 0, start = 0, warehouse = null) {
     if (this.connection.isLive) {
       try {
-        const res = await this.callIslandChillMethod('get_all_inventory_items', { limit });
+        const params = { limit: limit || 0 };
+        if (warehouse && warehouse !== 'all') {
+          params.warehouse = warehouse;
+        }
+        const res = await this.callIslandChillMethod('get_all_inventory_items', params);
         return res || [];
       } catch (e) {
         console.error('Failed to fetch Items from ERPNext:', e);
@@ -1629,6 +1613,7 @@ class FrappeService {
     }
     return [];
   }
+
 
   // Fetch Bin quantities for item codes
   async getBinQuantities(itemCodes) {
@@ -1657,6 +1642,8 @@ class FrappeService {
             try { remarks = JSON.parse(rec.remarks || '{}'); } catch { }
             return {
               id: rec.name,
+              name: rec.name,
+              doctype: 'Daily Preventative Maintenance Schedule',
               templateId: rec.template_id || rec.equipment,
               equipment: rec.equipment,
               workOrder: rec.work_order,
@@ -1667,6 +1654,9 @@ class FrappeService {
               toDate: rec.to_date,
               operator: rec.operator || rec.sign_of_the_operator,
               supervisor: rec.supervisor || rec.sign_of_supervisor,
+              docstatus: rec.docstatus,
+              workflow_state: rec.workflow_state,
+              status: rec.workflow_state || (rec.docstatus === 1 ? 'Approved' : 'Pending'),
               checkgrid,
               remarks,
               totalChecked: Number(rec.total_checked || 0),
@@ -2187,10 +2177,10 @@ class FrappeService {
     }
     // Mock Warehouses
     const mockWarehouses = [
-      { name: 'Finished Goods - CWFL', warehouse_name: 'Finished Goods - CWFL', company: 'CWFL' },
-      { name: 'Raw Materials - CWFL', warehouse_name: 'Raw Materials - CWFL', company: 'CWFL' },
-      { name: 'Stores - AD', warehouse_name: 'Stores - AD', company: 'Carpenters Waters (Fiji) PTE Limited' },
-      { name: 'Work In Progress - AD', warehouse_name: 'Work In Progress - AD', company: 'Carpenters Waters (Fiji) PTE Limited' }
+      { name: 'Stores - CWFPL', warehouse_name: 'Stores', clean_name: 'Stores', company: 'Carpenters Waters (Fiji) PTE Limited', has_stock: true, item_count: 20 },
+      { name: 'Finished Goods - CWFPL', warehouse_name: 'Finished Goods', clean_name: 'Finished Goods', company: 'Carpenters Waters (Fiji) PTE Limited', has_stock: true, item_count: 2 },
+      { name: 'Work In Progress - CWFPL', warehouse_name: 'Work In Progress', clean_name: 'Work In Progress', company: 'Carpenters Waters (Fiji) PTE Limited', has_stock: true, item_count: 13 },
+      { name: 'Extra Goods Warehouse - CWFPL', warehouse_name: 'Extra Goods Warehouse', clean_name: 'Extra Goods', company: 'Carpenters Waters (Fiji) PTE Limited', has_stock: true, item_count: 1 }
     ];
     let filtered = mockWarehouses;
     if (company) {
@@ -2989,7 +2979,8 @@ async getEquipmentList(params = {}) {
       'Cleaning of Lab and Office',
       'Incubator Temperature Record',
       'Balance Check or Callibration',
-      'equipment sanitation and cip'
+      'equipment sanitation and cip',
+      'Outside Perimeter Cleaning'
     ];
 
     try {
@@ -3025,8 +3016,12 @@ async getEquipmentList(params = {}) {
               id: item.name,
               name: item.name,
               type: dt,
+              doctype: dt,
               timestamp: item.creation || item.modified || new Date().toISOString(),
               status: status,
+              docstatus: item.docstatus,
+              workflow_state: item.workflow_state,
+              work_order: item.work_order || '',
               cleaner: item.operator_name || item.duties_performed_by || item.performed_by_operator || item.checked_by || 'Staff',
               supervisor: item.supervisor_name || item.checked_by || item.verified_by_supervisor || item.verified_by || '',
               operator_name: item.operator_name || item.duties_performed_by || item.performed_by_operator || item.checked_by || 'Staff',

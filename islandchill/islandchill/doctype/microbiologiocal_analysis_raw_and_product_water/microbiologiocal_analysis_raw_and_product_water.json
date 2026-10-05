@@ -24,7 +24,7 @@
   "hpc_incubation_in_date_and_time",
   "hpc_incubation_out_date",
   "sample_analysis_and_results_section",
-  "table_aqat",
+  "sample_analysis",
   "analyst",
   "notes_and_validity_section",
   "comments",
@@ -122,13 +122,7 @@
   },
   {
    "fieldname": "sample_analysis_and_results_section",
-   "fieldtype": "Section Break",
-   "label": "Sample, Analysis and Results"
-  },
-  {
-   "fieldname": "table_aqat",
-   "fieldtype": "Table",
-   "options": "Microbiological sample table"
+   "fieldtype": "Section Break"
   },
   {
    "fieldname": "analyst",
@@ -171,14 +165,20 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Work Order"
+  },
+  {
+   "fieldname": "sample_analysis",
+   "fieldtype": "Table",
+   "label": "Sample, Analysis and Results",
+   "options": "Microbiological sample table"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-26 17:13:30.595381",
- "modified_by": "sushmita@anantdv.com",
+ "modified": "2026-10-05 19:56:05.739605",
+ "modified_by": "anantdv@gmail.com",
  "module": "Islandchill",
  "name": "Microbiologiocal Analysis Raw and Product Water",
  "naming_rule": "By \"Naming Series\" field",

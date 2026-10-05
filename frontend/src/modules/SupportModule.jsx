@@ -391,7 +391,6 @@ const SupportModule = ({
                   f.fieldtype !== 'Fold' &&
                   f.fieldtype !== 'Table' &&
                   f.fieldname !== 'amended_from' &&
-                  f.fieldname !== 'work_order' &&
                   f.hidden !== 1
                 );
 
@@ -991,12 +990,13 @@ const CustomerComplaintModal = ({ isOpen, onClose, complaintMeta, onRecordCreate
       { idx: 4, fieldname: 'contact_email', label: 'Contact Email / Phone', fieldtype: 'Data' },
       { idx: 5, fieldname: 'product_name', label: 'Product Name / SKU', fieldtype: 'Link', options: 'Item' },
       { idx: 6, fieldname: 'batch_no', label: 'Batch No / Lot Code', fieldtype: 'Data' },
-      { idx: 7, fieldname: 'complaint_type', label: 'Complaint Type / Category', fieldtype: 'Select', options: 'Quality Issue\nPackage Damage\nDelivery Delay\nTaste Discrepancy\nOther' },
-      { idx: 8, fieldname: 'severity', label: 'Severity / Priority', fieldtype: 'Select', options: 'Low\nMedium\nHigh\nCritical' },
-      { idx: 9, fieldname: 'recorded_by', label: 'Recorded By', fieldtype: 'Link', options: 'Employee' },
-      { idx: 10, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Open\nIn Progress\nResolved\nClosed' },
-      { idx: 11, fieldname: 'description', label: 'Detailed Complaint Description', fieldtype: 'Small Text', reqd: 1 },
-      { idx: 12, fieldname: 'action_taken', label: 'Immediate Action Taken / Corrective Action', fieldtype: 'Small Text' }
+      { idx: 7, fieldname: 'work_order', label: 'Work Order', fieldtype: 'Link', options: 'Work Order' },
+      { idx: 8, fieldname: 'complaint_type', label: 'Complaint Type / Category', fieldtype: 'Select', options: 'Quality Issue\nPackage Damage\nDelivery Delay\nTaste Discrepancy\nOther' },
+      { idx: 9, fieldname: 'severity', label: 'Severity / Priority', fieldtype: 'Select', options: 'Low\nMedium\nHigh\nCritical' },
+      { idx: 10, fieldname: 'recorded_by', label: 'Recorded By', fieldtype: 'Link', options: 'Employee' },
+      { idx: 11, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Open\nIn Progress\nResolved\nClosed' },
+      { idx: 12, fieldname: 'description', label: 'Detailed Complaint Description', fieldtype: 'Small Text', reqd: 1 },
+      { idx: 13, fieldname: 'action_taken', label: 'Immediate Action Taken / Corrective Action', fieldtype: 'Small Text' }
     ];
   }
 
@@ -1007,7 +1007,6 @@ const CustomerComplaintModal = ({ isOpen, onClose, complaintMeta, onRecordCreate
     f.fieldtype !== 'Table' &&
     f.fieldtype !== 'Signature' &&
     f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
     f.hidden !== 1
   );
 

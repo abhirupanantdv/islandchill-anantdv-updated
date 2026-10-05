@@ -7,6 +7,8 @@ import logo from '../../public/logo.png';
  * All authentication state and handlers live in App.jsx and are passed as props.
  */
 export default function LoginPage({
+  loginPortal = 'auto',
+  setLoginPortal,
   is2FAPhase,
   setIs2FAPhase,
   loginUsername,
@@ -182,6 +184,24 @@ export default function LoginPage({
 
         <form onSubmit={handleLoginSubmit} className="login-form">
           <div className="form-group">
+            <label htmlFor="loginPortal">Open after sign-in</label>
+            <select
+              id="loginPortal"
+              className="form-input"
+              value={loginPortal}
+              onChange={event => setLoginPortal(event.target.value)}
+              disabled={loginLoading}
+              aria-describedby="loginPortalHelp"
+            >
+              <option value="auto">Choose automatically</option>
+              <option value="mes">IslandChill MES — Plant Operations</option>
+              <option value="admin">ERPNext Desk — Administration</option>
+            </select>
+            <small id="loginPortalHelp" style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px', lineHeight: 1.5 }}>
+              Choose the portal you want to open. Access depends on your assigned roles.
+            </small>
+          </div>
+          <div className="form-group">
             <label>Username / Email</label>
             <div className="input-wrapper">
               <span className="input-icon">👤</span>
@@ -214,26 +234,8 @@ export default function LoginPage({
             </div>
           </div>
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 14px',
-            borderRadius: '10px',
-            backgroundColor: 'rgba(245, 158, 11, 0.08)',
-            border: '1px solid rgba(245, 158, 11, 0.2)',
-            fontSize: '11.5px',
-            color: 'var(--text-main)',
-            margin: '4px 0 12px 0'
-          }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>⚡</span>
-              <span><strong>Auto Portal Routing</strong>: Admin to Desk (/app) • Operators to MES (/islandchill)</span>
-            </span>
-          </div>
-
           <button type="submit" className="btn-primary-login" disabled={loginLoading} style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: '700' }}>
-            {loginLoading ? 'Authenticating...' : 'Sign In to Operations'}
+            {loginLoading ? 'Authenticating...' : loginPortal === 'mes' ? 'Sign In to MES' : loginPortal === 'admin' ? 'Sign In to ERPNext Desk' : 'Sign In'}
           </button>
         </form>
 

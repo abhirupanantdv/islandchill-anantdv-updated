@@ -80,10 +80,11 @@ export const CLEANING_TEMPLATES = [
   { id: 'perimeter-clean', name: 'Form 46: Outside Perimeter Cleaning', doctype: 'Outside Perimeter Cleaning', description: 'Log outside perimeter cleaning inspection and checklist.' }
 ];
 
-export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, setActiveSearchField }) {
+export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, setActiveSearchField, workOrders = [] }) {
   const template = CLEANING_TEMPLATES.find(t => t.id === templateId);
   const [postingDate, setPostingDate] = useState(new Date().toISOString().slice(0, 10));
   const [postingTime, setPostingTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [workOrder, setWorkOrder] = useState('');
 
   // Cleaner / Checker autocomplete
   const [cleanerSearch, setCleanerSearch] = useState('');
@@ -425,6 +426,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
     const finalData = {
       posting_date: postingDate,
       posting_time: postingTime,
+      work_order: workOrder,
       ...formData,
       ...tableData
     };
@@ -470,7 +472,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
 
   return (
     <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setShowEmployeeDropdown(false)}>
-      <div className="modal-panel" style={{ width: '550px', maxWidth: '95%' }} onClick={e => e.stopPropagation()}>
+      <div className="modal-panel" style={{ width: '580px', maxWidth: '95%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>🧹 {template?.name}</h3>
@@ -484,7 +486,7 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
         </div>
         <form onSubmit={handleFormSubmit}>
           <div className="modal-content" style={{ maxHeight: '70vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px', fontSize: '12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '12px' }}>
               <div className="form-group">
                 <label className="input-label">Date *</label>
                 <input type="date" className="text-input" required min={new Date().toISOString().split('T')[0]} value={postingDate} onChange={e => setPostingDate(e.target.value)} />
@@ -492,6 +494,25 @@ export function CleaningFormModal({ templateId, onClose, onSubmit, employeeList,
               <div className="form-group">
                 <label className="input-label">Time *</label>
                 <input type="time" className="text-input" required value={postingTime} onChange={e => setPostingTime(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="input-label">Work Order</label>
+                <select
+                  className="text-input"
+                  value={workOrder}
+                  onChange={e => setWorkOrder(e.target.value)}
+                >
+                  <option value="">-- Select Work Order --</option>
+                  {(workOrders || []).map(wo => {
+                    const woName = typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || '');
+                    const itemDesc = typeof wo === 'object' && wo.production_item ? ` (${wo.production_item})` : '';
+                    return (
+                      <option key={woName} value={woName}>
+                        {woName}{itemDesc}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             </div>
 
@@ -1669,8 +1690,14 @@ export function CleaningRecordDetailModal({ record, onClose, employeeList = [] }
           <button className="no-print" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={onClose}>✕</button>
         </div>
         <div className="modal-content" style={{ padding: '16px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
             <div><span style={{ color: 'var(--text-muted)' }}>Document Type:</span><br /><strong>{tpl.name}</strong></div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>Work Order:</span><br />
+              <strong style={{ color: (record.work_order || record.workOrder) ? 'var(--primary)' : 'var(--text-muted)' }}>
+                {record.work_order || record.workOrder || '—'}
+              </strong>
+            </div>
             <div><span style={{ color: 'var(--text-muted)' }}>Logged Timestamp:</span><br /><strong>{record.timestamp}</strong></div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
@@ -1691,7 +1718,7 @@ export function CleaningRecordDetailModal({ record, onClose, employeeList = [] }
             <table className="custom-table" style={{ width: '100%', fontSize: '12px' }}>
               <tbody>
                 {Object.entries(record).map(([key, val]) => {
-                  if (['id', 'type', 'timestamp', 'cleaner', 'recorded_by', 'checked_by', 'performed_by', 'supervisor', 'operator_name', 'supervisor_name', 'remarks'].includes(key)) return null;
+                  if (['id', 'type', 'timestamp', 'work_order', 'workOrder', 'cleaner', 'recorded_by', 'checked_by', 'performed_by', 'supervisor', 'operator_name', 'supervisor_name', 'remarks'].includes(key)) return null;
                   let cleanKey;
                   if (key === 'posting_date') {
                     cleanKey = 'SANITATION DATE';
@@ -1803,7 +1830,8 @@ export default function CleaningTab({
   setActiveCleaningForm,
   setViewingCleaningRecord,
   onRefreshCleaningRecords,
-  employeeList = []
+  employeeList = [],
+  workOrders = []
 }) {
   useEffect(() => {
     if (onRefreshCleaningRecords) {
@@ -1948,6 +1976,7 @@ export default function CleaningTab({
                   <tr style={{ backgroundColor: 'var(--bg-card)' }}>
                     <th style={{ padding: '10px', textAlign: 'left' }}>Log ID</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>Form Template</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Work Order</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>Performed By</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>Status</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>Submitted</th>
@@ -1962,6 +1991,13 @@ export default function CleaningTab({
                         <td style={{ fontWeight: '700', padding: '10px' }}>{rec.id}</td>
                         <td style={{ padding: '10px' }}>
                           <strong>{rec.type}</strong>
+                        </td>
+                        <td style={{ padding: '10px' }}>
+                          {(rec.work_order || rec.workOrder) ? (
+                            <span style={{ fontWeight: '600', color: 'var(--primary)' }}>{rec.work_order || rec.workOrder}</span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          )}
                         </td>
                         <td style={{ padding: '10px' }}>👤 {resolveEmployeeName(rec.operator_name || rec.cleaner || rec.recorded_by || rec.checked_by || rec.performed_by, employeeList)}</td>
                         <td style={{ padding: '10px' }}>

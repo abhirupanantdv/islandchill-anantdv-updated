@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { frappe } from '../services/frappe';
 
-export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
+export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, workOrders = [] }) {
   const [injuredName, setInjuredName] = useState('');
   const [sex, setSex] = useState('Male');
   const [address, setAddress] = useState('');
@@ -12,6 +12,7 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
   const [experienceDays, setExperienceDays] = useState('');
   const [relationship, setRelationship] = useState('Employee');
   const [incidentTime, setIncidentTime] = useState('');
+  const [workOrder, setWorkOrder] = useState('');
   const [incidentType, setIncidentType] = useState('Accident');
   const [incidentAgency, setIncidentAgency] = useState('');
   const [incidentLocation, setIncidentLocation] = useState('');
@@ -57,6 +58,8 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
       experience: `${experienceYears || 0}y ${experienceMonths || 0}m ${experienceDays || 0}d`,
       relationship,
       incidentTime,
+      work_order: workOrder,
+      workOrder: workOrder,
       incidentType,
       incidentAgency,
       incidentLocation,
@@ -176,10 +179,21 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
             {/* Section 2: Details of Incident */}
             <div>
               <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', marginBottom: '12px', color: 'var(--accent)', fontSize: '13px' }}>2. Incident / Disease Details</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date and Time of Occurrence *</label>
                   <input type="datetime-local" className="form-input" required min={new Date().toISOString().slice(0, 16)} value={incidentTime} onChange={e => setIncidentTime(e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Work Order</label>
+                  <select className="form-input" value={workOrder} onChange={e => setWorkOrder(e.target.value)}>
+                    <option value="">-- Select Work Order --</option>
+                    {(workOrders || []).map(wo => {
+                      const woName = typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || '');
+                      const itemDesc = typeof wo === 'object' && wo.production_item ? ` (${wo.production_item})` : '';
+                      return <option key={woName} value={woName}>{woName}{itemDesc}</option>;
+                    })}
+                  </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Type of Incident</label>
@@ -338,10 +352,11 @@ export function SafetyIncidentFormModal({ onClose, onSubmit, saving, employeeLis
 }
 
 
-export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, workOrders = [] }) {
   const [injuredName, setInjuredName] = useState('');
   const [time, setTime] = useState(new Date().toTimeString().slice(0, 5));
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [workOrder, setWorkOrder] = useState('');
   const [injuryType, setInjuryType] = useState('Minor');
   const [cause, setCause] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -356,6 +371,8 @@ export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handl
       injuredPerson: injuredName,
       date,
       time,
+      work_order: workOrder,
+      workOrder: workOrder,
       injuryType,
       incidentNature: injuryType,
       cause,
@@ -380,7 +397,7 @@ export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handl
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date</label>
                 <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
@@ -388,6 +405,17 @@ export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handl
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Time</label>
                 <input type="time" className="form-input" required value={time} onChange={e => setTime(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Work Order</label>
+                <select className="form-input" value={workOrder} onChange={e => setWorkOrder(e.target.value)}>
+                  <option value="">-- Select Work Order --</option>
+                  {(workOrders || []).map(wo => {
+                    const woName = typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || '');
+                    const itemDesc = typeof wo === 'object' && wo.production_item ? ` (${wo.production_item})` : '';
+                    return <option key={woName} value={woName}>{woName}{itemDesc}</option>;
+                  })}
+                </select>
               </div>
             </div>
 
@@ -503,9 +531,10 @@ export function SafetyFirstAidFormModal({ onClose, onSubmit, employeeList, handl
 }
 
 
-export function SafetySwabFormModal({ onClose, onSubmit, saving, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
+export function SafetySwabFormModal({ onClose, onSubmit, saving, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, workOrders = [] }) {
   const [analyst, setAnalyst] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [workOrder, setWorkOrder] = useState('');
   const [swabData, setSwabData] = useState({
     filtration: { yeast: '', mould: '', hpc: '' },
     infeed: { yeast: '', mould: '', hpc: '' },
@@ -550,6 +579,8 @@ export function SafetySwabFormModal({ onClose, onSubmit, saving, employeeList, h
     onSubmit({
       analyst,
       date,
+      work_order: workOrder,
+      workOrder: workOrder,
       swabData,
       operator: analyst,
       supervisor: 'Operations Manager',
@@ -570,7 +601,7 @@ export function SafetySwabFormModal({ onClose, onSubmit, saving, employeeList, h
         <form onSubmit={handleSubmitForm}>
           <div className="modal-content" style={{ maxHeight: '75vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.5fr', gap: '12px' }}>
               <div style={{ position: 'relative' }}>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Analyst *</label>
                 <input
@@ -604,6 +635,17 @@ export function SafetySwabFormModal({ onClose, onSubmit, saving, employeeList, h
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Date of Swab *</label>
                 <input type="date" className="form-input" required min={new Date().toISOString().split('T')[0]} value={date} onChange={e => setDate(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Work Order</label>
+                <select className="form-input" value={workOrder} onChange={e => setWorkOrder(e.target.value)}>
+                  <option value="">-- Select Work Order --</option>
+                  {(workOrders || []).map(wo => {
+                    const woName = typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || '');
+                    const itemDesc = typeof wo === 'object' && wo.production_item ? ` (${wo.production_item})` : '';
+                    return <option key={woName} value={woName}>{woName}{itemDesc}</option>;
+                  })}
+                </select>
               </div>
             </div>
 
@@ -721,6 +763,12 @@ export function SafetyReportViewerModal({ record, onClose, setEmailModal }) {
             <div>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>DOCUMENT TYPE</span>
               <strong style={{ fontSize: '14px', color: 'var(--accent)' }}>{record.type}</strong>
+            </div>
+            <div>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>WORK ORDER</span>
+              <strong style={{ fontSize: '13px', color: (record.work_order || record.workOrder) ? 'var(--primary)' : 'var(--text-muted)' }}>
+                {record.work_order || record.workOrder || '—'}
+              </strong>
             </div>
             <div>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>LOGGED TIMESTAMP</span>
@@ -920,8 +968,9 @@ export function SafetyReportViewerModal({ record, onClose, setEmailModal }) {
 // Sub-components for Laboratory & QC Tab
 
 
-export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
+export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, workOrders = [] }) {
   const [name, setName] = useState('');
+  const [workOrder, setWorkOrder] = useState('');
   const [reasonForVisit, setReasonForVisit] = useState('Audit');
   const [visitingAreas, setVisitingAreas] = useState('');
   const [comments, setComments] = useState('');
@@ -976,9 +1025,19 @@ export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, han
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit({
-      name, reasonForVisit, visitingAreas, comments, date, signature: signature ? 'Checked' : 'Unsigned',
-      inductorName, inductorSignature: inductorSignature ? 'Checked' : 'Unsigned', inductorDate,
-      approvedByName, approvedBySign: approvedBySign ? 'Checked' : 'Unsigned',
+      name,
+      work_order: workOrder,
+      workOrder: workOrder,
+      reasonForVisit,
+      visitingAreas,
+      comments,
+      date,
+      signature: signature ? 'Checked' : 'Unsigned',
+      inductorName,
+      inductorSignature: inductorSignature ? 'Checked' : 'Unsigned',
+      inductorDate,
+      approvedByName,
+      approvedBySign: approvedBySign ? 'Checked' : 'Unsigned',
       checklist
     });
   };
@@ -995,7 +1054,7 @@ export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, han
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-content" style={{ maxHeight: '70vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
               <div style={{ position: 'relative' }}>
                 <label>Name of Visitor/Employee/Contractor *</label>
                 <input
@@ -1014,6 +1073,17 @@ export function SafetyForm37Modal({ onClose, onSubmit, saving, employeeList, han
                     ))}
                   </div>
                 )}
+              </div>
+              <div>
+                <label>Work Order</label>
+                <select className="form-input" value={workOrder} onChange={e => setWorkOrder(e.target.value)}>
+                  <option value="">-- Select Work Order --</option>
+                  {(workOrders || []).map(wo => {
+                    const woName = typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || '');
+                    const itemDesc = typeof wo === 'object' && wo.production_item ? ` (${wo.production_item})` : '';
+                    return <option key={woName} value={woName}>{woName}{itemDesc}</option>;
+                  })}
+                </select>
               </div>
               <div>
                 <label>Reason for Visit (audit, tour, others)</label>
@@ -1163,7 +1233,8 @@ export default function SafetyTab({
   safetyPage,
   setSafetyPage,
   setActiveSafetyForm,
-  setViewingSafetyRecord
+  setViewingSafetyRecord,
+  workOrders = []
 }) {
   // Safety dashboard cards calculations
   const getDaysSinceLastIncident = () => {
@@ -1394,6 +1465,7 @@ export default function SafetyTab({
                   <tr>
                     <th>Log ID</th>
                     <th>Form Type</th>
+                    <th>Work Order</th>
                     <th>Target Person / Analyst</th>
                     <th>Event Summary / Area Status</th>
                     <th>Logged By / Witness</th>
@@ -1433,6 +1505,9 @@ export default function SafetyTab({
                           }}>
                             {rec.type}
                           </span>
+                        </td>
+                        <td style={{ fontWeight: '600', color: (rec.work_order || rec.workOrder) ? 'var(--primary)' : 'var(--text-muted)' }}>
+                          {rec.work_order || rec.workOrder || '—'}
                         </td>
                         <td style={{ fontWeight: '600' }}>{target}</td>
                         <td style={{ fontStyle: 'italic' }}>{summary}</td>

@@ -952,7 +952,7 @@ def build_user_activity_email(
 
 		"<p>"
 		"Please find the "
-		"<b>User Activity Summary</b> "
+		"<b>User Activity Summary For Islandchill</b> "
 		"for <b>"
 		+ html.escape(date_label)
 		+ "</b>."

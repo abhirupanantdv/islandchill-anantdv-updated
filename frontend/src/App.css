@@ -341,101 +341,190 @@
   gap: 24px;
 }
 
-/* Process Flow Cards (linked with arrows) */
+/* Process Flow Cards (Shop Floor Pipeline) */
 .flow-container {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+  width: 100%;
   margin-bottom: 8px;
 }
 
 .flow-card {
-  flex: 1;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 16px 20px;
+  padding: 16px;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  min-height: 125px;
 }
 
 .flow-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  border-color: var(--info);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+
+.flow-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flow-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .flow-icon-container {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background-color: rgba(245, 158, 11, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: rgba(245, 158, 11, 0.12);
   color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .flow-card.blue .flow-icon-container {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(59, 130, 246, 0.12);
   color: var(--info);
 }
 
 .flow-card.green .flow-icon-container {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: rgba(16, 185, 129, 0.12);
   color: var(--success);
 }
 
-.flow-details h3 {
-  font-size: 13px;
+.flow-card.purple .flow-icon-container {
+  background-color: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.flow-stage-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
   color: var(--text-muted);
-  margin-bottom: 2px;
-  font-weight: 500;
+}
+
+.flow-next-arrow {
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-weight: bold;
+}
+
+.flow-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flow-card-body h3 {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  margin: 0;
 }
 
 .flow-value {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.2;
   font-family: var(--heading);
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.flow-status {
-  font-size: 12px;
-  margin-top: 4px;
+.flow-badges-container {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  margin-top: 4px;
+}
+
+.flow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 500;
-}
-
-.flow-arrow {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.04);
   color: var(--text-muted);
-  font-size: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
 }
 
-/* Metric Widgets Row */
+.flow-chip.info {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--info);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.flow-chip.success {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.flow-chip.warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.flow-chip.danger {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Metric Widgets Row - 4 Columns matching flow-container precisely */
 .metrics-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+  width: 100%;
 }
 
 .metric-widget {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  min-height: 115px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.metric-widget:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 
 .metric-widget-header {
@@ -446,37 +535,69 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .metric-widget-header .icon {
   font-size: 14px;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .metric-value-container {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .metric-val {
   font-size: 20px;
   font-weight: 700;
   font-family: var(--heading);
+  white-space: nowrap;
 }
 
 .metric-change {
   font-size: 11px;
   font-weight: 600;
-  display: flex;
+  white-space: nowrap;
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 4px;
 }
 
-.metric-change.up { color: var(--success); }
-.metric-change.down { color: var(--danger); }
+.metric-change.up {
+  color: var(--success);
+  background-color: rgba(16, 185, 129, 0.08);
+}
+
+.metric-change.down {
+  color: var(--danger);
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.metric-change.neutral {
+  color: var(--text-muted);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 1200px) {
+  .flow-container,
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .flow-container,
+  .metrics-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 /* Live Production Lines Section */
 .live-lines-section {

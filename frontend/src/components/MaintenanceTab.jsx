@@ -48,7 +48,7 @@ const isDatetimeField = (fieldtype, fieldname, label) => {
   );
 };
 
-export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, workOrders = [] }) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
     checked_by: '',
@@ -76,13 +76,14 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
         if (!fields || fields.length === 0) {
           fields = [
             { idx: 1, fieldname: 'date', label: 'Date', fieldtype: 'Date' },
-            { idx: 2, fieldname: 'checked_by', label: 'Checked By (Chemist)', fieldtype: 'Link', options: 'Employee' },
-            { idx: 3, fieldname: 'verified_by', label: 'Verified By (Supervisor)', fieldtype: 'Link', options: 'Employee' },
-            { idx: 4, fieldname: 'product_desc', label: 'Product Description', fieldtype: 'Data' },
-            { idx: 5, fieldname: 'weight_1', label: 'Weight Check 1 (g)', fieldtype: 'Float' },
-            { idx: 6, fieldname: 'weight_2', label: 'Weight Check 2 (g)', fieldtype: 'Float' },
-            { idx: 7, fieldname: 'overall_comments', label: 'Overall Comments / Remarks', fieldtype: 'Small Text' },
-            { idx: 8, fieldname: 'weight_check_table', label: 'Weight Check Table', fieldtype: 'Table', options: 'Weight Check Table' }
+            { idx: 2, fieldname: 'work_order', label: 'Work Order', fieldtype: 'Link', options: 'Work Order' },
+            { idx: 3, fieldname: 'checked_by', label: 'Checked By (Chemist)', fieldtype: 'Link', options: 'Employee' },
+            { idx: 4, fieldname: 'verified_by', label: 'Verified By (Supervisor)', fieldtype: 'Link', options: 'Employee' },
+            { idx: 5, fieldname: 'product_desc', label: 'Product Description', fieldtype: 'Data' },
+            { idx: 6, fieldname: 'weight_1', label: 'Weight Check 1 (g)', fieldtype: 'Float' },
+            { idx: 7, fieldname: 'weight_2', label: 'Weight Check 2 (g)', fieldtype: 'Float' },
+            { idx: 8, fieldname: 'overall_comments', label: 'Overall Comments / Remarks', fieldtype: 'Small Text' },
+            { idx: 9, fieldname: 'weight_check_table', label: 'Weight Check Table', fieldtype: 'Table', options: 'Weight Check Table' }
           ];
         }
 
@@ -182,7 +183,6 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
     f.fieldtype !== 'Column Break' &&
     f.fieldtype !== 'Fold' &&
     f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
     f.hidden !== 1
   );
   const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
@@ -337,7 +337,10 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
 
                       const empOpts = isEmpTarget ? (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`) : [];
                       const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts]));
+                      const woOpts = (field.fieldname === 'work_order' || targetDoctype === 'Work Order')
+                        ? (workOrders || []).map(wo => typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || ''))
+                        : [];
+                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts, ...woOpts]));
                       const datalistId = `dl_m88_${sKey}`;
 
                       return (
@@ -507,7 +510,7 @@ export function MaintForm88DynamicModal({ onClose, onSubmit, employeeList, handl
   );
 }
 
-export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, workOrders = [] }) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
     time: new Date().toTimeString().slice(0, 5),
@@ -649,7 +652,6 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
     f.fieldtype !== 'Column Break' &&
     f.fieldtype !== 'Fold' &&
     f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
     f.hidden !== 1
   );
   const tableFields = fieldsList.filter(f => f.fieldtype === 'Table');
@@ -786,7 +788,10 @@ export function MaintForm107Modal({ onClose, onSubmit, employeeList, handleSearc
 
                       const empOpts = isEmpTarget ? (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`) : [];
                       const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts]));
+                      const woOpts = (field.fieldname === 'work_order' || targetDoctype === 'Work Order')
+                        ? (workOrders || []).map(wo => typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || ''))
+                        : [];
+                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts, ...woOpts]));
                       const datalistId = `dl_m107_${sKey}`;
 
                       return (
@@ -1106,8 +1111,9 @@ export function MaintWeightCheckModal({ onClose, onSubmit, employeeList, handleS
 }
 
 
-export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField }) {
+export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, workOrders = [] }) {
   const [requestorName, setRequestorName] = useState('');
+  const [workOrder, setWorkOrder] = useState('');
   const [machineName, setMachineName] = useState('');
   const [breakdownDate, setBreakdownDate] = useState(new Date().toISOString().slice(0, 10));
   const [breakdownTime, setBreakdownTime] = useState('10:00');
@@ -1131,7 +1137,10 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit({
-      requestorName, machineName, breakdownDate, breakdownTime, breakdownDesc, checkedBySV, approvedByFM,
+      requestorName,
+      work_order: workOrder,
+      workOrder: workOrder,
+      machineName, breakdownDate, breakdownTime, breakdownDesc, checkedBySV, approvedByFM,
       receivedBy, workAssessment, workCarriedOut, partsUsed, dateRepaired, timeRepaired, repairedDoneBy, approvedByMM,
       checkedByProdSV, approvedByProdFM, overallComments
     });
@@ -1153,7 +1162,7 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
             {/* Section 1 */}
             <div style={{ border: '1px solid var(--border-color)', padding: '12px', borderRadius: '8px' }}>
               <h4 style={{ color: 'var(--accent)', marginBottom: '8px', fontWeight: '700' }}>Section 1: To be filled-up by the Requestor</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '8px' }}>
                 <div style={{ position: 'relative' }}>
                   <label>Requestor Name *</label>
                   <input
@@ -1172,6 +1181,17 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
                       ))}
                     </div>
                   )}
+                </div>
+                <div>
+                  <label>Work Order</label>
+                  <select className="form-input" value={workOrder} onChange={e => setWorkOrder(e.target.value)}>
+                    <option value="">-- Select Work Order --</option>
+                    {(workOrders || []).map(wo => {
+                      const woName = typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || '');
+                      const itemDesc = typeof wo === 'object' && wo.production_item ? ` (${wo.production_item})` : '';
+                      return <option key={woName} value={woName}>{woName}{itemDesc}</option>;
+                    })}
+                  </select>
                 </div>
                 <div>
                   <label>Machine Name & No. *</label>
@@ -1394,7 +1414,7 @@ export function MaintBreakdownModal({ onClose, onSubmit, employeeList, handleSea
   );
 }
 
-export function MaintPMRequestModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving }) {
+export function MaintPMRequestModal({ onClose, onSubmit, employeeList, handleSearchEmployees, showEmployeeDropdown, setShowEmployeeDropdown, activeSearchField, saving, workOrders = [] }) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().slice(0, 10),
     maintenance_type: 'Preventive',
@@ -1419,16 +1439,17 @@ export function MaintPMRequestModal({ onClose, onSubmit, employeeList, handleSea
         if (!fields || fields.length === 0) {
           fields = [
             { idx: 1, fieldname: 'request_date', label: 'Request Date', fieldtype: 'Date', reqd: 1 },
-            { idx: 2, fieldname: 'title', label: 'Maintenance Title / Subject', fieldtype: 'Data', reqd: 1 },
-            { idx: 3, fieldname: 'equipment', label: 'Equipment / Machine', fieldtype: 'Link', options: 'Equipment', reqd: 1 },
-            { idx: 4, fieldname: 'maintenance_type', label: 'Maintenance Type', fieldtype: 'Select', options: 'Preventive\nRoutine\nInspection\nCalibration\nOverhaul\nBreakdown Action' },
-            { idx: 5, fieldname: 'priority', label: 'Priority / Urgency', fieldtype: 'Select', options: 'Low\nMedium\nHigh\nUrgent' },
-            { idx: 6, fieldname: 'requested_by', label: 'Requested By', fieldtype: 'Link', options: 'Employee', reqd: 1 },
-            { idx: 7, fieldname: 'assigned_to', label: 'Assigned Technician / Lead', fieldtype: 'Link', options: 'Employee' },
-            { idx: 8, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Draft\nPending Approval\nIn Progress\nCompleted\nCancelled' },
-            { idx: 9, fieldname: 'scheduled_date', label: 'Scheduled Date & Time', fieldtype: 'Datetime' },
-            { idx: 10, fieldname: 'description', label: 'Detailed Problem / Maintenance Scope Description', fieldtype: 'Small Text', reqd: 1 },
-            { idx: 11, fieldname: 'action_taken', label: 'Action Taken / Execution Remarks', fieldtype: 'Small Text' }
+            { idx: 2, fieldname: 'work_order', label: 'Work Order', fieldtype: 'Link', options: 'Work Order' },
+            { idx: 3, fieldname: 'title', label: 'Maintenance Title / Subject', fieldtype: 'Data', reqd: 1 },
+            { idx: 4, fieldname: 'equipment', label: 'Equipment / Machine', fieldtype: 'Link', options: 'Equipment', reqd: 1 },
+            { idx: 5, fieldname: 'maintenance_type', label: 'Maintenance Type', fieldtype: 'Select', options: 'Preventive\nRoutine\nInspection\nCalibration\nOverhaul\nBreakdown Action' },
+            { idx: 6, fieldname: 'priority', label: 'Priority / Urgency', fieldtype: 'Select', options: 'Low\nMedium\nHigh\nUrgent' },
+            { idx: 7, fieldname: 'requested_by', label: 'Requested By', fieldtype: 'Link', options: 'Employee', reqd: 1 },
+            { idx: 8, fieldname: 'assigned_to', label: 'Assigned Technician / Lead', fieldtype: 'Link', options: 'Employee' },
+            { idx: 9, fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Draft\nPending Approval\nIn Progress\nCompleted\nCancelled' },
+            { idx: 10, fieldname: 'scheduled_date', label: 'Scheduled Date & Time', fieldtype: 'Datetime' },
+            { idx: 11, fieldname: 'description', label: 'Detailed Problem / Maintenance Scope Description', fieldtype: 'Small Text', reqd: 1 },
+            { idx: 12, fieldname: 'action_taken', label: 'Action Taken / Execution Remarks', fieldtype: 'Small Text' }
           ];
         }
 
@@ -1527,7 +1548,6 @@ export function MaintPMRequestModal({ onClose, onSubmit, employeeList, handleSea
     f.fieldtype !== 'Column Break' &&
     f.fieldtype !== 'Fold' &&
     f.fieldname !== 'amended_from' &&
-    f.fieldname !== 'work_order' &&
     f.hidden !== 1
   );
   const tableFields = fieldsList.filter(f => f.fieldtype === 'Table' && f.hidden !== 1);
@@ -1673,7 +1693,10 @@ export function MaintPMRequestModal({ onClose, onSubmit, employeeList, handleSea
 
                       const empOpts = isEmpTarget ? (employeeList || []).map(e => `${e.employee_name || e.name} (${e.name})`) : [];
                       const fetchedOpts = linkOptionsMap[targetDoctype] || [];
-                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts]));
+                      const woOpts = (field.fieldname === 'work_order' || targetDoctype === 'Work Order')
+                        ? (workOrders || []).map(wo => typeof wo === 'string' ? wo : (wo.name || wo.work_order || wo.id || ''))
+                        : [];
+                      const combinedOpts = Array.from(new Set([...empOpts, ...fetchedOpts, ...woOpts]));
                       const datalistId = `dl_pmr_${sKey}`;
 
                       return (
