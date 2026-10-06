@@ -26,7 +26,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/islandchill/css/islandchill.css"
-# app_include_js = "/assets/islandchill/js/islandchill.js"
+app_include_js = "/assets/islandchill/js/portal_switch.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/islandchill/css/islandchill.css"

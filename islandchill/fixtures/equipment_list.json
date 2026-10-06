@@ -110,17 +110,6 @@
   "show_on_app": 0
  },
  {
-  "area": "Utilities",
-  "docstatus": 0,
-  "doctype": "Equipment List",
-  "equipments": "Glycol Chilling Plant & Grasso Refrigerator",
-  "filling_line_1": 1,
-  "filling_line_2": 1,
-  "modified": "2026-09-25 20:59:27.736121",
-  "name": "Glycol Chilling Plant & Grasso Refrigerator",
-  "show_on_app": 0
- },
- {
   "area": "Bottling Line",
   "docstatus": 0,
   "doctype": "Equipment List",
@@ -151,6 +140,17 @@
   "filling_line_2": 1,
   "modified": "2026-09-25 20:52:25.556692",
   "name": "Air Compressor",
+  "show_on_app": 0
+ },
+ {
+  "area": "Utilities",
+  "docstatus": 0,
+  "doctype": "Equipment List",
+  "equipments": "Glycol Chilling Plant & Grasso Refrigerator",
+  "filling_line_1": 1,
+  "filling_line_2": 1,
+  "modified": "2026-09-25 20:59:27.736121",
+  "name": "Glycol Chilling Plant & Grasso Refrigerator",
   "show_on_app": 0
  }
 ]

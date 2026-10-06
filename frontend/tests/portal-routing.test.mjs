@@ -3,29 +3,47 @@ import test from 'node:test';
 
 const MES = 'IslandChill MES User';
 const ADMIN = 'IslandChill Admin User';
-const resolve = async (roles, selection) => {
-  const { resolveLoginPortal } = await import('../src/services/portalRouting.js');
-  return resolveLoginPortal(roles, selection);
+const routing = async () => {
+  return import('../src/services/portalRouting.js');
 };
 
-test('users with both roles can choose either portal or request the chooser', async () => {
-  assert.equal(await resolve([MES, ADMIN], 'mes'), 'mes');
-  assert.equal(await resolve([MES, ADMIN], 'admin'), 'admin');
-  assert.equal(await resolve([MES, ADMIN], 'auto'), 'choose');
+test('users with both roles always enter ERPNext Desk after login', async () => {
+  const { resolveLoginPortal } = await routing();
+  assert.equal(resolveLoginPortal([MES, ADMIN]), 'admin');
 });
 
-test('automatic routing sends single-role users to their assigned portal', async () => {
-  assert.equal(await resolve([MES], 'auto'), 'mes');
-  assert.equal(await resolve([ADMIN], 'auto'), 'admin');
+test('single-role users enter only their assigned portal', async () => {
+  const { resolveLoginPortal } = await routing();
+  assert.equal(resolveLoginPortal([MES]), 'mes');
+  assert.equal(resolveLoginPortal([ADMIN]), 'admin');
 });
 
-test('selection cannot grant a missing portal role', async () => {
-  assert.equal(await resolve([MES], 'admin'), 'denied');
-  assert.equal(await resolve([ADMIN], 'mes'), 'denied');
-  for (const selection of ['auto', 'mes', 'admin']) {
-    assert.equal(await resolve([], selection), 'denied');
-    assert.equal(await resolve(['System Manager'], selection), 'denied');
-  }
-  assert.equal(await resolve(undefined, 'auto'), 'denied');
-  assert.equal(await resolve([MES, ADMIN], 'invalid'), 'denied');
+test('users without an IslandChill portal role are denied', async () => {
+  const { resolveLoginPortal } = await routing();
+  assert.equal(resolveLoginPortal([]), 'denied');
+  assert.equal(resolveLoginPortal(['System Manager']), 'denied');
+  assert.equal(resolveLoginPortal(undefined), 'denied');
+});
+
+test('portal switching is available only when both roles are assigned', async () => {
+  const { canSwitchPortals } = await routing();
+  assert.equal(canSwitchPortals([MES, ADMIN]), true);
+  assert.equal(canSwitchPortals([MES]), false);
+  assert.equal(canSwitchPortals([ADMIN]), false);
+  assert.equal(canSwitchPortals([]), false);
+  assert.equal(canSwitchPortals(undefined), false);
+});
+
+test('an explicit MES switch lets dual-role users enter MES', async () => {
+  const { resolvePortalVisit } = await routing();
+  assert.equal(resolvePortalVisit([MES, ADMIN], 'mes'), 'mes');
+  assert.equal(resolvePortalVisit([MES, ADMIN]), 'admin');
+});
+
+test('direct IslandChill visits keep MES-only users out of Desk and return admin-only users to Desk', async () => {
+  const { resolvePortalVisit } = await routing();
+  assert.equal(resolvePortalVisit([MES]), 'mes');
+  assert.equal(resolvePortalVisit([ADMIN]), 'admin');
+  assert.equal(resolvePortalVisit([ADMIN], 'mes'), 'admin');
+  assert.equal(resolvePortalVisit([]), 'denied');
 });

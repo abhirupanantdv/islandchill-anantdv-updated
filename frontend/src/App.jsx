@@ -5,7 +5,8 @@ import { generateSecret, verifyTOTP } from './services/totp';
 import SupportModule from './modules/SupportModule';
 import HRMSModule from './modules/HRMSModule';
 import { CONFIG } from './config';
-import { resolveLoginPortal } from './services/portalRouting';
+import { canSwitchPortals, resolveLoginPortal, resolvePortalVisit } from './services/portalRouting';
+import { buildStockEntryItems, getStockEntryShortages } from './services/stockEntry';
 import './App.css';
 import logo from "../public/logo.png";
 
@@ -30,17 +31,259 @@ import line2 from "../public/line2.png"
 
 
 const WORKFLOW_STAGES = [
-  { id: 'extraction', name: 'Water Extraction', icon: '🚰', dept: 'Utilities', desc: 'Artesian water drawn from natural Fiji aquifer.', metrics: 'Flow: 120.00 L/min', color: '#0ea5e9', colorRgb: '14, 165, 233', tagline: '100% PURE FIJI SOURCE' },
-  { id: 'mixing', name: 'Syrup Mixing', icon: '🧪', dept: 'Production', desc: 'Mixing artesian water, sugars, and concentrates.', metrics: 'Temp: 18.00°C', color: '#f59e0b', colorRgb: '245, 158, 11', tagline: 'MICRO-DIALED CONCENTRATE' },
-  { id: 'testing', name: 'Lab QA Testing', icon: '🔬', dept: 'Quality Control', desc: 'Testing pH, Brix value, and microbiological safety.', metrics: 'pH: 6.80 • Brix: 11.20%', color: '#8b5cf6', colorRgb: '139, 92, 246', tagline: 'LAB INSPECTION APPROVED' },
-  { id: 'blowing', name: 'Blowing / Prep', icon: '🍾', dept: 'Packaging Prep', desc: 'Blowing preforms to bottles or washing cans.', metrics: 'Output: 240.00 bpm', color: '#6366f1', colorRgb: '99, 102, 241', tagline: 'STERILE HIGH-SPEED FORMING' },
-  { id: 'filling', name: 'Filling & Sealing', icon: '⚡', dept: 'Bottling Line', desc: 'Monobloc rotary filling and capping under CO2.', metrics: 'Fill rate: 12,000.00 cph', color: '#ef4444', colorRgb: '239, 68, 68', tagline: 'HERMETIC CO2 PRESSURE FILL' },
-  { id: 'warmer', name: 'Warmer Tunnel', icon: '♨️', dept: 'Utilities', desc: 'Warming bottles to prevent condensation.', metrics: 'Temp: 32.00°C', color: '#f97316', colorRgb: '249, 115, 22', tagline: 'CONDENSATION PREVENTED' },
-  { id: 'labeling', name: 'Laser labeling', icon: '🏷️', dept: 'Packaging', desc: 'High-speed laser label application & barcode print.', metrics: 'Laser power: 98.00%', color: '#06b6d4', colorRgb: '6, 182, 212', tagline: 'LASER-PRINTED BARCODES' },
-  { id: 'final_qc', name: 'Final Inspection', icon: '👁️', dept: 'Quality Control', desc: 'Vision inspection for level checks and seals.', metrics: 'Rejects: 0.02%', color: '#d946ef', colorRgb: '217, 70, 239', tagline: 'VISION SCANNER QC PASS' },
-  { id: 'packing', name: 'Hand Packing', icon: '📦', dept: 'Packing Area', desc: 'Cartoning products into box cases (12/24 units).', metrics: 'Output: 500.00 cases/hr', color: '#ec4899', colorRgb: '236, 72, 153', tagline: 'ROBOTIC CARTON PACK' },
-  { id: 'palletising', name: 'Palletising', icon: '🏗️', dept: 'Logistics', desc: 'Stacking cartons on pallets & shrink wrapping.', metrics: 'Load: 60.00 cases/pal', color: '#14b8a6', colorRgb: '20, 184, 166', tagline: 'STRETCH-WRAPPED LOAD' },
-  { id: 'dispatch', name: 'Dispatch Store', icon: '🚛', dept: 'Warehouse', desc: 'Inventory receipt syncing to ERPNext stores.', metrics: 'Status: Sync Complete', color: '#10b981', colorRgb: '16, 185, 129', tagline: 'ERP STORE SYNC COMPLETE' }
+  {
+    id: 'extraction',
+    name: 'Water Extraction',
+    icon: '💧',
+    dept: 'Utilities',
+    desc: 'Extraction and initial treatment of pure Fiji water from natural source. Includes filtration, UV treatment and storage in main tanks.',
+    metrics: 'Flow: 12,500.00 L/hr',
+    telemetry: [
+      { icon: '🔄', label: 'Flow Rate', value: '12,500 L/hr' },
+      { icon: '💧', label: 'Water Quality', value: 'pH 7.2' },
+      { icon: '🌡️', label: 'Temperature', value: '18°C' }
+    ],
+    activities: [
+      'Water intake & filtration',
+      'UV treatment',
+      'Quality monitoring',
+      'Storage tank filling',
+      'System pressure check'
+    ],
+    color: '#0ea5e9',
+    colorRgb: '14, 165, 233',
+    tagline: '100% PURE FIJI SOURCE'
+  },
+  {
+    id: 'mixing',
+    name: 'Syrup Mixing',
+    icon: '🧪',
+    dept: 'Production',
+    desc: 'Precision blending of artesian water with liquid sugar, fruit concentrates, and natural flavors in stainless steel mixing vats.',
+    metrics: 'Temp: 18.00°C • Brix: 11.2%',
+    telemetry: [
+      { icon: '🔄', label: 'Mix Speed', value: '850 RPM' },
+      { icon: '🧪', label: 'Brix Level', value: '11.2%' },
+      { icon: '🌡️', label: 'Temperature', value: '18°C' }
+    ],
+    activities: [
+      'Syrup dosing & metering',
+      'High-shear agitation',
+      'Brix & pH calibration',
+      'Temperature regulation',
+      'Inline fine filtration'
+    ],
+    color: '#10b981',
+    colorRgb: '16, 185, 129',
+    tagline: 'MICRO-DIALED CONCENTRATE'
+  },
+  {
+    id: 'testing',
+    name: 'Lab QA Testing',
+    icon: '🔬',
+    dept: 'Quality Control',
+    desc: 'Comprehensive microbiological SPC agar culture, TCC/E-Coli testing, chemical analysis, and retention sample verification.',
+    metrics: 'pH: 6.80 • Brix: 11.20%',
+    telemetry: [
+      { icon: '🧫', label: 'Micro Status', value: '0 CFU/ml' },
+      { icon: '🧪', label: 'pH Value', value: '6.80' },
+      { icon: '⚡', label: 'Conductivity', value: '142 µS/cm' }
+    ],
+    activities: [
+      'Microbiological plating',
+      'Incubator temperature log',
+      'Conductivity & pH check',
+      'Organoleptic taste testing',
+      'COA approval & sign-off'
+    ],
+    color: '#f59e0b',
+    colorRgb: '245, 158, 11',
+    tagline: 'LAB INSPECTION APPROVED'
+  },
+  {
+    id: 'blowing',
+    name: 'Blowing / Prep',
+    icon: '🍾',
+    dept: 'Packaging Prep',
+    desc: 'High-speed rotary stretch blow molding of preforms into sterile 1.5L / 500ml PET bottles and automated bottle air washing.',
+    metrics: 'Output: 240.00 bpm',
+    telemetry: [
+      { icon: '⚡', label: 'Blowing Pressure', value: '38 bar' },
+      { icon: '🔄', label: 'Output Rate', value: '14,000 bph' },
+      { icon: '🌡️', label: 'Preform Temp', value: '115°C' }
+    ],
+    activities: [
+      'Preform neck inspection',
+      'Infrared heating tunnel',
+      'Stretch blow molding',
+      'Air neck transport conveyor',
+      'Ionized air bottle rinsing'
+    ],
+    color: '#8b5cf6',
+    colorRgb: '139, 92, 246',
+    tagline: 'STERILE HIGH-SPEED FORMING'
+  },
+  {
+    id: 'filling',
+    name: 'Filling & Sealing',
+    icon: '⚡',
+    dept: 'Bottling Line',
+    desc: 'Isobaric counter-pressure monobloc filling under sterile CO2 atmosphere with immediate automatic 28mm capping and sealing.',
+    metrics: 'Fill rate: 12,000.00 cph',
+    telemetry: [
+      { icon: '⚡', label: 'Fill Speed', value: '12,000 cph' },
+      { icon: '💨', label: 'CO2 Pressure', value: '3.4 bar' },
+      { icon: '🎯', label: 'Fill Accuracy', value: '99.9%' }
+    ],
+    activities: [
+      'Isobaric bottle pressurization',
+      'Precision valve filling',
+      'CO2 head flushing',
+      'Rotary capper application',
+      'Cap torque verification'
+    ],
+    color: '#ef4444',
+    colorRgb: '239, 68, 68',
+    tagline: 'HERMETIC CO2 PRESSURE FILL'
+  },
+  {
+    id: 'warmer',
+    name: 'Warmer Tunnel',
+    icon: '♨️',
+    dept: 'Utilities',
+    desc: 'Multi-zone spray warming tunnel to elevate bottle temperature to ambient, preventing surface moisture condensation.',
+    metrics: 'Temp: 32.00°C',
+    telemetry: [
+      { icon: '🌡️', label: 'Tunnel Temp', value: '32°C' },
+      { icon: '🕒', label: 'Retention Time', value: '12 min' },
+      { icon: '🚿', label: 'Pump Flow', value: '45 m³/h' }
+    ],
+    activities: [
+      'Multi-stage water cascade',
+      'Temperature gradient ramp',
+      'Blower air knife drying',
+      'Surface dryness check',
+      'Energy recovery recirculation'
+    ],
+    color: '#f97316',
+    colorRgb: '249, 115, 22',
+    tagline: 'CONDENSATION PREVENTED'
+  },
+  {
+    id: 'labeling',
+    name: 'Laser Labeling',
+    icon: '🏷️',
+    dept: 'Packaging',
+    desc: 'High-speed roll-fed OPP sleeve label application, steam shrink tunnel shaping, and high-precision CO2 laser date & lot coding.',
+    metrics: 'Laser power: 98.00%',
+    telemetry: [
+      { icon: '⚡', label: 'Laser Power', value: '98%' },
+      { icon: '🎯', label: 'Label Alignment', value: '100%' },
+      { icon: '🏷️', label: 'Feed Speed', value: '12,000 cph' }
+    ],
+    activities: [
+      'Rotary sleeve positioning',
+      'Steam shrink sleeve tunnel',
+      'Laser batch/date printing',
+      'OCR barcode verification',
+      'Label tension control'
+    ],
+    color: '#ec4899',
+    colorRgb: '236, 72, 153',
+    tagline: 'LASER-PRINTED BARCODES'
+  },
+  {
+    id: 'final_qc',
+    name: 'Final Inspection',
+    icon: '🔍',
+    dept: 'Quality Control',
+    desc: 'High-resolution optical camera vision system inspecting fill levels, cap position, label alignment, and code clarity.',
+    metrics: 'Rejects: 0.02%',
+    telemetry: [
+      { icon: '👁️', label: 'Vision Pass Rate', value: '99.98%' },
+      { icon: '🚫', label: 'Rejects Count', value: '2 bottles' },
+      { icon: '⚡', label: 'Camera Speed', value: '250 fps' }
+    ],
+    activities: [
+      'Infrared liquid level scan',
+      'Cap tilt & seal check',
+      'OCR text print verification',
+      'Pneumatic rejection push',
+      'Statistical defect logging'
+    ],
+    color: '#d946ef',
+    colorRgb: '217, 70, 239',
+    tagline: 'VISION SCANNER QC PASS'
+  },
+  {
+    id: 'packing',
+    name: 'Hand Packing',
+    icon: '📦',
+    dept: 'Packing Area',
+    desc: 'Automated case packing and shrink-wrapping into 12-pack / 24-pack corrugated cartons with checkweigher verification.',
+    metrics: 'Output: 500.00 cases/hr',
+    telemetry: [
+      { icon: '📦', label: 'Pack Output', value: '500 cases/hr' },
+      { icon: '⚖️', label: 'Weight Check', value: '18.4 kg' },
+      { icon: '🌡️', label: 'Shrink Heat', value: '190°C' }
+    ],
+    activities: [
+      'Bottle lane divider grid',
+      'Corrugated tray formation',
+      'Film wrapper heat seal',
+      'Under/Overweight rejection',
+      'Barcode carton labeling'
+    ],
+    color: '#14b8a6',
+    colorRgb: '20, 184, 166',
+    tagline: 'ROBOTIC CARTON PACK'
+  },
+  {
+    id: 'palletising',
+    name: 'Palletising',
+    icon: '🏗️',
+    dept: 'Logistics',
+    desc: 'Robotic arm palletizer stacking cases onto wooden pallets in standard interlocking patterns followed by rotary stretch wrapping.',
+    metrics: 'Load: 60.00 cases/pal',
+    telemetry: [
+      { icon: '🏗️', label: 'Pallet Load', value: '60 cases/pal' },
+      { icon: '🔄', label: 'Wrap Turns', value: '12 layers' },
+      { icon: '⏱️', label: 'Cycle Time', value: '90 sec' }
+    ],
+    activities: [
+      'Robotic pick & place',
+      'Layer pad insertion',
+      'Automatic pallet dispenser',
+      'Rotary stretch film wrap',
+      'Pallet ID tag printing'
+    ],
+    color: '#0284c7',
+    colorRgb: '2, 132, 199',
+    tagline: 'STRETCH-WRAPPED LOAD'
+  },
+  {
+    id: 'dispatch',
+    name: 'Dispatch Store',
+    icon: '🚛',
+    dept: 'Warehouse',
+    desc: 'Staging in Finished Goods warehouse and real-time Stock Entry creation in Frappe ERPNext for dispatch and logistics.',
+    metrics: 'Status: Sync Complete',
+    telemetry: [
+      { icon: '📦', label: 'FG Staged Qty', value: '12,000 units' },
+      { icon: '⚡', label: 'ERP Sync', value: 'Live Complete' },
+      { icon: '🚛', label: 'Dispatch Loading', value: 'Active' }
+    ],
+    activities: [
+      'Finished Goods stock receipt',
+      'Forklift rack placement',
+      'Frappe ERPNext stock update',
+      'Shipping container loading',
+      'Dispatch manifest sign-off'
+    ],
+    color: '#7c3aed',
+    colorRgb: '124, 58, 237',
+    tagline: 'ERP STORE SYNC COMPLETE'
+  }
 ];
 
 const MAINTENANCE_TEMPLATES_STATIC = [
@@ -289,18 +532,11 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Authentication & Connection States
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    const conn = frappe.getConnectionSettings();
-    return Boolean(conn.connected && conn.user && conn.user !== 'Guest');
-  });
-  const [currentUser, setCurrentUser] = useState(() => {
-    const conn = frappe.getConnectionSettings();
-    return conn.connected && conn.user && conn.user !== 'Guest' ? conn.user : '';
-  });
-  const [currentUserRole, setCurrentUserRole] = useState(() => {
-    const conn = frappe.getConnectionSettings();
-    return conn.role || 'Operator';
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [currentUser, setCurrentUser] = useState('');
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [currentUserRoles, setCurrentUserRoles] = useState([]);
 
   // Login form states
   const [loginUsername, setLoginUsername] = useState('administrator');
@@ -320,9 +556,6 @@ function App() {
   const [totpQrUrl, setTotpQrUrl] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
   const [use2FA, setUse2FA] = useState(false);
-  // Portal choice screen (when user has BOTH roles)
-  const [loginPortal, setLoginPortal] = useState('auto');
-  const [portalChoiceData, setPortalChoiceData] = useState(null); // { user, role } or null
 
   // Real-time Clock State synced with browser's time zone
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -333,6 +566,77 @@ function App() {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+
+  useEffect(() => {
+    let active = true;
+
+    const restorePortalSession = async () => {
+      try {
+        const session = await frappe.getPortalSession(CONFIG.ERPNEXT_SERVER_URL);
+        if (!active) return;
+
+        if (!session.authenticated) {
+          setIsLoggedIn(false);
+          setCurrentUser('');
+          setCurrentUserRole('');
+          setCurrentUserRoles([]);
+          setLoginError('');
+          return;
+        }
+
+        const requestedPortal = new URLSearchParams(window.location.search).get('portal') || 'default';
+        const destination = resolvePortalVisit(session.roles, requestedPortal);
+
+        if (destination === 'admin') {
+          window.location.replace('/app');
+          return;
+        }
+
+        if (destination === 'denied') {
+          await frappe.logout();
+          if (!active) return;
+          setLoginError('Access denied. Ask your administrator to assign an IslandChill MES User or IslandChill Admin User role.');
+          setIsLoggedIn(false);
+          setCurrentUser('');
+          setCurrentUserRole('');
+          setCurrentUserRoles([]);
+          return;
+        }
+
+        const existing = frappe.getConnectionSettings();
+        const roleLabel = session.isAdmin ? 'ERPNext Administrator' : 'IslandChill MES User';
+        frappe.setConnectionSettings({
+          ...existing,
+          isLive: true,
+          url: CONFIG.ERPNEXT_SERVER_URL,
+          connected: true,
+          user: session.fullName,
+          role: roleLabel,
+          roles: session.roles,
+          isAdmin: session.isAdmin
+        });
+        setCurrentUser(session.fullName);
+        setCurrentUserRole(roleLabel);
+        setCurrentUserRoles(session.roles);
+        setIsLoggedIn(true);
+      } catch (error) {
+        if (!active) return;
+        setIsLoggedIn(false);
+        setCurrentUser('');
+        setCurrentUserRole('');
+        setCurrentUserRoles([]);
+        setLoginError('');
+      } finally {
+        if (active) setIsAuthChecking(false);
+      }
+    };
+
+    restorePortalSession();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Tab & Control states
@@ -3124,7 +3428,7 @@ function App() {
     if (isLoggedIn) {
       loadItems();
     }
-  }, [isLoggedIn, currentTab === 'inventory']);
+  }, [isLoggedIn, currentTab]);
 
 
 
@@ -3490,30 +3794,30 @@ function App() {
   // Login Procedures
   // Shared by password login and both existing 2FA flows.
   const completePortalLogin = async (result) => {
-    const destination = resolveLoginPortal(result.roles, loginPortal);
-    setPortalChoiceData(null);
+    const destination = resolveLoginPortal(result.roles);
     setIs2FAPhase('none');
     setOtpCode('');
     if (destination === 'denied') {
       setIsLoggedIn(false);
       setCurrentUser('');
       setCurrentUserRole('');
-      setLoginError(loginPortal === 'auto'
-        ? 'Access denied. Ask your administrator to assign an IslandChill MES User or IslandChill Admin User role.'
-        : `Access denied. Your account does not have access to ${loginPortal === 'mes' ? 'IslandChill MES' : 'ERPNext Desk'}. Choose another portal or contact your administrator.`);
+      setCurrentUserRoles([]);
+      setLoginError('Access denied. Ask your administrator to assign an IslandChill MES User or IslandChill Admin User role.');
       await frappe.logout();
       return;
     }
+
     setCurrentUser(result.user);
     setCurrentUserRole(result.role);
-    if (destination === 'choose') {
+    setCurrentUserRoles(result.roles || []);
+    if (destination === 'admin') {
       setIsLoggedIn(false);
-      setPortalChoiceData({ user: result.user, role: result.role });
+      window.location.href = '/app';
       return;
     }
+
     setIsLoggedIn(true);
-    const target = destination === 'admin' ? '/app' : '/islandchill';
-    if (window.location.pathname !== target) window.location.href = target;
+    if (window.location.pathname !== '/islandchill') window.location.href = '/islandchill';
   };
 
   const handleSetup2FA = async (userVal) => {
@@ -3628,12 +3932,12 @@ function App() {
     setIsLoggedIn(false);
     setCurrentUser('');
     setCurrentUserRole('');
+    setCurrentUserRoles([]);
     setLoginUsername('');
     setLoginPassword('');
     setCurrentTab('dashboard');
-    setPortalChoiceData(null);
-    setLoginPortal('auto');
     setIs2FAPhase('none');
+    window.location.href = '/islandchill';
   };
 
   const handleCopyMFAKey = () => {
@@ -3715,19 +4019,17 @@ function App() {
     if (conn.isLive && conn.connected) {
       setSyncStatusMsg('Loading BOM materials for Stock Entry...');
       try {
-        const details = await frappe.getBOMDetails(woToStart.bomNo);
+        const details = await frappe.getBOMDetails(
+          woToStart.bomNo,
+          woToStart.sourceWarehouse || '',
+          woToStart.fgWarehouse || ''
+        );
         if (details && details.length > 0) {
           const enabledCodes = new Set((erpItems || []).filter(i => !i.disabled).map(i => i.code || i.item_code));
-          materials = details
-            .filter(m => !m.disabled && (enabledCodes.size === 0 || enabledCodes.has(m.code)))
-            .map(m => ({
-              code: m.code,
-              name: m.name,
-              qty: Number((m.qty * (woToStart.quantity || 1)).toFixed(4)),
-              unit: m.unit,
-              sourceWarehouse: woToStart.sourceWarehouse || '',
-              targetWarehouse: woToStart.wipWarehouse || ''
-            }));
+          materials = buildStockEntryItems(
+            details.filter(m => enabledCodes.size === 0 || enabledCodes.has(m.code)),
+            woToStart
+          );
         }
       } catch (err) {
         console.error('Failed to load BOM materials for stock entry:', err);
@@ -4114,6 +4416,20 @@ function App() {
   const handleSubmitStockEntry = async () => {
     if (!stockEntryModal?.stockEntryName) {
       showAlert('Please save the Stock Entry first.', 'warning', 'Stock Entry Not Saved');
+      return;
+    }
+
+    const shortages = getStockEntryShortages(stockEntryModal.items);
+    if (shortages.length > 0) {
+      const lines = shortages.slice(0, 5).map(item =>
+        `${item.code}: needs ${item.requiredQty}, available ${item.availableQty} in ${item.warehouse || "the selected warehouse"}`
+      );
+      if (shortages.length > 5) lines.push(`and ${shortages.length - 5} more item(s)`);
+      showAlert(
+        `Cannot submit this Stock Entry because stock is insufficient:\n${lines.join("\n")}`,
+        "warning",
+        "Insufficient Raw Materials"
+      );
       return;
     }
 
@@ -5278,101 +5594,13 @@ function App() {
     }
   }, [currentPage, isLoggedIn, defaultCompany, woStatusFilter]);
 
-  // Portal choice screen — shown when user holds BOTH IslandChill roles
-  if (portalChoiceData && !isLoggedIn) {
+  if (isAuthChecking) {
     return (
       <div className="login-page">
-        <div className="login-bg-decorations">
-          <div className="login-blob login-blob-1"></div>
-          <div className="login-blob login-blob-2"></div>
-        </div>
-        <div className="login-card" style={{ maxWidth: '420px' }}>
-          <div className="login-header" style={{ textAlign: 'center', marginBottom: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
-              <img src={logo} alt="Island Chill" style={{ height: '48px', width: 'auto' }} />
-            </div>
-            <h2 style={{ fontSize: '22px', fontWeight: '800' }}>Choose Your Portal</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-              Welcome, <strong style={{ color: 'var(--accent)' }}>{portalChoiceData.user}</strong>.<br />
-              Your account has access to both portals.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
-            {/* MES Portal */}
-            <button
-              type="button"
-              onClick={() => {
-                setPortalChoiceData(null);
-                setIsLoggedIn(true);
-                if (window.location.pathname !== '/islandchill') {
-                  window.location.href = '/islandchill';
-                }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                padding: '18px 20px',
-                borderRadius: '12px',
-                border: '1.5px solid rgba(0, 210, 255, 0.35)',
-                backgroundColor: 'rgba(0, 210, 255, 0.07)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s ease',
-                color: 'var(--text-main)'
-              }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(0, 210, 255, 0.7)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(0, 210, 255, 0.35)'}
-            >
-              <span style={{ fontSize: '32px', lineHeight: 1 }}>🏭</span>
-              <div>
-                <div style={{ fontWeight: '700', fontSize: '15px', color: '#00d2ff' }}>MES Operations Portal</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>Production, inventory, quality control & maintenance</div>
-              </div>
-            </button>
-
-            {/* Admin Portal */}
-            <button
-              type="button"
-              onClick={() => {
-                setPortalChoiceData(null);
-                setIsLoggedIn(true);
-                window.location.href = '/app';
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                padding: '18px 20px',
-                borderRadius: '12px',
-                border: '1.5px solid rgba(245, 158, 11, 0.35)',
-                backgroundColor: 'rgba(245, 158, 11, 0.07)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s ease',
-                color: 'var(--text-main)'
-              }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(245, 158, 11, 0.7)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(245, 158, 11, 0.35)'}
-            >
-              <span style={{ fontSize: '32px', lineHeight: 1 }}>⚙️</span>
-              <div>
-                <div style={{ fontWeight: '700', fontSize: '15px', color: 'var(--accent)' }}>ERPNext Admin Desk</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>Full ERP administration, reports & system settings</div>
-              </div>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={async () => {
-              await handleLogout();
-            }}
-            style={{ width: '100%', marginTop: '16px', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
-          >
-            ← Back to login
-          </button>
+        <div className="login-card" style={{ maxWidth: '360px', textAlign: 'center' }}>
+          <div style={{ fontSize: '30px', marginBottom: '12px' }}>❄️</div>
+          <h2 style={{ fontSize: '20px', marginBottom: '6px' }}>Island Chill</h2>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Checking your session…</p>
         </div>
       </div>
     );
@@ -5382,8 +5610,6 @@ function App() {
   if (!isLoggedIn || !currentUser || currentUser === 'Guest') {
     return (
       <LoginPage
-        loginPortal={loginPortal}
-        setLoginPortal={setLoginPortal}
         is2FAPhase={is2FAPhase}
         setIs2FAPhase={setIs2FAPhase}
         loginUsername={loginUsername}
@@ -5695,6 +5921,7 @@ function App() {
         setMobileMenuOpen={setMobileMenuOpen}
         handleLogout={handleLogout}
         setSelectedWOId={setSelectedWOId}
+        showAdminSwitch={canSwitchPortals(currentUserRoles)}
       />
 
       {/* Main Workspace Area */}
@@ -6030,6 +6257,10 @@ function App() {
             setSimPlaying={setSimPlaying}
             simSpeed={simSpeed}
             setSimSpeed={setSimSpeed}
+            bomList={bomList}
+            workOrders={workOrders}
+            erpItems={erpItems}
+            loadWorkOrders={loadWorkOrders}
           />
         )}
 

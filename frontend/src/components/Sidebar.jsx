@@ -15,7 +15,8 @@ export default function Sidebar({
   mobileMenuOpen,
   setMobileMenuOpen,
   handleLogout,
-  setSelectedWOId
+  setSelectedWOId,
+  showAdminSwitch = false
 }) {
   const navItems = [
     { id: 'dashboard', label: '📊 Dashboard', resetSelectedWO: true },
@@ -64,6 +65,12 @@ export default function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
+        {showAdminSwitch && (
+          <a className="portal-switch-button" href="/app">
+            <span aria-hidden="true">⚙️</span>
+            Switch to ERPNext Admin
+          </a>
+        )}
         <div className="user-profile" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="avatar">{currentUser.substring(0, 2).toUpperCase()}</div>

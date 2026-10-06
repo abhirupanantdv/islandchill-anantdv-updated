@@ -4,6 +4,19 @@ from frappe import _
 WORK_ORDER_FINAL_STATUSES = {"Completed", "Closed", "Stopped", "Cancelled"}
 
 
+def _stock_entry_item_values(row):
+    qty = frappe.utils.flt(row.get("qty") or row.get("transfer_qty") or 0)
+    return {
+        "item_code": row.get("code") or row.get("item_code"),
+        "qty": qty,
+        "transfer_qty": qty,
+        "uom": row.get("unit") or row.get("uom"),
+        "s_warehouse": row.get("sourceWarehouse") or row.get("s_warehouse"),
+        "t_warehouse": row.get("targetWarehouse") or row.get("t_warehouse"),
+        "allow_zero_valuation_rate": 1,
+    }
+
+
 def _force_work_order_in_progress(work_order):
     if not work_order:
         return None
@@ -110,14 +123,7 @@ def save_stock_entry_draft(work_order, company, posting_date, posting_time=None,
         if item_disabled:
             frappe.throw(_("Item {0} is disabled in ERPNext and cannot be included in a Stock Entry").format(item_code))
 
-        doc.append("items", {
-            "item_code": item_code,
-            "qty": qty,
-            "transfer_qty": qty,
-            "uom": row.get("unit") or row.get("uom"),
-            "s_warehouse": row.get("sourceWarehouse") or row.get("s_warehouse"),
-            "t_warehouse": row.get("targetWarehouse") or row.get("t_warehouse"),
-        })
+        doc.append("items", _stock_entry_item_values(row))
 
     if not doc.items:
         frappe.throw(_("No valid Stock Entry items found"))
@@ -1485,7 +1491,7 @@ def get_all_boms_list(limit=100, start=0, fg_warehouse=None):
     start = frappe.utils.cint(start) or 0
     boms = frappe.get_all(
         "BOM",
-        filters={"is_active": 1, "docstatus": 1},
+        filters={"is_active": 1, "is_default": 1, "docstatus": 1},
         fields=["name", "item", "item_name", "is_active", "is_default", "quantity", "uom"],
         order_by="is_default desc, creation desc",
         limit_page_length=limit,
@@ -1507,6 +1513,7 @@ def get_all_boms_list(limit=100, start=0, fg_warehouse=None):
             "item": b.item,
             "itemCode": b.item,
             "active": b.is_active or 1,
+            "is_active": b.is_active,
             "isDefault": bool(b.is_default),
             "quantity": frappe.utils.flt(b.quantity or 1),
             "unit": b.uom or "Nos",
@@ -1515,6 +1522,15 @@ def get_all_boms_list(limit=100, start=0, fg_warehouse=None):
             "materials": []
         })
     return result
+
+
+@frappe.whitelist(allow_guest=True)
+def get_full_bom_doc(bom_id):
+    """Return complete BOM document including child tables (items, operations, exploded_items, etc.)."""
+    if not bom_id or not frappe.db.exists("BOM", bom_id):
+        return {}
+    doc = frappe.get_doc("BOM", bom_id)
+    return doc.as_dict()
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1621,11 +1637,77 @@ def get_all_inventory_items(limit=0, warehouse=None):
     items = frappe.get_all(
         "Item",
         filters={"disabled": 0},
-        fields=["name", "item_code", "item_name", "stock_uom", "item_group", "safety_stock", "valuation_rate"],
+        fields=["name", "item_code", "item_name", "stock_uom", "item_group", "safety_stock", "valuation_rate", "image"],
         limit_page_length=page_len,
         order_by="item_name asc",
         ignore_permissions=True
     )
+
+    # Fetch attached images directly from tabFile via SQL (bypasses ORM filter list syntax quirks)
+    file_image_map = {}
+    try:
+        file_records = frappe.db.sql("""
+            SELECT attached_to_name, attached_to_doctype, file_name, file_url
+            FROM `tabFile`
+            WHERE file_url IS NOT NULL AND file_url != ''
+            ORDER BY creation DESC
+        """, as_dict=True)
+
+        for f in file_records:
+            att_name = (f.attached_to_name or "").strip()
+            url = (f.file_url or f.file_name or "").strip()
+            if not url:
+                continue
+
+            clean_url = url.split("?")[0].lower()
+            is_img = any(clean_url.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"])
+            if not is_img:
+                continue
+
+            if att_name:
+                for key in [att_name, att_name.lower()]:
+                    if key not in file_image_map:
+                        file_image_map[key] = url
+
+        # Keyword matching fallback (e.g. Pineapple.jpg -> Crush Pineapple 600mL)
+        for i in items:
+            ic_code = i.item_code or i.name
+            ic_low = (ic_code or "").lower()
+            in_low = (i.item_name or "").lower()
+
+            if ic_code not in file_image_map and ic_low not in file_image_map:
+                # Find matching image file by item name keywords
+                keywords = [w for w in in_low.split() if len(w) > 3 and w not in ["600ml", "500ml", "1.5l", "330ml", "pack", "box", "bottle", "crush"]]
+                if keywords:
+                    for f in file_records:
+                        url = (f.file_url or f.file_name or "").strip()
+                        clean_url = url.split("?")[0].lower()
+                        if any(clean_url.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]):
+                            f_name_lower = (f.file_name or f.file_url or "").lower()
+                            if any(k in f_name_lower for k in keywords):
+                                file_image_map[ic_code] = url
+                                file_image_map[ic_low] = url
+                                break
+    except Exception as e:
+        frappe.log_error(f"Error querying tabFile for item images: {e}")
+
+    # Also query Website Item table if available
+    try:
+        web_items = frappe.get_all(
+            "Website Item",
+            fields=["item_code", "website_image", "thumbnail"],
+            limit_page_length=2000,
+            ignore_permissions=True
+        )
+        for wi in web_items:
+            w_img = wi.get("website_image") or wi.get("thumbnail")
+            ic = (wi.get("item_code") or "").strip()
+            if w_img and ic:
+                for key in [ic, ic.lower()]:
+                    if key not in file_image_map:
+                        file_image_map[key] = w_img
+    except Exception:
+        pass
 
     # Active leaf warehouses only (exclude disabled, group, or orphan warehouses)
     active_whs = frappe.get_all(
@@ -1750,7 +1832,17 @@ def get_all_inventory_items(limit=0, warehouse=None):
             "total_stock_value": round(tot_val, 2),
             "warehouse_stocks": wh_stocks,
             "warehouses_with_stock": wh_with_stock,
-            "minLevel": frappe.utils.flt(i.safety_stock or 0)
+            "minLevel": frappe.utils.flt(i.safety_stock or 0),
+            "image": (
+                i.get("image") or
+                file_image_map.get(i.item_code) or
+                file_image_map.get((i.item_code or "").lower()) or
+                file_image_map.get(i.name) or
+                file_image_map.get((i.name or "").lower()) or
+                file_image_map.get(i.item_name) or
+                file_image_map.get((i.item_name or "").lower()) or
+                None
+            )
         })
     return result
 
@@ -2264,6 +2356,7 @@ def check_mes_access():
     user_roles = frappe.get_roles(user)
     is_mes   = "IslandChill MES User"   in user_roles
     is_admin = "IslandChill Admin User" in user_roles
+    full_name = frappe.db.get_value("User", user, "full_name") or user
 
     return {
         "allowed":  is_mes or is_admin,
@@ -2271,4 +2364,5 @@ def check_mes_access():
         "is_admin": is_admin,
         "roles":    user_roles,
         "user":     user,
+        "full_name": full_name,
     }

@@ -354,6 +354,49 @@ class FrappeService {
     return promise;
   }
 
+  async getPortalSession(url = CONFIG.ERPNEXT_SERVER_URL) {
+    try {
+      const baseUrl = this.resolveUrl(url || CONFIG.ERPNEXT_SERVER_URL);
+      const userRes = await fetch(`${baseUrl}/api/method/frappe.auth.get_logged_user`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' }
+      });
+
+      if (!userRes.ok) {
+        return { authenticated: false, user: 'Guest', fullName: '', roles: [], isMES: false, isAdmin: false };
+      }
+
+      const userData = await userRes.json().catch(() => ({}));
+      const userEmail = userData?.message;
+      if (!userEmail || userEmail === 'Guest') {
+        return { authenticated: false, user: 'Guest', fullName: '', roles: [], isMES: false, isAdmin: false };
+      }
+
+      const accessRes = await fetch(`${baseUrl}/api/method/islandchill.api.manufacturing.check_mes_access`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' }
+      });
+      if (!accessRes.ok) {
+        return { authenticated: false, user: 'Guest', fullName: '', roles: [], isMES: false, isAdmin: false };
+      }
+
+      const accessData = await accessRes.json().catch(() => ({}));
+      const access = accessData?.message || {};
+      return {
+        authenticated: true,
+        user: access.user || userEmail,
+        fullName: access.full_name || userEmail,
+        roles: Array.isArray(access.roles) ? access.roles : [],
+        isMES: Boolean(access.is_mes),
+        isAdmin: Boolean(access.is_admin),
+        allowed: Boolean(access.allowed)
+      };
+    } catch {
+      return { authenticated: false, user: 'Guest', fullName: '', roles: [], isMES: false, isAdmin: false };
+    }
+  }
   async login(url, usernameOrKey, passwordOrSecret, isLive = true, defaultCompany = 'Carpenters Waters (Fiji) PTE Limited') {
     try {
       const targetUrl = url || CONFIG.ERPNEXT_SERVER_URL;
@@ -377,84 +420,20 @@ class FrappeService {
         throw new Error('Connection failed: Invalid credentials or URL is unreachable.');
       }
 
-      const loginRes = await response.json();
+      await response.json().catch(() => null);
 
-      // Now fetch user details using the session
-      const userRes = await fetch(`${baseUrl}/api/method/frappe.auth.get_logged_user`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!userRes.ok) {
-        throw new Error('Failed to retrieve user session details.');
-      }
-
-      const resData = await userRes.json();
-      const userEmail = resData.message;
-
-      if (!userEmail || userEmail === 'Guest') {
+      const portalSession = await this.getPortalSession(targetUrl);
+      if (!portalSession.authenticated) {
         throw new Error('Login failed: Invalid username or password.');
       }
 
-      // Try fetching profile details & roles
-      let fullName = userEmail;
-      let islandchill_user_type = '';
-      let userRoles = [];
-      let isAdmin = false;
-
-      try {
-        const profileRes = await fetch(`${baseUrl}/api/resource/User/${encodeURIComponent(userEmail)}`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        if (profileRes.ok) {
-          const profileData = await profileRes.json();
-          fullName = profileData.data.full_name || userEmail;
-          islandchill_user_type = profileData?.data?.islandchill_user_type || '';
-          if (Array.isArray(profileData?.data?.roles)) {
-            userRoles = profileData.data.roles.map(r => r.role || r);
-          }
-        }
-      } catch (err) {
-        console.warn('Profile fetch failed, using email instead', err);
-      }
-
-      // If roles not in User resource, fetch via get_roles or fallback
-      if (userRoles.length === 0) {
-        try {
-          const rolesRes = await fetch(`${baseUrl}/api/method/frappe.core.doctype.user.user.get_roles`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ uid: userEmail })
-          });
-          if (rolesRes.ok) {
-            const rolesData = await rolesRes.json();
-            if (Array.isArray(rolesData.message)) {
-              userRoles = rolesData.message;
-            }
-          }
-        } catch (e) {
-          console.warn('get_roles method fallback:', e);
-        }
-      }
-
-      isAdmin = userEmail === 'Administrator' || userRoles.includes('System Manager') || userRoles.includes('Administrator');
+      const fullName = portalSession.fullName;
+      const userRoles = portalSession.roles;
+      const isAdmin = portalSession.isAdmin;
 
       const settings = {
         isLive: true,
-        url: targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl, // store original url
+        url: targetUrl.endsWith('/') ? targetUrl.slice(0, -1) : targetUrl,
         username: usernameOrKey,
         password: passwordOrSecret,
         apiKey: '',
@@ -474,8 +453,7 @@ class FrappeService {
         user: fullName,
         role: settings.role,
         roles: userRoles,
-        isAdmin,
-        islandchill_user_type
+        isAdmin
       };
     } catch (error) {
       console.error('ERPNext login error:', error);
@@ -1558,6 +1536,41 @@ class FrappeService {
       }
     }
     return [];
+  }
+
+  // Fetch complete BOM document including child tables (items, operations, exploded_items, etc.)
+  async getFullBOMDoc(bomId) {
+    if (this.connection.isLive && bomId) {
+      try {
+        const res = await this.callIslandChillMethod('get_full_bom_doc', { bom_id: bomId });
+        if (res && (res.name || res.docstatus !== undefined)) {
+          return res;
+        }
+      } catch (e) {
+        console.warn(`[FrappeService] Custom get_full_bom_doc unavailable, falling back to frappe.client.get for ${bomId}:`, e);
+      }
+
+      // Standard Frappe API fallback: frappe.client.get (guaranteed to be available on all Frappe instances)
+      try {
+        const baseUrl = this.resolveUrl(this.connection.url);
+        const headers = this.attachCsrfHeader({
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        });
+        const resp = await fetch(`${baseUrl}/api/method/frappe.client.get?doctype=BOM&name=${encodeURIComponent(bomId)}`, {
+          method: 'GET',
+          headers,
+          credentials: 'include'
+        });
+        if (resp.ok) {
+          const json = await resp.json();
+          return json.message || json.data || null;
+        }
+      } catch (e2) {
+        console.error(`Failed to fetch BOM doc via frappe.client.get for ${bomId}:`, e2);
+      }
+    }
+    return null;
   }
 
   // Fetch BOM Details (raw materials and warehouse balances)

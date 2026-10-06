@@ -1,11 +1,25 @@
-export function resolveLoginPortal(roles = [], selection = 'auto') {
-  const isMES = roles.includes('IslandChill MES User');
-  const isAdmin = roles.includes('IslandChill Admin User');
-  if (selection === 'mes') return isMES ? 'mes' : 'denied';
-  if (selection === 'admin') return isAdmin ? 'admin' : 'denied';
-  if (selection !== 'auto') return 'denied';
-  if (isMES && isAdmin) return 'choose';
-  if (isMES) return 'mes';
+export const MES_ROLE = 'IslandChill MES User';
+export const ADMIN_ROLE = 'IslandChill Admin User';
+
+export function resolveLoginPortal(roles = []) {
+  const isMES = roles.includes(MES_ROLE);
+  const isAdmin = roles.includes(ADMIN_ROLE);
+
   if (isAdmin) return 'admin';
+  if (isMES) return 'mes';
+  return 'denied';
+}
+
+export function canSwitchPortals(roles = []) {
+  return roles.includes(MES_ROLE) && roles.includes(ADMIN_ROLE);
+}
+
+export function resolvePortalVisit(roles = [], requestedPortal = 'default') {
+  const isMES = roles.includes(MES_ROLE);
+  const isAdmin = roles.includes(ADMIN_ROLE);
+
+  if (requestedPortal === 'mes' && isMES) return 'mes';
+  if (isAdmin) return 'admin';
+  if (isMES) return 'mes';
   return 'denied';
 }
