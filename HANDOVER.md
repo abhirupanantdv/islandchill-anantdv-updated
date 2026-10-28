@@ -226,6 +226,29 @@ print('Connected to', frappe.local.site)
 
 ## 7. Recent Changes & Fixes Log
 
+### Universal Form Submittability & Schema Audit (2026-10-28)
+
+Audited all 52 operational DocTypes mapped in the Island Chill MES UI (Laboratory QA, Cleaning & Sanitation, Safety & HSE, Maintenance, Support, and Core Manufacturing/Selling). Identified 17 custom forms that were previously non-submittable (`is_submittable: 0`) and upgraded them to fully submittable documents (`is_submittable: 1`):
+1. `Seam Checklist Form` (Lab Form 104)
+2. `Sanitation Record` (Lab Form 85)
+3. `Autoclave Record` (Lab Form 12)
+4. `Media Preparation Record` (Lab Form 13)
+5. `Rinse-Off Test for Raw Materials` (Lab Form 64)
+6. `Library Sample Record` (Lab Form 72)
+7. `Outside Perimeter Cleaning` (Cleaning Form 46)
+8. `Injury Report` (Safety Form 37)
+9. `Employee Screening` (Safety Health Screening)
+10. `Preventive Maintenance Request` (Maintenance PM Request)
+11. `Customer Complaint Report` (Support Ticket)
+12. `Customer Complaint Tracking` (Support Complaint Item)
+13. `Cleaning and Sanitation Form` (Master Sanitation)
+14. `Toilet Cleaning purpose` (Cleaning Purpose)
+15. `Dining Room Cleaning Purpose` (Cleaning Purpose)
+16. `Factory Floor Cleaning Purpose` (Cleaning Purpose)
+17. `Lab and Office Cleaning Purpose` (Cleaning Purpose)
+
+Added standard `amended_from` link fields, submission/cancellation permissions, and verified that 100% (52/52) of operational forms can now transition to `docstatus: 1` (Submitted) via the frontend and Approvals desk.
+
 ### Work Order Search, Sub-Operation Panels & Query Fix (2026-10-28)
 
 Fixed `get_work_order_dashboard` counting in Frappe v15 by eliminating invalid SQL string expressions in `get_all` fields, and added server-side search by Work Order name, item code, or item name. Added operator identification from `Job Card Time Log` rows. Modularized Work Orders Tab into three sequential operation sub-tabs (`Issue Raw Materials`, `Maintenance`, `Job Cards`) with dedicated `WorkOrderMaintenancePanel` and `WorkOrderMaintenanceChecklists` components. Aligned `WorkflowTab` with live ERPNext Job Cards and directional flow arrows. Rebuilt frontend bundle and passed all 29 node unit tests.
@@ -241,6 +264,7 @@ Fixed the Work Order raw-material Stock Entry flow. The frontend now requests BO
 
 
 | Date | Area | Description of Change |
+| **2026-10-28** | Operational Forms & DocTypes | **Universal Form Submittability (100% Submittable)**: Audited all 52 operational DocTypes mapped in the Island Chill MES UI. Identified and upgraded 17 non-submittable custom forms (`Seam Checklist Form`, `Sanitation Record`, `Autoclave Record`, `Media Preparation Record`, `Rinse-Off Test for Raw Materials`, `Library Sample Record`, `Outside Perimeter Cleaning`, `Injury Report`, `Employee Screening`, `Preventive Maintenance Request`, `Customer Complaint Report`, `Customer Complaint Tracking`, `Cleaning and Sanitation Form`, and 4 Cleaning Purpose doctypes) to `is_submittable = 1` with `amended_from` link fields and submit/cancel permissions. Verified 100% (52/52) forms can now submit (`docstatus: 1`). |
 | **2026-10-28** | Work Orders & Operation Workflows | **Work Order Search, Sub-Operation Panels & Dashboard Count Fix**: (1) Fixed `get_work_order_dashboard` query count error in Frappe v15 when filters or search queries are applied. (2) Added server-side search (`search` parameter) matching Work Order ID, item code, and item name. (3) Added extraction of operator assignments from `Job Card Time Log` records. (4) Re-architected Work Orders UX into 3 tabs (`Issue Raw Materials`, `Maintenance`, `Job Cards`) with isolated `WorkOrderMaintenancePanel` and `WorkOrderMaintenanceChecklists` subcomponents. (5) Updated `WorkflowTab` to optionally link with Work Orders and sync active operations with live ERPNext Job Cards. |
 | **2026-10-06** | Portal Access & Navigation Switch | **Two-Role Portal Routing & About Section Switch**: (1) Implemented two-role routing with `IslandChill MES User` (Website User, desk_access: 0, home_page: islandchill) and `IslandChill Admin User` (System User, desk_access: 1). (2) Removed legacy `islandchill_user_type` field and schema references from User DocType. (3) Added persistent top-right "Switch to IslandChill MES" button in ERPNext Desk navbar, user dropdown, and inside Frappe "About" dialog (`frappe.ui.misc.about`). (4) Kept "Switch to ERPNext Admin" button in IslandChill MES left sidebar footer. (5) Fixed session initialization to prevent spurious login error banners on unauthenticated visits. Exported fixtures and compiled production assets. |
 | **2026-10-05** | Inventory & Multi-Warehouse Stock Accuracy | **Warehouse Normalization, Live Valuation & Stocked Items Visibility**: (1) Fixed root cause of items showing 0.00 when selecting "Stores" (backend dictionary key mismatch between `'Stores'` and `'Stores - CWFPL'`) by introducing bi-directional warehouse name normalization across `get_all_inventory_items` and `getItemStock`. (2) Cleaned up warehouse dropdown: eliminated empty/irrelevant system warehouses (`Goods In Transit`, `Scrap Warehouse`) from the primary view, sorted warehouses holding physical stock to the top, and annotated warehouse options with clean short names and item counts (`Stores (20 items)`, `Finished Goods (2 items)`, `Work In Progress (13 items)`). (3) Resolved "Stores nothing shows" issue by prioritizing items with positive stock at the top of the inventory table (descending by stock quantity) and adding an interactive `[✓] In-Stock Only` toggle filter. (4) Added accurate stock valuation rates and total in-stock monetary values ($) at both the item row level, right-side detail breakdown, and in an Executive KPI summary bar (Total In-Stock Value: $451.37M in Stores / $453.26M Consolidated, Total Units, Stocked SKUs). (5) Purged legacy `- AD` orphan warehouses from active calculations. Rebuilt frontend production bundle and cleared bench cache. |
