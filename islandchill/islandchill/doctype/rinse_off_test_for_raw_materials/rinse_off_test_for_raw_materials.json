@@ -1,0 +1,200 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-21 20:13:00.217823",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "analysis_report_for_raw_material_section",
+  "date_of_analysis",
+  "analyst",
+  "column_break_v6xh",
+  "preform_lot_no",
+  "blown_bottles_date",
+  "closures_lot_no",
+  "analysis_and_result_section",
+  "analysis_table",
+  "media_and_material_information_section",
+  "sterile_water_date_prepared",
+  "column_break_qqtb",
+  "sterile_vessel_lot_no",
+  "incubation_information_and_results_analysis_section",
+  "incubator_notcc",
+  "incubation_in",
+  "column_break_pmkw",
+  "incubation_out",
+  "notes_and_validity_section",
+  "html",
+  "signed",
+  "column_break_ejbp",
+  "date",
+  "section_break_5spm",
+  "comments",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "analysis_report_for_raw_material_section",
+   "fieldtype": "Section Break",
+   "label": "Analysis Report For Raw Material"
+  },
+  {
+   "fieldname": "date_of_analysis",
+   "fieldtype": "Date",
+   "label": "Date of Analysis"
+  },
+  {
+   "fieldname": "analyst",
+   "fieldtype": "Link",
+   "label": "Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "column_break_v6xh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "preform_lot_no",
+   "fieldtype": "Data",
+   "label": "Preform Lot No"
+  },
+  {
+   "fieldname": "blown_bottles_date",
+   "fieldtype": "Date",
+   "label": "Blown Bottles Date"
+  },
+  {
+   "fieldname": "closures_lot_no",
+   "fieldtype": "Data",
+   "label": "Closures Lot No"
+  },
+  {
+   "fieldname": "analysis_and_result_section",
+   "fieldtype": "Section Break",
+   "label": "Analysis and Result"
+  },
+  {
+   "fieldname": "analysis_table",
+   "fieldtype": "Table",
+   "options": "Analysis And Results Details"
+  },
+  {
+   "fieldname": "media_and_material_information_section",
+   "fieldtype": "Section Break",
+   "label": "Media And Material Information"
+  },
+  {
+   "fieldname": "sterile_water_date_prepared",
+   "fieldtype": "Date",
+   "label": "Sterile Water Date Prepared"
+  },
+  {
+   "fieldname": "column_break_qqtb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sterile_vessel_lot_no",
+   "fieldtype": "Data",
+   "label": "Sterile Vessel Lot No"
+  },
+  {
+   "fieldname": "incubation_information_and_results_analysis_section",
+   "fieldtype": "Section Break",
+   "label": "Incubation Information And Results Analysis"
+  },
+  {
+   "fieldname": "incubator_notcc",
+   "fieldtype": "Select",
+   "label": "Incubator No(TCC)",
+   "options": "1\n2\n3"
+  },
+  {
+   "fieldname": "incubation_in",
+   "fieldtype": "Datetime",
+   "label": "Incubation In Date &Time"
+  },
+  {
+   "fieldname": "column_break_pmkw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "incubation_out",
+   "fieldtype": "Datetime",
+   "label": "Incubation Out Date & Time"
+  },
+  {
+   "fieldname": "notes_and_validity_section",
+   "fieldtype": "Section Break",
+   "label": "Notes And Validity"
+  },
+  {
+   "fieldname": "html",
+   "fieldtype": "HTML",
+   "options": "<P>This analysis is carried out as required for Plastic Bags and once per month for Raw Materials. This result is not valid without the citing of the Operations Manager.</P>"
+  },
+  {
+   "fieldname": "signed",
+   "fieldtype": "Signature",
+   "label": "Signed"
+  },
+  {
+   "fieldname": "column_break_ejbp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date "
+  },
+  {
+   "fieldname": "section_break_5spm",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Rinse-Off Test for Raw Materials",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:14.172968",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Rinse-Off Test for Raw Materials",
+ "owner": "devteam@anantdv.com",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

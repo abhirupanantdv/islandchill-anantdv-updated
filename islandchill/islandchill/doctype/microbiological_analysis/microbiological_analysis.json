@@ -1,0 +1,173 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "MA-.YYYY.-.#####",
+ "creation": "2026-09-15 18:45:19.124382",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date_of_analysis",
+  "product_size",
+  "colilert_lot",
+  "incubation_in_date",
+  "incubation_out_date",
+  "column_break_zywh",
+  "product",
+  "market",
+  "incubator_no_tcc_and_hpc",
+  "incubation_in_time",
+  "incubation_out_time",
+  "sample_analysis_section",
+  "sample_results",
+  "section_break_jisg",
+  "silver_ion",
+  "acceptance_criteria",
+  "comments",
+  "column_break_vvhr",
+  "analyst",
+  "verified_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date_of_analysis",
+   "fieldtype": "Date",
+   "label": "Date of Analysis"
+  },
+  {
+   "fieldname": "product_size",
+   "fieldtype": "Data",
+   "label": "Product Size"
+  },
+  {
+   "fieldname": "colilert_lot",
+   "fieldtype": "Data",
+   "label": "Colilert Lot"
+  },
+  {
+   "fieldname": "incubation_in_date",
+   "fieldtype": "Date",
+   "label": "Incubation In Date"
+  },
+  {
+   "fieldname": "incubation_out_date",
+   "fieldtype": "Date",
+   "label": "Incubation Out Date"
+  },
+  {
+   "fieldname": "column_break_zywh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "product",
+   "fieldtype": "Data",
+   "label": "Product"
+  },
+  {
+   "fieldname": "market",
+   "fieldtype": "Data",
+   "label": "Market"
+  },
+  {
+   "fieldname": "incubator_no_tcc_and_hpc",
+   "fieldtype": "Data",
+   "label": "Incubator No TCC and HPC"
+  },
+  {
+   "fieldname": "incubation_in_time",
+   "fieldtype": "Time",
+   "label": "Incubation In Time"
+  },
+  {
+   "fieldname": "incubation_out_time",
+   "fieldtype": "Time",
+   "label": "Incubation Out Time"
+  },
+  {
+   "fieldname": "sample_analysis_section",
+   "fieldtype": "Section Break",
+   "label": "Sample Analysis"
+  },
+  {
+   "fieldname": "sample_results",
+   "fieldtype": "Table",
+   "label": "Sample Results",
+   "options": "Microbiological Analysis Sample Result"
+  },
+  {
+   "fieldname": "section_break_jisg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "silver_ion",
+   "fieldtype": "Data",
+   "label": "Silver Ion"
+  },
+  {
+   "fieldname": "acceptance_criteria",
+   "fieldtype": "Small Text",
+   "label": "Acceptance Criteria"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "column_break_vvhr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "analyst",
+   "fieldtype": "Link",
+   "label": "Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Microbiological Analysis",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:11.128085",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Microbiological Analysis",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "anantdv@gmail.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

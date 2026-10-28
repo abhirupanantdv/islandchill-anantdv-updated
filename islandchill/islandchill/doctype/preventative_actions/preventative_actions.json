@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-06-03 21:23:56.627814",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "preventative_action",
+  "proposed",
+  "taken"
+ ],
+ "fields": [
+  {
+   "fieldname": "preventative_action",
+   "fieldtype": "Select",
+   "label": "Preventative Action",
+   "options": "\nChange to induction training\nChange to ongoing training\nEquipment / machinery modifications\nChange to work procedures\nChange to work environment\nEquipment / machinery maintenance\nOther job redesign\nOther preventative action"
+  },
+  {
+   "default": "0",
+   "fieldname": "proposed",
+   "fieldtype": "Check",
+   "label": "Proposed"
+  },
+  {
+   "default": "0",
+   "fieldname": "taken",
+   "fieldtype": "Check",
+   "label": "Taken"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:12.712821",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Preventative Actions",
+ "owner": "sharda.k@anantdv.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

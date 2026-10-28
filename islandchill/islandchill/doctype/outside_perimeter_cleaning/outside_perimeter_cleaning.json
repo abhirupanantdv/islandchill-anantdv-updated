@@ -1,0 +1,85 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-15 23:30:08.639221",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "name1",
+  "actions_taken_for_perimeter_cleaning",
+  "sign",
+  "verified_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "name1",
+   "fieldtype": "Link",
+   "label": "Name",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "actions_taken_for_perimeter_cleaning",
+   "fieldtype": "Small Text",
+   "label": "Actions taken for Perimeter Cleaning"
+  },
+  {
+   "fieldname": "sign",
+   "fieldtype": "Signature",
+   "label": "Sign"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Outside Perimeter Cleaning",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:12.369678",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Outside Perimeter Cleaning",
+ "owner": "sushmita@anantdv.com",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

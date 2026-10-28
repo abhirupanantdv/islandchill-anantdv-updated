@@ -1,0 +1,141 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-21 15:56:13.667865",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "items_sterilized",
+  "media__agar",
+  "lot_number",
+  "time_in",
+  "time_out",
+  "total_time",
+  "media_sterilization_time",
+  "sterilization_indicator",
+  "pass__fail",
+  "run_number",
+  "max_temp_obtained",
+  "pressure",
+  "analyst",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "items_sterilized",
+   "fieldtype": "Table",
+   "label": "Items Sterilized",
+   "options": "Autoclave Sterilized Item"
+  },
+  {
+   "fieldname": "media__agar",
+   "fieldtype": "Data",
+   "label": "Media / Agar"
+  },
+  {
+   "fieldname": "lot_number",
+   "fieldtype": "Data",
+   "label": "Lot Number"
+  },
+  {
+   "fieldname": "time_in",
+   "fieldtype": "Time",
+   "label": "Time In"
+  },
+  {
+   "fieldname": "time_out",
+   "fieldtype": "Time",
+   "label": "Time Out"
+  },
+  {
+   "fieldname": "total_time",
+   "fieldtype": "Duration",
+   "label": "Total Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "media_sterilization_time",
+   "fieldtype": "Duration",
+   "label": "Media Sterilization Time"
+  },
+  {
+   "fieldname": "sterilization_indicator",
+   "fieldtype": "Data",
+   "label": "Sterilization Indicator"
+  },
+  {
+   "fieldname": "pass__fail",
+   "fieldtype": "Select",
+   "label": "Pass / Fail",
+   "options": "\nPass\nFail"
+  },
+  {
+   "fieldname": "run_number",
+   "fieldtype": "Data",
+   "label": "Run Number"
+  },
+  {
+   "fieldname": "max_temp_obtained",
+   "fieldtype": "Float",
+   "label": "Max Temp Obtained"
+  },
+  {
+   "fieldname": "pressure",
+   "fieldtype": "Float",
+   "label": "Pressure"
+  },
+  {
+   "fieldname": "analyst",
+   "fieldtype": "Link",
+   "label": "Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Autoclave Record",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:31:24.690360",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Autoclave Record",
+ "owner": "sushmita@anantdv.com",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

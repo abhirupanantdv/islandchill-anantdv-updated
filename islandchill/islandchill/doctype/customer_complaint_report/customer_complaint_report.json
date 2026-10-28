@@ -1,0 +1,241 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "CCR-.YYYY.-.#####",
+ "creation": "2026-09-23 16:42:34.401456",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer_and_complaint_information_section",
+  "report_date",
+  "customer",
+  "customer_address",
+  "customer_phone",
+  "po_no__invoice_number",
+  "delivery_no",
+  "item_description",
+  "total_quantity_delivered",
+  "total_quantity_affected",
+  "delivery_date",
+  "complaint_received_by",
+  "complaint_received_date",
+  "reported_by_qa_in_charge",
+  "problem_details_and_investigation_section",
+  "problem_details",
+  "immediate_action_taken",
+  "root_cause",
+  "images__evidence_section",
+  "complaint_images__evidence",
+  "recommendation_and_disposition_section",
+  "recommendation",
+  "disposition",
+  "disposition_date",
+  "comments",
+  "complaint_status_and_closure_section",
+  "status_of_cc",
+  "start_date",
+  "closure_date",
+  "status_details",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer_and_complaint_information_section",
+   "fieldtype": "Section Break",
+   "label": "Customer and Complaint Information"
+  },
+  {
+   "fieldname": "report_date",
+   "fieldtype": "Date",
+   "label": "Report Date"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "customer_address",
+   "fieldtype": "Link",
+   "label": "Customer Address",
+   "options": "Address"
+  },
+  {
+   "fieldname": "customer_phone",
+   "fieldtype": "Data",
+   "label": "Customer Phone"
+  },
+  {
+   "fieldname": "po_no__invoice_number",
+   "fieldtype": "Data",
+   "label": "PO No. / Invoice Number"
+  },
+  {
+   "fieldname": "delivery_no",
+   "fieldtype": "Data",
+   "label": "Delivery No."
+  },
+  {
+   "fieldname": "item_description",
+   "fieldtype": "Data",
+   "label": "Item Description"
+  },
+  {
+   "fieldname": "total_quantity_delivered",
+   "fieldtype": "Float",
+   "label": "Total Quantity Delivered"
+  },
+  {
+   "fieldname": "total_quantity_affected",
+   "fieldtype": "Float",
+   "label": "Total Quantity Affected"
+  },
+  {
+   "fieldname": "delivery_date",
+   "fieldtype": "Date",
+   "label": "Delivery Date"
+  },
+  {
+   "fieldname": "complaint_received_by",
+   "fieldtype": "Link",
+   "label": "Complaint Received By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "complaint_received_date",
+   "fieldtype": "Date",
+   "label": "Complaint Received Date"
+  },
+  {
+   "fieldname": "reported_by_qa_in_charge",
+   "fieldtype": "Link",
+   "label": "Reported By (QA In Charge)",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "problem_details_and_investigation_section",
+   "fieldtype": "Section Break",
+   "label": "Problem Details and Investigation"
+  },
+  {
+   "fieldname": "problem_details",
+   "fieldtype": "Small Text",
+   "label": "Problem Details"
+  },
+  {
+   "fieldname": "immediate_action_taken",
+   "fieldtype": "Small Text",
+   "label": "Immediate Action Taken"
+  },
+  {
+   "fieldname": "root_cause",
+   "fieldtype": "Small Text",
+   "label": "Root Cause"
+  },
+  {
+   "fieldname": "images__evidence_section",
+   "fieldtype": "Section Break",
+   "label": "Images / Evidence"
+  },
+  {
+   "fieldname": "complaint_images__evidence",
+   "fieldtype": "Table",
+   "label": "Complaint Images / Evidence",
+   "options": "Customer Complaint Attachment"
+  },
+  {
+   "fieldname": "recommendation_and_disposition_section",
+   "fieldtype": "Section Break",
+   "label": "Recommendation and Disposition"
+  },
+  {
+   "fieldname": "recommendation",
+   "fieldtype": "Small Text",
+   "label": "Recommendation"
+  },
+  {
+   "fieldname": "disposition",
+   "fieldtype": "Small Text",
+   "label": "Disposition"
+  },
+  {
+   "fieldname": "disposition_date",
+   "fieldtype": "Date",
+   "label": "Disposition Date"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "complaint_status_and_closure_section",
+   "fieldtype": "Section Break",
+   "label": "Complaint Status and Closure"
+  },
+  {
+   "fieldname": "status_of_cc",
+   "fieldtype": "Select",
+   "label": "Status of CC",
+   "options": "\nOpen\nUnder Investigation\nAction Required\nPending Verification\nClosed"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date"
+  },
+  {
+   "fieldname": "closure_date",
+   "fieldtype": "Date",
+   "label": "Closure Date"
+  },
+  {
+   "fieldname": "status_details",
+   "fieldtype": "Small Text",
+   "label": "Status Details"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Customer Complaint Report",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:08.826020",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Customer Complaint Report",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "sushmita@anantdv.com",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,66 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-22 17:20:42.740822",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "qa_forms_filled_for_the_product",
+  "name_of_operator_who_filled_the_form",
+  "sighted_from_qc_manager",
+  "attach_photocopies",
+  "from_is_ok"
+ ],
+ "fields": [
+  {
+   "fieldname": "qa_forms_filled_for_the_product",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "QA forms filled for the product"
+  },
+  {
+   "fieldname": "name_of_operator_who_filled_the_form",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Name of operator who filled the form"
+  },
+  {
+   "fieldname": "sighted_from_qc_manager",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Sighted from QC Manager ",
+   "options": "\nYes\nNo"
+  },
+  {
+   "depends_on": "eval:doc.sighted_from_qc_manager==\"Yes\"",
+   "fieldname": "attach_photocopies",
+   "fieldtype": "Attach",
+   "in_list_view": 1,
+   "label": "Attach Photocopies"
+  },
+  {
+   "default": "0",
+   "fieldname": "from_is_ok",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "From Is Ok?"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:13.847893",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "QA Table",
+ "owner": "devteam@anantdv.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

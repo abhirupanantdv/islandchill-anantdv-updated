@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-10 20:30:40.265120",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sample_description",
+  "tcc_result",
+  "e_coli_result",
+  "tcc_analyst",
+  "e_coli_analyst",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "sample_description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Sample Description"
+  },
+  {
+   "fieldname": "tcc_result",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "TCC Result"
+  },
+  {
+   "fieldname": "e_coli_result",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "E Coli Result"
+  },
+  {
+   "fieldname": "tcc_analyst",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "TCC Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "e_coli_analyst",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "E Coli Analyst",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:11.630218",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Microbiological Analysis Result",
+ "owner": "anantdv@gmail.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,122 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-21 18:40:28.328781",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "section_break_l6qj",
+  "media_preparation_details",
+  "section_break_sjzc",
+  "distilled_water_batch_no",
+  "date_duran_bottles_sterilized",
+  "media_pouring_temprature",
+  "column_break_avjm",
+  "media_sterilization_time",
+  "total_autoclave_time",
+  "section_break_4cj5",
+  "analyst_sign",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "section_break_l6qj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "media_preparation_details",
+   "fieldtype": "Table",
+   "label": "Media Preparation Details",
+   "options": "Media Preparation Details"
+  },
+  {
+   "fieldname": "section_break_sjzc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "distilled_water_batch_no",
+   "fieldtype": "Data",
+   "label": "Distilled Water Batch no"
+  },
+  {
+   "fieldname": "date_duran_bottles_sterilized",
+   "fieldtype": "Date",
+   "label": "Date Duran Bottles Sterilized"
+  },
+  {
+   "fieldname": "media_pouring_temprature",
+   "fieldtype": "Data",
+   "label": "Media Pouring Temprature"
+  },
+  {
+   "fieldname": "column_break_avjm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "media_sterilization_time",
+   "fieldtype": "Data",
+   "label": "Media Sterilization Time"
+  },
+  {
+   "fieldname": "total_autoclave_time",
+   "fieldtype": "Duration",
+   "label": "Total autoclave Time"
+  },
+  {
+   "fieldname": "section_break_4cj5",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "analyst_sign",
+   "fieldtype": "Signature",
+   "label": "Analyst Sign"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Media Preparation Record",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:10.800936",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Media Preparation Record",
+ "owner": "devteam@anantdv.com",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

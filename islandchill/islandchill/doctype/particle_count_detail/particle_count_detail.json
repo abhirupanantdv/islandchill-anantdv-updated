@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-10 18:22:47.411814",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sample_date",
+  "sample_size",
+  "5th_day_particle_count",
+  "5th_day_count_done_by",
+  "10th_day_particle_count",
+  "10th_day_count_done_by",
+  "30th_day_particle_count",
+  "30th_day_count_done_by",
+  "verified_by",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "sample_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Sample Date"
+  },
+  {
+   "fieldname": "sample_size",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sample Size"
+  },
+  {
+   "fieldname": "5th_day_particle_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "5th Day Particle Count"
+  },
+  {
+   "fieldname": "5th_day_count_done_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "5th Day Count Done By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "10th_day_particle_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "10th Day Particle Count"
+  },
+  {
+   "fieldname": "10th_day_count_done_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "10th Day Count Done By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "30th_day_particle_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "30th Day Particle Count"
+  },
+  {
+   "fieldname": "30th_day_count_done_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "30th Day Count Done By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:12.537061",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Particle Count Detail",
+ "owner": "anantdv@gmail.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

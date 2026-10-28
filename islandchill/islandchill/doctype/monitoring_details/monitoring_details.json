@@ -1,0 +1,105 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-15 23:35:03.998242",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "time",
+  "uv1",
+  "uv2",
+  "uv3",
+  "09_\u00b5m_filter_silver_tank_area",
+  "045_\u00b5m_filter_silver_tank_area",
+  "silver_ion_ccp_water_filter_area",
+  "5_\u00b5m_filter",
+  "1_\u00b5m_filter",
+  "045_\u00b5m_filter",
+  "taken_by"
+ ],
+ "fields": [
+  {
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Time"
+  },
+  {
+   "fieldname": "uv1",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "UV1"
+  },
+  {
+   "fieldname": "uv2",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "UV2"
+  },
+  {
+   "fieldname": "uv3",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "UV3"
+  },
+  {
+   "fieldname": "09_\u00b5m_filter_silver_tank_area",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "0.9 \u00b5m Filter Silver Tank Area"
+  },
+  {
+   "fieldname": "045_\u00b5m_filter_silver_tank_area",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "0.45 \u00b5m Filter Silver Tank Area"
+  },
+  {
+   "fieldname": "silver_ion_ccp_water_filter_area",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Silver Ion (CCP) Water Filter Area"
+  },
+  {
+   "fieldname": "5_\u00b5m_filter",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "5 \u00b5m Filter"
+  },
+  {
+   "fieldname": "1_\u00b5m_filter",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "1 \u00b5m Filter"
+  },
+  {
+   "fieldname": "045_\u00b5m_filter",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "0.45 \u00b5m Filter"
+  },
+  {
+   "fieldname": "taken_by",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Taken By"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:12.181574",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Monitoring Details",
+ "owner": "anantdv@gmail.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

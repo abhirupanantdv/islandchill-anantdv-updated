@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-10 16:03:10.339490",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sample",
+  "time",
+  "reading"
+ ],
+ "fields": [
+  {
+   "fieldname": "sample",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Sample"
+  },
+  {
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Time"
+  },
+  {
+   "fieldname": "reading",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reading"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:15.357324",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Silver Photometer Reading",
+ "owner": "anantdv@gmail.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

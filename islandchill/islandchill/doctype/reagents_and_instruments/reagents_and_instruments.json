@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-15 15:45:20.291053",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "check",
+  "check_type",
+  "standard__reagent",
+  "expected_value",
+  "unit",
+  "time",
+  "result"
+ ],
+ "fields": [
+  {
+   "fieldname": "check",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Check"
+  },
+  {
+   "fieldname": "check_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Check Type",
+   "options": "\npH Meter Check Buffer\nConductivity Meter Check"
+  },
+  {
+   "fieldname": "standard__reagent",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Standard / Reagent"
+  },
+  {
+   "fieldname": "expected_value",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Expected Value"
+  },
+  {
+   "fieldname": "unit",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Unit",
+   "options": "\npH\n\u00b5S/cm"
+  },
+  {
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Time"
+  },
+  {
+   "fieldname": "result",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Result"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:14.004815",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Reagents and Instruments",
+ "owner": "anantdv@gmail.com",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

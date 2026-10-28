@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "CLI-.YYYY.-.#####",
+ "creation": "2026-09-29 15:35:37.879435",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_dofd",
+  "date",
+  "market",
+  "odour_check_done",
+  "any_odour_observed",
+  "visual_inspection_done",
+  "inspected_by",
+  "inspector_signature",
+  "verifier_signature",
+  "odour_details",
+  "any_damages",
+  "damage_details",
+  "comments",
+  "column_break_rxka",
+  "container_no",
+  "verified_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_dofd",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "market",
+   "fieldtype": "Data",
+   "label": "Market"
+  },
+  {
+   "default": "0",
+   "fieldname": "odour_check_done",
+   "fieldtype": "Check",
+   "label": "Odour Check Done"
+  },
+  {
+   "default": "0",
+   "fieldname": "any_odour_observed",
+   "fieldtype": "Check",
+   "label": "Any Odour Observed"
+  },
+  {
+   "default": "0",
+   "fieldname": "visual_inspection_done",
+   "fieldtype": "Check",
+   "label": "Visual Inspection Done"
+  },
+  {
+   "fieldname": "inspected_by",
+   "fieldtype": "Link",
+   "label": "Inspected By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "inspector_signature",
+   "fieldtype": "Signature",
+   "label": "Inspector Signature"
+  },
+  {
+   "fieldname": "verifier_signature",
+   "fieldtype": "Signature",
+   "label": "Verifier Signature"
+  },
+  {
+   "fieldname": "odour_details",
+   "fieldtype": "Small Text",
+   "label": "Odour Details"
+  },
+  {
+   "default": "0",
+   "fieldname": "any_damages",
+   "fieldtype": "Check",
+   "label": "Any Damages"
+  },
+  {
+   "fieldname": "damage_details",
+   "fieldtype": "Small Text",
+   "label": "Damage Details"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "column_break_rxka",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "container_no",
+   "fieldtype": "Data",
+   "label": "Container No."
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Container Loading Inspection",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:08.302991",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Container Loading Inspection",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "sushmita@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

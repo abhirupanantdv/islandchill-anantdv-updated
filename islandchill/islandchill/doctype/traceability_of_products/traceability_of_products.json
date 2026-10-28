@@ -1,0 +1,177 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-22 16:12:03.469946",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "name_person_carrying_out_traceability",
+  "product",
+  "column_break_oc9w",
+  "date_of_production",
+  "section_break_inqv",
+  "product_details",
+  "section_break_vt72",
+  "date_in_which_the_product_was_manifactured",
+  "column_break_90fz",
+  "names",
+  "approved_by_section",
+  "name1",
+  "column_break_x2pe",
+  "sign",
+  "section_break_uy71",
+  "qa_table",
+  "finished_goods_transfer_section",
+  "date_transferred_to_warehouse",
+  "column_break_boyz",
+  "date_dispatch",
+  "section_break_rcxj",
+  "qa_supervisons_comments",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "name_person_carrying_out_traceability",
+   "fieldtype": "Data",
+   "label": "Name (Person Carrying out Traceability)"
+  },
+  {
+   "fieldname": "product",
+   "fieldtype": "Data",
+   "label": "Product"
+  },
+  {
+   "fieldname": "column_break_oc9w",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "date_of_production",
+   "fieldtype": "Date",
+   "label": "Date of Production"
+  },
+  {
+   "fieldname": "section_break_inqv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "product_details",
+   "fieldtype": "Table",
+   "label": "Product Details",
+   "options": "Product Details"
+  },
+  {
+   "fieldname": "section_break_vt72",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "date_in_which_the_product_was_manifactured",
+   "fieldtype": "Date",
+   "label": "Date in which the product was manufactured"
+  },
+  {
+   "fieldname": "column_break_90fz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "names",
+   "fieldtype": "Data",
+   "label": "Names"
+  },
+  {
+   "fieldname": "approved_by_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "name1",
+   "fieldtype": "Link",
+   "label": "Name",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "column_break_x2pe",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sign",
+   "fieldtype": "Signature",
+   "label": "Sign"
+  },
+  {
+   "fieldname": "section_break_uy71",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "qa_table",
+   "fieldtype": "Table",
+   "label": "QA Table",
+   "options": "QA Table"
+  },
+  {
+   "fieldname": "finished_goods_transfer_section",
+   "fieldtype": "Section Break",
+   "label": "Finished Goods Transfer"
+  },
+  {
+   "fieldname": "date_transferred_to_warehouse",
+   "fieldtype": "Date",
+   "label": "Date transferred to warehouse"
+  },
+  {
+   "fieldname": "column_break_boyz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "date_dispatch",
+   "fieldtype": "Date",
+   "label": "Date Dispatch"
+  },
+  {
+   "fieldname": "section_break_rcxj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "qa_supervisons_comments",
+   "fieldtype": "Small Text",
+   "label": "QA Supervisor's Comments"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Traceability of products",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:16.094261",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Traceability of products",
+ "owner": "devteam@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,124 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-15 23:31:28.281859",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "time_stop",
+  "column_break_kkfm",
+  "time_start",
+  "product_size",
+  "section_break_zbxr",
+  "monitoring_details",
+  "section_break_pabo",
+  "verified_by",
+  "comments",
+  "column_break_frhb",
+  "sign",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "time_stop",
+   "fieldtype": "Time",
+   "label": "Time Stop"
+  },
+  {
+   "fieldname": "column_break_kkfm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "time_start",
+   "fieldtype": "Time",
+   "label": "Time Start"
+  },
+  {
+   "fieldname": "product_size",
+   "fieldtype": "Data",
+   "label": "Product Size"
+  },
+  {
+   "fieldname": "section_break_zbxr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "monitoring_details",
+   "fieldtype": "Table",
+   "label": "Monitoring Details",
+   "options": "Monitoring Details"
+  },
+  {
+   "fieldname": "section_break_pabo",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "column_break_frhb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sign",
+   "fieldtype": "Link",
+   "label": "Sign",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Monitoring",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:11.964443",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Monitoring",
+ "owner": "anantdv@gmail.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

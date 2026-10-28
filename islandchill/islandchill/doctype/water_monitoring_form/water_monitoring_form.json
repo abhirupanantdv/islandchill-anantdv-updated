@@ -1,0 +1,139 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-06-17 21:38:52.245140",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "product_size",
+  "column_break_nlcc",
+  "time_start",
+  "time_stop",
+  "section_break_buzd",
+  "water_monitoring_detail",
+  "section_break_hgzr",
+  "verified_by",
+  "column_break_kuya",
+  "signature",
+  "section_break_kiaq",
+  "comments",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "product_size",
+   "fieldtype": "Data",
+   "label": "Product Size"
+  },
+  {
+   "fieldname": "column_break_nlcc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "time_start",
+   "fieldtype": "Time",
+   "label": "Time Start"
+  },
+  {
+   "fieldname": "time_stop",
+   "fieldtype": "Time",
+   "label": "Time Stop"
+  },
+  {
+   "fieldname": "section_break_buzd",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "water_monitoring_detail",
+   "fieldtype": "Table",
+   "label": "Water Monitoring Detail",
+   "options": "Water Monitoring Detail"
+  },
+  {
+   "fieldname": "section_break_hgzr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "column_break_kuya",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Signature",
+   "label": "Signature"
+  },
+  {
+   "fieldname": "section_break_kiaq",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Water Monitoring Form",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:16.671242",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Water Monitoring Form",
+ "owner": "sharda.k@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Operation Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

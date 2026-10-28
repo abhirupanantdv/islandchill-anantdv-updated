@@ -1,0 +1,550 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-09-15 23:45:20.019087",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "time_start",
+  "stop",
+  "market",
+  "production_supervisor",
+  "product_description",
+  "column_break_dkiz",
+  "size_carton__ldpe_wrap",
+  "production_to_warehouse_total_cases_handover",
+  "endorsed_by",
+  "received_by_warehouse_supervisor",
+  "filler_counter_csd_rtd",
+  "labeller_counter",
+  "meter_reading_section",
+  "lpg_start",
+  "lpg_stop",
+  "boc_vessel_level_start",
+  "column_break_2rtd",
+  "efl_start",
+  "efl_stop",
+  "vessel_level_stop",
+  "production_crew_section",
+  "in_feed_palletizer",
+  "filler",
+  "lab",
+  "water_system",
+  "blowing_machine",
+  "labeller",
+  "qc",
+  "fill_level",
+  "warehouse",
+  "other_bottle_cans_cap_wastage",
+  "transportation",
+  "column_break_vhbm",
+  "palletizer__in_feed",
+  "filler_1",
+  "can_under_fill",
+  "can_leakage",
+  "lid_under_fill",
+  "sample",
+  "damaged",
+  "lab_test",
+  "cap_lid",
+  "pre_from",
+  "blownbottle",
+  "section_break_conb",
+  "front_label_description",
+  "front_label_used",
+  "front_label_wastage",
+  "column_break_2smi",
+  "front_label_issued",
+  "front_label_wip",
+  "back_label_section",
+  "back_label_description",
+  "back_label_used",
+  "back_label_wastage",
+  "column_break_9oat",
+  "back_label_issued",
+  "back_label_wip",
+  "ldpe_usage_section",
+  "size",
+  "mm",
+  "\u03bcm_used",
+  "column_break_gixq",
+  "wastage",
+  "issued",
+  "wip",
+  "cartons_used_section",
+  "size1",
+  "column_break_8i47",
+  "used",
+  "column_break_qzdw",
+  "wastage1",
+  "section_break_lpmt",
+  "cap",
+  "section_break_qhpo",
+  "downtimes__comments",
+  "section_break_vuo0",
+  "forms_filled_by",
+  "column_break_vivs",
+  "checked_by",
+  "section_break_s2pp",
+  "column_break_nt8f",
+  "column_break_yt6e",
+  "approved_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "time_start",
+   "fieldtype": "Time",
+   "label": "Time start"
+  },
+  {
+   "fieldname": "stop",
+   "fieldtype": "Data",
+   "label": "Stop"
+  },
+  {
+   "fieldname": "market",
+   "fieldtype": "Data",
+   "label": "Market"
+  },
+  {
+   "fieldname": "production_supervisor",
+   "fieldtype": "Link",
+   "label": "Production Supervisor",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "product_description",
+   "fieldtype": "Small Text",
+   "label": "Product Description"
+  },
+  {
+   "fieldname": "column_break_dkiz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "size_carton__ldpe_wrap",
+   "fieldtype": "Data",
+   "label": "Size (Carton / LDPE Wrap)"
+  },
+  {
+   "fieldname": "production_to_warehouse_total_cases_handover",
+   "fieldtype": "Data",
+   "label": "Production to Warehouse Total Cases Handover"
+  },
+  {
+   "fieldname": "endorsed_by",
+   "fieldtype": "Data",
+   "label": "Endorsed By"
+  },
+  {
+   "fieldname": "received_by_warehouse_supervisor",
+   "fieldtype": "Link",
+   "label": "Received by Warehouse Supervisor",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "filler_counter_csd_rtd",
+   "fieldtype": "Data",
+   "label": "Filler Counter (CSD/ RTD)"
+  },
+  {
+   "fieldname": "labeller_counter",
+   "fieldtype": "Data",
+   "label": "Labeller Counter"
+  },
+  {
+   "fieldname": "meter_reading_section",
+   "fieldtype": "Section Break",
+   "label": "Meter Reading"
+  },
+  {
+   "fieldname": "lpg_start",
+   "fieldtype": "Datetime",
+   "label": "LPG Start "
+  },
+  {
+   "fieldname": "lpg_stop",
+   "fieldtype": "Datetime",
+   "label": "LPG Stop"
+  },
+  {
+   "fieldname": "boc_vessel_level_start",
+   "fieldtype": "Datetime",
+   "label": "BOC Vessel Level Start"
+  },
+  {
+   "fieldname": "column_break_2rtd",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "efl_start",
+   "fieldtype": "Datetime",
+   "label": "EFL Start"
+  },
+  {
+   "fieldname": "efl_stop",
+   "fieldtype": "Datetime",
+   "label": "EFL Stop"
+  },
+  {
+   "fieldname": "vessel_level_stop",
+   "fieldtype": "Datetime",
+   "label": "Vessel Level Stop"
+  },
+  {
+   "fieldname": "production_crew_section",
+   "fieldtype": "Section Break",
+   "label": "Production Crew"
+  },
+  {
+   "fieldname": "in_feed_palletizer",
+   "fieldtype": "Data",
+   "label": "In-feed/Palletizer"
+  },
+  {
+   "fieldname": "filler",
+   "fieldtype": "Data",
+   "label": "Filler"
+  },
+  {
+   "fieldname": "lab",
+   "fieldtype": "Data",
+   "label": "Lab"
+  },
+  {
+   "fieldname": "water_system",
+   "fieldtype": "Data",
+   "label": "Water System"
+  },
+  {
+   "fieldname": "blowing_machine",
+   "fieldtype": "Data",
+   "label": "Blowing Machine"
+  },
+  {
+   "fieldname": "labeller",
+   "fieldtype": "Data",
+   "label": "Labeller"
+  },
+  {
+   "fieldname": "qc",
+   "fieldtype": "Data",
+   "label": "QC"
+  },
+  {
+   "fieldname": "fill_level",
+   "fieldtype": "Data",
+   "label": "Fill Level"
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Data",
+   "label": "Warehouse"
+  },
+  {
+   "fieldname": "other_bottle_cans_cap_wastage",
+   "fieldtype": "Data",
+   "label": "Other (Bottle/ Cans/ Cap Wastage)"
+  },
+  {
+   "fieldname": "transportation",
+   "fieldtype": "Data",
+   "label": "Transportation"
+  },
+  {
+   "fieldname": "column_break_vhbm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "palletizer__in_feed",
+   "fieldtype": "Data",
+   "label": "Palletizer/ In-feed"
+  },
+  {
+   "fieldname": "filler_1",
+   "fieldtype": "Data",
+   "label": "Filler"
+  },
+  {
+   "fieldname": "can_under_fill",
+   "fieldtype": "Data",
+   "label": "Can under fill"
+  },
+  {
+   "fieldname": "can_leakage",
+   "fieldtype": "Data",
+   "label": "Can Leakage"
+  },
+  {
+   "fieldname": "lid_under_fill",
+   "fieldtype": "Data",
+   "label": "Lid under fill"
+  },
+  {
+   "fieldname": "sample",
+   "fieldtype": "Data",
+   "label": "Sample "
+  },
+  {
+   "fieldname": "damaged",
+   "fieldtype": "Data",
+   "label": "Damaged"
+  },
+  {
+   "fieldname": "lab_test",
+   "fieldtype": "Data",
+   "label": "Lab Test"
+  },
+  {
+   "fieldname": "cap_lid",
+   "fieldtype": "Data",
+   "label": "Cap/ Lid"
+  },
+  {
+   "fieldname": "pre_from",
+   "fieldtype": "Data",
+   "label": "Pre-From"
+  },
+  {
+   "fieldname": "blownbottle",
+   "fieldtype": "Data",
+   "label": "BlownBottle"
+  },
+  {
+   "fieldname": "section_break_conb",
+   "fieldtype": "Section Break",
+   "label": "Front Label"
+  },
+  {
+   "fieldname": "front_label_description",
+   "fieldtype": "Data",
+   "label": "Front Label Description"
+  },
+  {
+   "fieldname": "front_label_used",
+   "fieldtype": "Data",
+   "label": "Front Label Used"
+  },
+  {
+   "fieldname": "front_label_wastage",
+   "fieldtype": "Data",
+   "label": "Front Label Wastage"
+  },
+  {
+   "fieldname": "column_break_2smi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "front_label_issued",
+   "fieldtype": "Data",
+   "label": "Front Label Issued"
+  },
+  {
+   "fieldname": "front_label_wip",
+   "fieldtype": "Data",
+   "label": "Front Label WIP"
+  },
+  {
+   "fieldname": "back_label_section",
+   "fieldtype": "Section Break",
+   "label": "Back Label"
+  },
+  {
+   "fieldname": "back_label_description",
+   "fieldtype": "Data",
+   "label": "Back Label Description"
+  },
+  {
+   "fieldname": "back_label_used",
+   "fieldtype": "Data",
+   "label": "Back Label Used"
+  },
+  {
+   "fieldname": "back_label_wastage",
+   "fieldtype": "Data",
+   "label": "Back Label Wastage"
+  },
+  {
+   "fieldname": "column_break_9oat",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "back_label_issued",
+   "fieldtype": "Data",
+   "label": "Back Label Issued"
+  },
+  {
+   "fieldname": "back_label_wip",
+   "fieldtype": "Data",
+   "label": "Back Label WIP"
+  },
+  {
+   "fieldname": "ldpe_usage_section",
+   "fieldtype": "Section Break",
+   "label": "LDPE Usage"
+  },
+  {
+   "fieldname": "size",
+   "fieldtype": "Data",
+   "label": "Size"
+  },
+  {
+   "fieldname": "mm",
+   "fieldtype": "Data",
+   "label": "mm"
+  },
+  {
+   "fieldname": "\u03bcm_used",
+   "fieldtype": "Data",
+   "label": "\u03bcm Used"
+  },
+  {
+   "fieldname": "column_break_gixq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "wastage",
+   "fieldtype": "Data",
+   "label": "Wastage"
+  },
+  {
+   "fieldname": "issued",
+   "fieldtype": "Data",
+   "label": "Issued"
+  },
+  {
+   "fieldname": "wip",
+   "fieldtype": "Data",
+   "label": "WIP"
+  },
+  {
+   "fieldname": "cartons_used_section",
+   "fieldtype": "Section Break",
+   "label": "Cartons Used"
+  },
+  {
+   "fieldname": "size1",
+   "fieldtype": "Data",
+   "label": "Size"
+  },
+  {
+   "fieldname": "column_break_8i47",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "used",
+   "fieldtype": "Data",
+   "label": "Used"
+  },
+  {
+   "fieldname": "column_break_qzdw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "wastage1",
+   "fieldtype": "Data",
+   "label": "Wastage"
+  },
+  {
+   "fieldname": "section_break_lpmt",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "cap",
+   "fieldtype": "Table",
+   "options": "Cap"
+  },
+  {
+   "fieldname": "section_break_qhpo",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "downtimes__comments",
+   "fieldtype": "Small Text",
+   "label": "Downtimes / Comments"
+  },
+  {
+   "fieldname": "section_break_vuo0",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "forms_filled_by",
+   "fieldtype": "Link",
+   "label": "Forms Filled By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "column_break_vivs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "checked_by",
+   "fieldtype": "Link",
+   "label": "Checked By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "section_break_s2pp",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_nt8f",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_yt6e",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Signature",
+   "label": "Approved By"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Production Record",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:13.452025",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Production Record",
+ "owner": "devteam@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

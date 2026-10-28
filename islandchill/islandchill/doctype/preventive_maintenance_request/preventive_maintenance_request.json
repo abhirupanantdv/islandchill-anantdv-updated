@@ -1,0 +1,233 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "PMR-.YYYY.-.#####",
+ "creation": "2026-09-23 21:35:18.694184",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_a_maintenance_request_section",
+  "request_date",
+  "machine",
+  "machine_name",
+  "machine_number",
+  "planned_pm_start_date",
+  "estimated_pm_duration",
+  "reason_for_maintenance",
+  "maintenance_checked_by",
+  "maintenance_approved_by",
+  "section_b_production_approval_section",
+  "production_coordinator",
+  "authorized_by",
+  "approved_by",
+  "production_approval_date",
+  "production_comments",
+  "section_c_maintenance_completion_section",
+  "pm_actual_start_date",
+  "pm_actual_end_date",
+  "pm_performed_by",
+  "maintenance_completion_checked_by",
+  "maintenance_completion_approved_by",
+  "pm_checklist",
+  "section_d_machine_handover_to_production_section",
+  "handover_checked_by",
+  "handover_approved_by",
+  "handover_date",
+  "handover_comments",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_a_maintenance_request_section",
+   "fieldtype": "Section Break",
+   "label": "Section A Maintenance Request"
+  },
+  {
+   "fieldname": "request_date",
+   "fieldtype": "Date",
+   "label": "Request Date"
+  },
+  {
+   "fieldname": "machine",
+   "fieldtype": "Data",
+   "label": "Machine"
+  },
+  {
+   "fieldname": "machine_name",
+   "fieldtype": "Data",
+   "label": "Machine Name"
+  },
+  {
+   "fieldname": "machine_number",
+   "fieldtype": "Data",
+   "label": "Machine Number"
+  },
+  {
+   "fieldname": "planned_pm_start_date",
+   "fieldtype": "Date",
+   "label": "Planned PM Start Date"
+  },
+  {
+   "fieldname": "estimated_pm_duration",
+   "fieldtype": "Int",
+   "label": "Estimated PM Duration"
+  },
+  {
+   "fieldname": "reason_for_maintenance",
+   "fieldtype": "Small Text",
+   "label": "Reason for Maintenance"
+  },
+  {
+   "fieldname": "maintenance_checked_by",
+   "fieldtype": "Link",
+   "label": "Maintenance Checked By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "maintenance_approved_by",
+   "fieldtype": "Link",
+   "label": "Maintenance Approved By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "section_b_production_approval_section",
+   "fieldtype": "Section Break",
+   "label": "Section B Production Approval"
+  },
+  {
+   "fieldname": "production_coordinator",
+   "fieldtype": "Link",
+   "label": "Production Coordinator",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "authorized_by",
+   "fieldtype": "Link",
+   "label": "Authorized By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "production_approval_date",
+   "fieldtype": "Date",
+   "label": "Production Approval Date"
+  },
+  {
+   "fieldname": "production_comments",
+   "fieldtype": "Small Text",
+   "label": "Production Comments"
+  },
+  {
+   "fieldname": "section_c_maintenance_completion_section",
+   "fieldtype": "Section Break",
+   "label": "Section C Maintenance Completion"
+  },
+  {
+   "fieldname": "pm_actual_start_date",
+   "fieldtype": "Date",
+   "label": "PM Actual Start Date"
+  },
+  {
+   "fieldname": "pm_actual_end_date",
+   "fieldtype": "Date",
+   "label": "PM Actual End Date"
+  },
+  {
+   "fieldname": "pm_performed_by",
+   "fieldtype": "Link",
+   "label": "PM Performed By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "maintenance_completion_checked_by",
+   "fieldtype": "Link",
+   "label": "Maintenance Completion Checked By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "maintenance_completion_approved_by",
+   "fieldtype": "Link",
+   "label": "Maintenance Completion Approved By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "pm_checklist",
+   "fieldtype": "Attach",
+   "label": "PM Checklist"
+  },
+  {
+   "fieldname": "section_d_machine_handover_to_production_section",
+   "fieldtype": "Section Break",
+   "label": "Section D Machine Handover to Production"
+  },
+  {
+   "fieldname": "handover_checked_by",
+   "fieldtype": "Link",
+   "label": "Handover Checked By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "handover_approved_by",
+   "fieldtype": "Link",
+   "label": "Handover Approved By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "handover_date",
+   "fieldtype": "Date",
+   "label": "Handover Date"
+  },
+  {
+   "fieldname": "handover_comments",
+   "fieldtype": "Small Text",
+   "label": "Handover Comments"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Preventive Maintenance Request",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:12.874247",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Preventive Maintenance Request",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "sushmita@anantdv.com",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

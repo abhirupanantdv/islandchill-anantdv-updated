@@ -1,0 +1,191 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-06-09 18:27:58.790707",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sample_and_analyst_info_section",
+  "date_of_analysis",
+  "product",
+  "column_break_bpum",
+  "product_size",
+  "market",
+  "media_and_material_info_section",
+  "colilert_lot",
+  "incubation_information_section",
+  "incubator_no_tcc_and_hpc",
+  "tcc__incubation_in_datetime",
+  "column_break_kdmc",
+  "tcc__incubation_out_datetime",
+  "results_section",
+  "water_analysis_result_row",
+  "acceptance_parameters_section",
+  "tcc__e_coli_limit",
+  "column_break_bigo",
+  "verified_by",
+  "notes_and_validity_section",
+  "comments",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "sample_and_analyst_info_section",
+   "fieldtype": "Section Break",
+   "label": "Sample and Analyst Info"
+  },
+  {
+   "fieldname": "date_of_analysis",
+   "fieldtype": "Date",
+   "label": "Date of Analysis"
+  },
+  {
+   "fieldname": "product",
+   "fieldtype": "Link",
+   "label": "Product",
+   "options": "Item"
+  },
+  {
+   "fieldname": "column_break_bpum",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "product_size",
+   "fieldtype": "Data",
+   "label": "Product Size"
+  },
+  {
+   "fieldname": "market",
+   "fieldtype": "Data",
+   "label": "Market"
+  },
+  {
+   "fieldname": "media_and_material_info_section",
+   "fieldtype": "Section Break",
+   "label": "Media and Material Info"
+  },
+  {
+   "fieldname": "colilert_lot",
+   "fieldtype": "Data",
+   "label": "Colilert Lot"
+  },
+  {
+   "fieldname": "incubation_information_section",
+   "fieldtype": "Section Break",
+   "label": "Incubation Information"
+  },
+  {
+   "fieldname": "incubator_no_tcc_and_hpc",
+   "fieldtype": "Data",
+   "label": "Incubator No TCC and HPC"
+  },
+  {
+   "fieldname": "tcc__incubation_in_datetime",
+   "fieldtype": "Datetime",
+   "label": "TCC  Incubation In (Date/Time)"
+  },
+  {
+   "fieldname": "column_break_kdmc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tcc__incubation_out_datetime",
+   "fieldtype": "Datetime",
+   "label": "TCC  Incubation Out (Date/Time)"
+  },
+  {
+   "fieldname": "results_section",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "water_analysis_result_row",
+   "fieldtype": "Table",
+   "label": "Water Analysis Result Row",
+   "options": "Water Analysis Result Row"
+  },
+  {
+   "fieldname": "acceptance_parameters_section",
+   "fieldtype": "Section Break",
+   "label": "Acceptance Parameters"
+  },
+  {
+   "default": "Absent/100mL",
+   "fieldname": "tcc__e_coli_limit",
+   "fieldtype": "Data",
+   "label": "TCC  E Coli Limit"
+  },
+  {
+   "fieldname": "column_break_bigo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "User"
+  },
+  {
+   "fieldname": "notes_and_validity_section",
+   "fieldtype": "Section Break",
+   "label": "Notes and Validity"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Microbiological Analysis CSD Rines Water Syrup Mixing Water",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:11.401911",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Microbiological Analysis CSD Rines Water Syrup Mixing Water",
+ "owner": "sharda.k@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Operation Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,213 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-07-15 17:17:18.753264",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "prepared_by",
+  "lab_report_alcohol_",
+  "column_break_hjig",
+  "tank_no",
+  "verified_by",
+  "tank_ph",
+  "column_break_djxe",
+  "volume",
+  "analysed_by",
+  "finished_product_ph",
+  "section_break_zafe",
+  "ingredients",
+  "section_break_ftpj",
+  "sugar_required_kg",
+  "mixer_taken_by",
+  "product_taken_by",
+  "column_break_mehw",
+  "sugar_added_kg",
+  "brix_product_",
+  "column_break_robl",
+  "brix_mixer_",
+  "gas_level",
+  "section_break_vsqf",
+  "approved_by",
+  "section_break_fgca",
+  "work_order",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "prepared_by",
+   "fieldtype": "Link",
+   "label": "Prepared By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "lab_report_alcohol_",
+   "fieldtype": "Float",
+   "label": "Lab Report Alcohol %"
+  },
+  {
+   "fieldname": "column_break_hjig",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tank_no",
+   "fieldtype": "Int",
+   "label": "Tank No"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Link",
+   "label": "Verified By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "tank_ph",
+   "fieldtype": "Float",
+   "label": "Tank PH"
+  },
+  {
+   "fieldname": "column_break_djxe",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "volume",
+   "fieldtype": "Float",
+   "label": "Volume"
+  },
+  {
+   "fieldname": "analysed_by",
+   "fieldtype": "Link",
+   "label": "Analysed By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "finished_product_ph",
+   "fieldtype": "Float",
+   "label": "Finished Product PH"
+  },
+  {
+   "fieldname": "section_break_zafe",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "ingredients",
+   "fieldtype": "Table",
+   "label": "Ingredients",
+   "options": "Standard Form 35 Item"
+  },
+  {
+   "fieldname": "section_break_ftpj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "sugar_required_kg",
+   "fieldtype": "Float",
+   "label": "Sugar Required (Kg)"
+  },
+  {
+   "fieldname": "mixer_taken_by",
+   "fieldtype": "Link",
+   "label": "Mixer Taken By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "product_taken_by",
+   "fieldtype": "Link",
+   "label": "Product Taken By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "column_break_mehw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sugar_added_kg",
+   "fieldtype": "Float",
+   "label": "Sugar Added (Kg)"
+  },
+  {
+   "fieldname": "brix_product_",
+   "fieldtype": "Float",
+   "label": "Brix Product (%)"
+  },
+  {
+   "fieldname": "column_break_robl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "brix_mixer_",
+   "fieldtype": "Float",
+   "label": "Brix Mixer (%)"
+  },
+  {
+   "fieldname": "gas_level",
+   "fieldtype": "Data",
+   "label": "Gas Level"
+  },
+  {
+   "fieldname": "section_break_vsqf",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved by",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "section_break_fgca",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Work Order"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Gold Stone Rum and Cola",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-28 23:33:09.771936",
+ "modified_by": "Administrator",
+ "module": "Islandchill",
+ "name": "Gold Stone Rum and Cola",
+ "owner": "sharda.k@anantdv.com",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
