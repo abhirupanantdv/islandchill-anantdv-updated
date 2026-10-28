@@ -1107,7 +1107,7 @@ def change_work_order_status(work_order, status):
 
 
 @frappe.whitelist(allow_guest=True)
-def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
+def get_work_order_dashboard(limit=20, start=0, company=None, status=None, search=None):
     limit = frappe.utils.cint(limit) or 20
     start = frappe.utils.cint(start) or 0
 
@@ -1120,9 +1120,14 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
     if status and status != 'All':
         filters.append(["status", "=", status])
 
+    search = (search or "").strip()
+    or_filters = [[field, "like", f"%{search}%"] for field in
+                  ("name", "production_item", "item_name")] if search else None
+
     wo_list = frappe.get_all(
         "Work Order",
         filters=filters,
+        or_filters=or_filters,
         fields=[
             "name", "production_item", "item_name",
             "qty", "produced_qty", "planned_start_date",
@@ -1136,7 +1141,16 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
         ignore_permissions=True
     )
 
-    total_count = frappe.db.count("Work Order", filters=filters)
+    if or_filters:
+        total_count = len(frappe.get_all(
+            "Work Order",
+            filters=filters,
+            or_filters=or_filters,
+            pluck="name",
+            ignore_permissions=True,
+        ))
+    else:
+        total_count = frappe.db.count("Work Order", filters=filters)
 
     if wo_list:
         wo_names = [w.name for w in wo_list]
@@ -1204,6 +1218,35 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
                 maint_by_wo[wo_n] = set()
             maint_by_wo[wo_n].add(s.get("equipment"))
 
+    # Employee assignments and timer entries share the same child DocType.
+    employees_by_card = {}
+    if jc_list:
+        employee_rows = frappe.get_all(
+            "Job Card Time Log",
+            filters={"parent": ["in", [jc.name for jc in jc_list]],
+                     "parenttype": "Job Card",
+                     "parentfield": ["in", ["employee", "time_logs"]]},
+            fields=["parent", "parentfield", "employee"],
+            order_by="idx asc",
+            limit_page_length=0,
+        )
+        employee_ids = list({row.employee for row in employee_rows if row.employee})
+        employee_names = {
+            row.name: row.employee_name or row.name
+            for row in (frappe.get_all(
+                "Employee", filters={"name": ["in", employee_ids]},
+                fields=["name", "employee_name"], limit_page_length=0,
+            ) if employee_ids else [])
+        }
+        for field in ("employee", "time_logs"):
+            for row in employee_rows:
+                if row.parentfield != field or not row.employee:
+                    continue
+                assignments = employees_by_card.setdefault(row.parent, {})
+                assignments.setdefault(field, [])
+                if row.employee not in assignments[field]:
+                    assignments[field].append(row.employee)
+
     jc_by_wo = {}
     for jc in jc_list:
         wo_name = jc.work_order
@@ -1214,12 +1257,14 @@ def get_work_order_dashboard(limit=20, start=0, company=None, status=None):
         if app_status == "Work in Progress":
             app_status = "Work In Progress"
 
+        assignments = employees_by_card.get(jc.name, {})
+        operator_ids = assignments.get("employee") or assignments.get("time_logs") or []
         jc_by_wo[wo_name].append({
             "id": jc.name,
             "operation": jc.operation or "",
             "station": jc.workstation or "",
             "status": app_status,
-            "operator": "",
+            "operator": ", ".join(employee_names.get(emp, emp) for emp in operator_ids),
             "remarks": jc.remarks or "",
             "forQuantity": frappe.utils.flt(jc.for_quantity or 0),
             "totalCompletedQty": frappe.utils.flt(jc.total_completed_qty or 0),

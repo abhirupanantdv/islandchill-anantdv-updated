@@ -3323,3 +3323,49 @@ input.form-input-icon,
   background: rgba(245, 158, 11, 0.2);
   color: #fcd34d;
 }
+
+/* Keep the header icon in its own column, outside the editable text. */
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 300px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #fff;
+}
+.header-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+.header-search-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text-muted, #64748b);
+  pointer-events: none;
+}
+.header-search .header-search-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: #1e293b;
+  caret-color: #1e293b;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.header-search-input::placeholder {
+  color: #64748b;
+  opacity: 1;
+}

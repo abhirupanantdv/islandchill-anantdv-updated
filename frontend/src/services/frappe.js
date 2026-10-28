@@ -3056,13 +3056,14 @@ async getEquipmentList(params = {}) {
   }
 
 
-  async getWorkOrderDashboard(limit = 20, start = 0, company = '', status = '') {
+  async getWorkOrderDashboard(limit = 20, start = 0, company = '', status = '', search = '') {
     const baseUrl = this.resolveUrl(this.connection.url);
     const companyQuery = company ? `&company=${encodeURIComponent(company)}` : '';
     const statusQuery = status ? `&status=${encodeURIComponent(status)}` : '';
+    const searchQuery = search ? `&search=${encodeURIComponent(search)}` : '';
 
     const response = await fetch(
-      `${baseUrl}/api/method/islandchill.api.manufacturing.get_work_order_dashboard?limit=${limit}&start=${start}${companyQuery}${statusQuery}`,
+      `${baseUrl}/api/method/islandchill.api.manufacturing.get_work_order_dashboard?limit=${limit}&start=${start}${companyQuery}${statusQuery}${searchQuery}`,
       {
         method: "GET",
         credentials: "include",

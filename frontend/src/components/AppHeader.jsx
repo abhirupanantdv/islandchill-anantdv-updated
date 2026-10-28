@@ -8,6 +8,7 @@ import { frappe } from '../services/frappe';
 export default function AppHeader({
   currentUser,
   currentTime,
+  showSearch = false,
   searchQuery,
   setSearchQuery,
   showNotifications,
@@ -35,25 +36,26 @@ export default function AppHeader({
     <header className="app-header">
       <div className="header-welcome">
         <h1>Welcome back, {currentUser.split(' ')[0]} 👋</h1>
-        <p>
-          Bottling Shop Floor Status. Mode:{' '}
-          <strong style={{ color: frappe.getConnectionSettings().isLive ? 'var(--success)' : 'var(--warning)' }}>
-            {frappe.getConnectionSettings().isLive ? 'Live ERPNext' : 'Offline Simulation'}
-          </strong>
-        </p>
+        <p>Bottling Shop Floor Status.</p>
       </div>
 
       <div className="header-actions">
-        <div className="search-container">
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            placeholder="Search work orders, items..."
-            className="search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        {showSearch && (
+          <div className="header-search">
+            <svg className="header-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 4.5 4.5" />
+            </svg>
+            <input
+              type="search"
+              aria-label="Search work orders by ID, item code, or item name"
+              placeholder="Search work orders, items..."
+              className="header-search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        )}
 
         {/* Notification Bell */}
         <div style={{ position: 'relative' }}>

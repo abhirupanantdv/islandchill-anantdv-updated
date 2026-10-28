@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import WorkOrderMaintenanceChecklists from './components/WorkOrderMaintenanceChecklists';
+import React, { useState, useEffect, useRef } from 'react';
 import { WORKFLOW_STEPS, PRODUCTS, BOMS, INITIAL_WORK_ORDERS, INITIAL_INVENTORY } from './data/mockData';
 import { frappe, DuplicateRequestError } from './services/frappe';
 import { generateSecret, verifyTOTP } from './services/totp';
@@ -642,6 +643,7 @@ function App() {
   // Tab & Control states
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  const workOrderRequestId = useRef(0);
   const [showNewWODrawer, setShowNewWODrawer] = useState(false);
   const [selectedWOId, setSelectedWOId] = useState(null);
 
@@ -668,6 +670,7 @@ function App() {
     allCompleted: false,
     loading: false
   });
+  const [maintenanceRevision, setMaintenanceRevision] = useState(0);
   const [quickMaintFillModal, setQuickMaintFillModal] = useState(null);
 
   // New Work Order dynamic loading states
@@ -3593,7 +3596,8 @@ function App() {
 
   const loadWorkOrders = async () => {
     if (!isLoggedIn) return;
-    Promise.resolve().then(() => setWoLoading(true));
+    const requestId = ++workOrderRequestId.current;
+    setWoLoading(true);
 
     const conn = frappe.getConnectionSettings();
 
@@ -3609,8 +3613,10 @@ function App() {
         recordsPerPage,
         offset,
         conn.defaultCompany || defaultCompany,
-        woStatusFilter
+        woStatusFilter,
+        searchQuery.trim()
       );
+      if (requestId !== workOrderRequestId.current) return;
 
       const savedLocal = localStorage.getItem("fiji_work_orders");
       const localList = savedLocal
@@ -3661,7 +3667,7 @@ function App() {
         err
       );
     } finally {
-      setWoLoading(false);
+      if (requestId === workOrderRequestId.current) setWoLoading(false);
     }
   };
 
@@ -4053,18 +4059,19 @@ function App() {
   };
 
   const refreshMaintChecklistValidation = async (woId) => {
+    setMaintenanceRevision(revision => revision + 1);
     try {
       const checkRes = await frappe.getWorkOrderMaintenanceChecklists(woId);
       if (checkRes) {
-        setMaintValidationModal({
-          isOpen: true,
+        setMaintValidationModal(prev => ({
+          isOpen: prev.isOpen && prev.woId === woId,
           woId: woId,
           checklists: checkRes.checklists || [],
           completedCount: checkRes.completed_count || 0,
           totalCount: checkRes.total_count || 10,
           allCompleted: checkRes.all_completed || false,
           loading: false
-        });
+        }));
       }
     } catch (err) {
       console.error('Failed to refresh maintenance checklists:', err);
@@ -4230,9 +4237,8 @@ function App() {
     }
   };
 
-  // Start a Work Order Run with Mandatory Pre-Start Maintenance Validation
+  // Issue raw materials first; maintenance gates Job Card execution afterward.
   const handleStartWorkOrder = async (woId) => {
-    const conn = frappe.getConnectionSettings();
     const woToStart = workOrders.find(wo => wo.id === woId);
     if (!woToStart) return;
 
@@ -4241,30 +4247,7 @@ function App() {
       return;
     }
 
-    if (conn.isLive && conn.connected) {
-      setSyncStatusMsg('Verifying Maintenance Checklists for Work Order...');
-      try {
-        const checkRes = await frappe.getWorkOrderMaintenanceChecklists(woId);
-        if (checkRes && !checkRes.all_completed) {
-          setMaintValidationModal({
-            isOpen: true,
-            woId: woId,
-            checklists: checkRes.checklists || [],
-            completedCount: checkRes.completed_count || 0,
-            totalCount: checkRes.total_count || 10,
-            allCompleted: false,
-            loading: false
-          });
-          return;
-        }
-      } catch (err) {
-        console.warn(`Failed to verify maintenance checklists for ${woId}:`, err);
-      } finally {
-        setSyncStatusMsg('');
-      }
-    }
-
-    proceedToStartRun(woToStart);
+    await proceedToStartRun(woToStart);
   };
 
   // const handleConfirmStockEntry = async (seData) => {
@@ -5569,9 +5552,11 @@ function App() {
     }
   };
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredWorkOrders = workOrders.filter(wo =>
-    wo.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    wo.product.toLowerCase().includes(searchQuery.toLowerCase())
+    [wo.id, wo.product, wo.productName].some(value =>
+      String(value ?? '').toLowerCase().includes(normalizedSearch)
+    )
   );
 
   const conn = frappe.getConnectionSettings();
@@ -5592,7 +5577,7 @@ function App() {
       loadWorkOrders();
       loadMaintenanceSchedules();
     }
-  }, [currentPage, isLoggedIn, defaultCompany, woStatusFilter]);
+  }, [currentPage, isLoggedIn, defaultCompany, woStatusFilter, searchQuery]);
 
   if (isAuthChecking) {
     return (
@@ -5929,8 +5914,13 @@ function App() {
         <AppHeader
           currentUser={currentUser}
           currentTime={currentTime}
+          showSearch={currentTab === 'work-orders'}
           searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
+          setSearchQuery={(value) => {
+            workOrderRequestId.current += 1;
+            setSearchQuery(value);
+            setCurrentPage(1);
+          }}
           showNotifications={showNotifications}
           setShowNotifications={setShowNotifications}
           lowStockCount={lowStockCount}
@@ -6045,6 +6035,8 @@ function App() {
             logo={logo}
             handleStartWorkOrder={handleStartWorkOrder}
             handleCheckWorkOrderMaintenance={handleCheckWorkOrderMaintenance}
+            onFillMaintenanceChecklist={handleOpenQuickFillChecklist}
+            maintenanceRevision={maintenanceRevision}
             isWorkOrderReadyForFinish={isWorkOrderReadyForFinish}
             woActionLoading={woActionLoading}
             handleFinishWorkOrder={handleFinishWorkOrder}
@@ -9209,77 +9201,10 @@ function App() {
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} onClick={() => setMaintValidationModal(prev => ({ ...prev, isOpen: false }))}>✕</button>
             </div>
 
-            <div className="modal-body" style={{ padding: '20px 0' }}>
-              <div style={{ marginBottom: '20px', backgroundColor: 'var(--card-bg)', padding: '14px 18px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 600 }}>Daily Preventive Maintenance Progress</span>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: maintValidationModal.allCompleted ? 'var(--success)' : 'var(--warning)' }}>
-                    {maintValidationModal.completedCount} / {maintValidationModal.totalCount} Checklists Submitted
-                  </span>
-                </div>
-                <div style={{ height: '8px', width: '100%', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${(maintValidationModal.completedCount / maintValidationModal.totalCount) * 100}%`,
-                    backgroundColor: maintValidationModal.allCompleted ? 'var(--success)' : 'var(--warning)',
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-                {!maintValidationModal.allCompleted && (
-                  <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--warning)', fontStyle: 'italic' }}>
-                    ⚠️ All {maintValidationModal.totalCount || 'required'} Daily Preventive Checklists must be submitted before starting this Work Order.
-                  </p>
-                )}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '12px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
-                {maintValidationModal.checklists.map((chk, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px 14px',
-                    borderRadius: '8px',
-                    border: `1px solid ${chk.completed ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`,
-                    backgroundColor: chk.completed ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-secondary)'
-                  }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <strong style={{ fontSize: '13px' }}>{chk.equipment}</strong>
-                        <span className="badge" style={{ fontSize: '10px', padding: '2px 6px' }}>{chk.area}</span>
-                      </div>
-                      {chk.completed ? (
-                        <span style={{ fontSize: '11px', color: 'var(--success)', display: 'block', marginTop: '2px' }}>
-                          ✓ Submitted ID: {chk.schedule_name}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: '11px', color: 'var(--warning)', display: 'block', marginTop: '2px' }}>
-                          ⏳ Unsubmitted / Pending Check
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      {chk.completed ? (
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--success)', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>
-                          Completed
-                        </span>
-                      ) : (
-                        <button
-                          className="primary-btn"
-                          style={{ fontSize: '12px', padding: '4px 10px' }}
-                          onClick={() => {
-                            handleOpenQuickFillChecklist(chk.equipment, chk.area, maintValidationModal.woId);
-                          }}
-                        >
-                          Fill Checklist
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <WorkOrderMaintenanceChecklists
+              validation={maintValidationModal}
+              onFillChecklist={handleOpenQuickFillChecklist}
+            />
 
             <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between' }}>
               <button className="secondary-btn" onClick={() => setMaintValidationModal(prev => ({ ...prev, isOpen: false }))}>

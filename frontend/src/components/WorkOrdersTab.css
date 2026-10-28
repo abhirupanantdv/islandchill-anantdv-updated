@@ -1,0 +1,221 @@
+.wo-operations-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.wo-operations-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #64748b);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wo-operations-tab:hover {
+  background: #f1f5f9;
+}
+
+.wo-operations-tab.is-active {
+  background: #334155;
+  color: #fff;
+  font-weight: 600;
+}
+
+.wo-operations-tab:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .wo-operations-tab {
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+}
+
+.wo-operations-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.wo-job-card-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 30px;
+}
+
+.wo-operation-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-areas:
+    "index status"
+    "details details"
+    "operator operator"
+    "actions actions";
+  grid-template-rows: auto 1fr auto auto;
+  align-items: start;
+  gap: 10px 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 2px solid #dfe7f1;
+  border-radius: 16px;
+  background: #f8fafc;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.03);
+}
+
+.wo-operation-card:not(:last-child):not(:nth-child(3n))::after {
+  content: '➜';
+  position: absolute;
+  right: -25px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 20px;
+}
+
+.wo-operation-card.is-completed {
+  border-color: #cbd5e1;
+}
+
+.wo-operation-card.is-completed::after {
+  color: #059669;
+}
+
+.wo-operation-card.is-running {
+  border-color: #0284c7;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.12);
+}
+
+.wo-operation-card > .jc-index {
+  grid-area: index;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #64748b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wo-operation-card.is-completed > .jc-index {
+  background: #059669;
+}
+
+.wo-operation-card.is-running > .jc-index {
+  background: #0284c7;
+}
+
+.wo-operation-card > .jc-op-details {
+  grid-area: details;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wo-operation-card .jc-op-details h4 {
+  margin: 0 0 5px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.wo-operation-card .jc-op-details p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.wo-operation-card > .jc-operator-log {
+  grid-area: operator;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.wo-operation-card > .jc-status-badge {
+  grid-area: status;
+  justify-self: end;
+  align-self: center;
+}
+
+.wo-operation-card .jc-status-badge .badge {
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: normal;
+  text-align: center;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.wo-operation-card.is-completed .jc-status-badge .badge {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.wo-operation-card.is-running .jc-status-badge .badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.wo-operation-card > .jc-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 1200px) {
+  .wo-job-card-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wo-operation-card::after {
+    display: none;
+  }
+
+  .wo-operation-card:not(:last-child):nth-child(odd)::after {
+    content: '➜';
+    display: block;
+    position: absolute;
+    right: -25px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 700px) {
+  .wo-job-card-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .wo-operation-card {
+    padding: 16px;
+  }
+
+  .wo-job-card-list .wo-operation-card::after {
+    display: none;
+  }
+}

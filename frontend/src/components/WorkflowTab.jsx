@@ -200,23 +200,93 @@ export default function WorkflowTab({
     return list.length > 0 ? list : workOrders;
   }, [workOrders, selectedBomId, activeFGItem]);
 
-  // Selected Work Order ID
+  // Selected Work Order ID (Empty/Unselected by default - Work Order selection is optional)
   const [selectedWOId, setSelectedWOId] = useState('');
 
-  // Update selected WO when selected BOM/Item changes
-  useEffect(() => {
-    if (matchingWorkOrders && matchingWorkOrders.length > 0) {
-      if (!matchingWorkOrders.some(wo => wo.id === selectedWOId)) {
-        setSelectedWOId(matchingWorkOrders[0].id);
-      }
-    }
+  // Active Selected Work Order object (null if none selected)
+  const activeWO = useMemo(() => {
+    if (!selectedWOId || !matchingWorkOrders || matchingWorkOrders.length === 0) return null;
+    return matchingWorkOrders.find(wo => wo.id === selectedWOId) || null;
   }, [matchingWorkOrders, selectedWOId]);
 
-  // Active Selected Work Order object
-  const activeWO = useMemo(() => {
-    if (!matchingWorkOrders || matchingWorkOrders.length === 0) return null;
-    return matchingWorkOrders.find(wo => wo.id === selectedWOId) || matchingWorkOrders[0];
-  }, [matchingWorkOrders, selectedWOId]);
+  // Live Job Cards state for selected Work Order
+  const [woJobCards, setWoJobCards] = useState([]);
+  const [loadingWOJobCards, setLoadingWOJobCards] = useState(false);
+
+  // Fetch Job Cards from ERPNext for selectedWOId whenever selectedWOId or workflowScreen changes
+  useEffect(() => {
+    if (!selectedWOId) {
+      setWoJobCards([]);
+      return;
+    }
+    let isMounted = true;
+    setLoadingWOJobCards(true);
+    frappe.getJobCardsForWorkOrder(selectedWOId).then(jcs => {
+      if (isMounted) {
+        setWoJobCards(jcs || []);
+        setLoadingWOJobCards(false);
+      }
+    }).catch(err => {
+      console.warn('[Business Workflow] Failed to fetch Job Cards for WO:', selectedWOId, err);
+      if (isMounted) setLoadingWOJobCards(false);
+    });
+    return () => { isMounted = false; };
+  }, [selectedWOId, workflowScreen]);
+
+  // Determine active operation index based on current selected Work Order & Job Cards (only when selectedWOId is set)
+  const activeWOOpIndex = useMemo(() => {
+    if (!selectedWOId || !activeWO || !bomOperations || bomOperations.length === 0) return -1;
+
+    const jcList = woJobCards.length > 0 ? woJobCards : (activeWO?.jobCards || []);
+
+    if (jcList && jcList.length > 0) {
+      // 1. Try to find a Job Card that is 'Work In Progress' / 'In Process'
+      const wipJc = jcList.find(jc => {
+        const s = (jc.status || '').toLowerCase();
+        return s.includes('progress') || s.includes('active') || s.includes('in process');
+      });
+
+      if (wipJc) {
+        const matchedIdx = bomOperations.findIndex(op => {
+          const opName = (op.operation || '').toLowerCase();
+          const jcOp = (wipJc.operation || '').toLowerCase();
+          return opName.includes(jcOp) || jcOp.includes(opName);
+        });
+        if (matchedIdx !== -1) return matchedIdx;
+      }
+
+      // 2. Find first 'Open' / uncompleted Job Card after completed ones
+      const openJc = jcList.find(jc => (jc.status || '').toLowerCase() === 'open');
+      if (openJc) {
+        const matchedIdx = bomOperations.findIndex(op => {
+          const opName = (op.operation || '').toLowerCase();
+          const jcOp = (openJc.operation || '').toLowerCase();
+          return opName.includes(jcOp) || jcOp.includes(opName);
+        });
+        if (matchedIdx !== -1) return matchedIdx;
+      }
+    }
+
+    return 0;
+  }, [selectedWOId, bomOperations, woJobCards, activeWO]);
+
+  // When a Work Order is selected by the user, highlight its active operation and pause simulation movement
+  // When no Work Order is selected (selectedWOId === ''), reset simStep back to 0 (default initial flow)
+  useEffect(() => {
+    if (workflowScreen === 'operations') {
+      if (selectedWOId) {
+        if (activeWOOpIndex >= 0 && activeWOOpIndex < bomOperations.length) {
+          setSimStep(activeWOOpIndex);
+          if (setSimPlaying) {
+            setSimPlaying(false); // Pause auto simulation movement when a specific Work Order is highlighted
+          }
+        }
+      } else {
+        // Reset to initial flow step 0 when Work Order selection is cleared/deselected
+        setSimStep(0);
+      }
+    }
+  }, [selectedWOId, activeWOOpIndex, workflowScreen, setSimStep, setSimPlaying, bomOperations.length]);
 
   // Map 11 workflow stages to Job Cards
   const stageJobCardsMap = useMemo(() => {
@@ -736,6 +806,8 @@ export default function WorkflowTab({
                   key={item.bomId}
                   onClick={() => {
                     setSelectedBomId(item.bomId);
+                    setSelectedWOId('');
+                    setSimStep(0);
                     setWorkflowScreen('operations');
                   }}
                   style={{
@@ -857,7 +929,11 @@ export default function WorkflowTab({
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <button
               type="button"
-              onClick={() => setWorkflowScreen('products')}
+              onClick={() => {
+                setSelectedWOId('');
+                setSimStep(0);
+                setWorkflowScreen('products');
+              }}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -906,108 +982,196 @@ export default function WorkflowTab({
                   <span>⚙️</span> Production Operations Pipeline for {selectedBomFullDoc?.item_name || activeFGItem?.name || selectedBomId}
                 </h2>
               </div>
-
-              {/* <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 16px', borderRadius: '12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: '#0369a1', textTransform: 'uppercase' }}>Operations Count</div>
-                  <div style={{ fontSize: '15px', fontWeight: '800', color: '#0284c7' }}>
-                    {bomOperations.length} Steps
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: '#fef3c7', border: '1px solid #fde68a', padding: '8px 16px', borderRadius: '12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: '#b45309', textTransform: 'uppercase' }}>Est. Cycle Time</div>
-                  <div style={{ fontSize: '15px', fontWeight: '800', color: '#d97706' }}>
-                    {bomOperations.reduce((sum, op) => sum + (op.time_in_mins || 0), 0)} Mins
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', padding: '8px 16px', borderRadius: '12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: '#065f46', textTransform: 'uppercase' }}>Total BOM Cost</div>
-                  <div style={{ fontSize: '15px', fontWeight: '800', color: '#059669' }}>
-                    FJD ${(selectedBomFullDoc?.total_cost || selectedBomFullDoc?.base_total_cost || 0).toFixed(2)}
-                  </div>
-                </div>
-              </div> */}
             </div>
 
-            {/* Operations Step Cards Grid */}
+            {/* Work Order Selector & Active Stage Highlight Bar */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
-              gap: '16px',
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '16px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>📋</span>
+                  <label htmlFor="wo-selector-operations" style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
+                    Select Work Order:
+                  </label>
+                </div>
+
+                <select
+                  id="wo-selector-operations"
+                  value={selectedWOId}
+                  onChange={(e) => setSelectedWOId(e.target.value)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    border: selectedWOId ? '1.5px solid #0284c7' : '1.5px solid #cbd5e1',
+                    backgroundColor: '#ffffff',
+                    color: selectedWOId ? '#0f172a' : '#64748b',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    minWidth: '260px',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)'
+                  }}
+                >
+                  <option value="">-- Optional: Select a Work Order --</option>
+                  {matchingWorkOrders && matchingWorkOrders.length > 0 && (
+                    matchingWorkOrders.map(wo => (
+                      <option key={wo.id} value={wo.id}>
+                        {wo.id} — {wo.status || 'Submitted'} (Target: {wo.quantity || wo.qty || 0} Units)
+                      </option>
+                    ))
+                  )}
+                </select>
+
+                {loadingWOJobCards && (
+                  <span style={{ fontSize: '12px', color: '#0284c7', fontWeight: '600' }}>
+                    ⌛ Syncing Job Cards...
+                  </span>
+                )}
+              </div>
+
+              {/* Active Selected Work Order Details & Current Stage Badge */}
+              {activeWO && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    backgroundColor: activeWO.status === 'In Process' || activeWO.status === 'Work In Progress' ? '#e0f2fe' : activeWO.status === 'Completed' ? '#ecfdf5' : '#f1f5f9',
+                    color: activeWO.status === 'In Process' || activeWO.status === 'Work In Progress' ? '#0369a1' : activeWO.status === 'Completed' ? '#047857' : '#475569',
+                    border: activeWO.status === 'In Process' || activeWO.status === 'Work In Progress' ? '1px solid #bae6fd' : activeWO.status === 'Completed' ? '1px solid #a7f3d0' : '1px solid #cbd5e1',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    padding: '4px 12px',
+                    borderRadius: '10px'
+                  }}>
+                    WO Status: {activeWO.status || 'Open'}
+                  </span>
+
+                  <span style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', color: '#334155', fontSize: '12px', fontWeight: '700', padding: '4px 12px', borderRadius: '10px' }}>
+                    Target: <strong>{(activeWO.quantity || activeWO.qty || 0).toLocaleString()}</strong> Units
+                  </span>
+
+                  {activeWOOpIndex >= 0 && bomOperations[activeWOOpIndex] && (
+                    <span style={{ backgroundColor: '#0284c7', color: '#ffffff', fontSize: '12px', fontWeight: '800', padding: '5px 14px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(2,132,199,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>📍</span> Current Active Stage: Step #{activeWOOpIndex + 1} ({bomOperations[activeWOOpIndex].operation})
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Operations Step Cards Flex Container with Directional Arrows */}
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '12px',
               marginBottom: '24px'
             }}>
               {bomOperations.map((op, idx) => {
                 const isActive = simStep === idx;
                 const isPassed = simStep > idx;
-                const numColor = STAGE_NUMBER_COLORS[idx % STAGE_NUMBER_COLORS.length];
+                const isWOCurrentOp = activeWOOpIndex === idx;
+                
+                // Reduced color palette: Cohesive ocean blue for active / WO current op, emerald for done, slate for open
+                const badgeBg = isWOCurrentOp ? '#0284c7' : isActive ? '#0284c7' : isPassed ? '#059669' : '#64748b';
 
                 return (
-                  <div
-                    key={op.id}
-                    onClick={() => setSimStep(idx)}
-                    style={{
-                      backgroundColor: isActive ? '#ffffff' : '#f8fafc',
-                      border: isActive ? `2.5px solid ${numColor}` : '1.5px solid #e2e8f0',
-                      borderRadius: '18px',
-                      padding: '18px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                      cursor: 'pointer',
-                      boxShadow: isActive
-                        ? `0 10px 25px rgba(0,0,0,0.08), 0 0 0 4px ${numColor}15`
-                        : '0 2px 6px rgba(0,0,0,0.02)',
-                      transition: 'all 0.3s ease',
-                      transform: isActive ? 'translateY(-2px)' : 'none'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <React.Fragment key={op.id || idx}>
+                    <div
+                      onClick={() => setSimStep(idx)}
+                      style={{
+                        flex: '1 1 220px',
+                        minWidth: '220px',
+                        backgroundColor: isWOCurrentOp || isActive ? '#ffffff' : '#f8fafc',
+                        border: isWOCurrentOp ? '2.5px solid #0284c7' : isActive ? '2px solid #0284c7' : isPassed ? '1.5px solid #cbd5e1' : '1.5px solid #e2e8f0',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        cursor: 'pointer',
+                        boxShadow: isWOCurrentOp
+                          ? '0 8px 22px rgba(2, 132, 199, 0.22)'
+                          : isActive
+                          ? '0 8px 20px rgba(2, 132, 199, 0.14)'
+                          : '0 2px 4px rgba(0,0,0,0.02)',
+                        transition: 'all 0.25s ease',
+                        transform: isWOCurrentOp || isActive ? 'translateY(-2px)' : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: badgeBg,
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: '800',
+                          fontSize: '13px'
+                        }}>
+                          {op.idx ? op.idx.toString().padStart(2, '0') : (idx + 1).toString().padStart(2, '0')}
+                        </div>
+                        {isWOCurrentOp ? (
+                          <span style={{ backgroundColor: '#0284c7', color: '#ffffff', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)' }}>
+                            📍 Active (WO)
+                          </span>
+                        ) : isPassed ? (
+                          <span style={{ backgroundColor: '#ecfdf5', color: '#047857', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
+                            ✓ Done
+                          </span>
+                        ) : isActive ? (
+                          <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                            ▶ Active
+                          </span>
+                        ) : (
+                          <span style={{ backgroundColor: '#f1f5f9', color: '#64748b', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                            ⏳ Open
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
+                          {op.operation}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>🏭</span> {op.workstation}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #f1f5f9', fontSize: '12px', color: '#475569' }}>
+                        <span>⏱ {op.time_in_mins} mins</span>
+                        <span style={{ fontWeight: '700', color: '#059669' }}>💰 FJD ${(op.operating_cost || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Directional Connector Arrow */}
+                    {idx < bomOperations.length - 1 && (
                       <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        backgroundColor: numColor,
-                        color: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontWeight: '800',
-                        fontSize: '13px',
-                        boxShadow: `0 4px 10px ${numColor}40`
+                        color: isPassed ? '#059669' : '#94a3b8',
+                        fontSize: '18px',
+                        fontWeight: '700',
+                        padding: '0 2px'
                       }}>
-                        {op.idx.toString().padStart(2, '0')}
+                        ➔
                       </div>
-                      {isPassed ? (
-                        <span style={{ backgroundColor: '#ecfdf5', color: '#047857', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
-                          ✓ Done
-                        </span>
-                      ) : isActive ? (
-                        <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '10px', border: '1px solid #bae6fd' }}>
-                          ▶ Active
-                        </span>
-                      ) : (
-                        <span style={{ backgroundColor: '#f1f5f9', color: '#94a3b8', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
-                          ⏳ Open
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
-                        {op.operation}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span>🏭</span> {op.workstation}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #f1f5f9', fontSize: '12px', color: '#475569' }}>
-                      <span>⏱ {op.time_in_mins} mins</span>
-                      <span style={{ fontWeight: '700', color: '#059669' }}>💰 FJD ${op.operating_cost || 0}</span>
-                    </div>
-                  </div>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -1029,7 +1193,7 @@ export default function WorkflowTab({
                       width: '36px',
                       height: '36px',
                       borderRadius: '50%',
-                      backgroundColor: STAGE_NUMBER_COLORS[simStep % STAGE_NUMBER_COLORS.length],
+                      backgroundColor: '#0284c7',
                       color: '#ffffff',
                       display: 'flex',
                       alignItems: 'center',
@@ -1049,17 +1213,24 @@ export default function WorkflowTab({
                     </div>
                   </div>
 
-                  <span style={{
-                    backgroundColor: currentOp.status === 'Completed' ? '#ecfdf5' : currentOp.status === 'Work In Progress' ? '#e0f2fe' : '#f1f5f9',
-                    color: currentOp.status === 'Completed' ? '#047857' : currentOp.status === 'Work In Progress' ? '#0369a1' : '#64748b',
-                    border: currentOp.status === 'Completed' ? '1px solid #a7f3d0' : currentOp.status === 'Work In Progress' ? '1px solid #bae6fd' : '1px solid #cbd5e1',
-                    fontSize: '12px',
-                    fontWeight: '800',
-                    padding: '4px 14px',
-                    borderRadius: '12px'
-                  }}>
-                    {currentOp.status || 'Open'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {selectedWOId && (
+                      <span style={{ backgroundColor: '#f0f9ff', color: '#0284c7', border: '1px solid #bae6fd', fontSize: '12px', fontWeight: '700', padding: '4px 12px', borderRadius: '12px' }}>
+                        Linked WO: <strong>{selectedWOId}</strong>
+                      </span>
+                    )}
+                    <span style={{
+                      backgroundColor: currentOp.status === 'Completed' ? '#ecfdf5' : currentOp.status === 'Work In Progress' ? '#e0f2fe' : '#f1f5f9',
+                      color: currentOp.status === 'Completed' ? '#047857' : currentOp.status === 'Work In Progress' ? '#0369a1' : '#64748b',
+                      border: currentOp.status === 'Completed' ? '1px solid #a7f3d0' : currentOp.status === 'Work In Progress' ? '1px solid #bae6fd' : '1px solid #cbd5e1',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      padding: '4px 14px',
+                      borderRadius: '12px'
+                    }}>
+                      {currentOp.status || 'Open'}
+                    </span>
+                  </div>
                 </div>
 
                 {currentOp.description ? (

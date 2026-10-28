@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import './WorkOrdersTab.css';
+import WorkOrderMaintenancePanel from './WorkOrderMaintenancePanel';
 import { frappe } from '../services/frappe';
 
 export default function WorkOrdersTab({
@@ -20,7 +22,8 @@ export default function WorkOrdersTab({
   JOB_CARD_RUNNING_STATUSES,
   JOB_CARD_PAUSED_STATUSES,
   handleStartWorkOrder,
-  handleCheckWorkOrderMaintenance,
+  onFillMaintenanceChecklist,
+  maintenanceRevision,
   isWorkOrderReadyForFinish,
   woActionLoading,
   handleFinishWorkOrder,
@@ -30,8 +33,10 @@ export default function WorkOrdersTab({
   currentUser,
   setOperatorRemarks,
   setActiveTimelineJC,
-  loadWorkOrders
+  loadWorkOrders,
+  showAlert
 }) {
+  const [operationTabs, setOperationTabs] = useState({});
   const conn = frappe.getConnectionSettings();
   const isLiveMode = conn.isLive && conn.connected;
 
@@ -98,6 +103,15 @@ export default function WorkOrdersTab({
                     (wo.produced_qty && Number(wo.produced_qty) > 0) ||
                     wo.status === 'Completed'
                   );
+                  const operationTabOptions = [
+                    ['materials', 'Issue Raw Materials', false, ''],
+                    ['maintenance', 'Maintenance', !isRawMaterialsIssued, 'Issue raw materials before maintenance.'],
+                    ['job-card', 'Job Cards', !isRawMaterialsIssued || !wo.maintAllCompleted, 'Complete raw material issue and maintenance before opening job cards.']
+                  ];
+                  const requestedTab = operationTabs[wo.id] || 'materials';
+                  const activeTab = operationTabOptions.some(([tab, , disabled]) => tab === requestedTab && !disabled)
+                    ? requestedTab
+                    : 'materials';
                   const isScheduledFuture = Boolean(wo.plannedStart && String(wo.plannedStart).substring(0, 10) > new Date().toISOString().substring(0, 10));
 
                   return (
@@ -114,81 +128,6 @@ export default function WorkOrdersTab({
                           <span className={`badge badge-${wo.status.toLowerCase().replace(/\s+/g, '-')}`}>
                             {wo.status}
                           </span>
-                          <span
-                            className="badge"
-                            style={{
-                              fontSize: '11px',
-                              padding: '4px 8px',
-                              backgroundColor: isScheduledFuture
-                                ? 'rgba(156, 163, 175, 0.15)'
-                                : (wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)'),
-                              color: isScheduledFuture
-                                ? 'var(--text-muted)'
-                                : (wo.maintAllCompleted ? 'var(--success)' : 'var(--warning)'),
-                              border: `1px solid ${isScheduledFuture ? 'rgba(156, 163, 175, 0.3)' : (wo.maintAllCompleted ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)')}`,
-                              fontWeight: 600,
-                              cursor: isScheduledFuture ? 'not-allowed' : 'pointer',
-                              opacity: isScheduledFuture ? 0.75 : 1
-                            }}
-                            onClick={() => {
-                              if (isScheduledFuture) {
-                                if (showAlert) showAlert(`Maintenance checklists cannot be performed yet because Work Order ${wo.id} is scheduled for a future date (${wo.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
-                                return;
-                              }
-                              if (handleCheckWorkOrderMaintenance) {
-                                handleCheckWorkOrderMaintenance(wo.id);
-                              } else {
-                                handleStartWorkOrder(wo.id);
-                              }
-                            }}
-                            title={isScheduledFuture ? `Scheduled for future date (${wo.plannedStart?.substring(0, 10)}). Cannot perform maintenance before planned start date.` : "Click to view & fill maintenance checklists for this Work Order"}
-                          >
-                            {isScheduledFuture ? `📅 Planned: ${wo.plannedStart?.substring(0, 10)}` : (wo.maintAllCompleted ? '✓ Maint: Completed' : `🛠️ Maint: ${wo.maintCompletedCount || 0}/${wo.maintTotalCount !== undefined ? wo.maintTotalCount : (wo.lineNo?.includes('2') ? 6 : 4)} Pending`)}
-                          </span>
-
-                          {!isRawMaterialsIssued ? (
-                            <button
-                              className="primary-btn"
-                              style={{
-                                padding: '6px 12px',
-                                fontSize: '12px',
-                                opacity: (!isScheduledFuture && wo.maintAllCompleted) ? 1 : 0.6,
-                                backgroundColor: (!isScheduledFuture && wo.maintAllCompleted) ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
-                                borderColor: (!isScheduledFuture && wo.maintAllCompleted) ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
-                                cursor: isScheduledFuture ? 'not-allowed' : 'pointer'
-                              }}
-                              onClick={() => {
-                                if (isScheduledFuture) {
-                                  if (showAlert) showAlert(`Raw Materials cannot be issued yet because Work Order ${wo.id} is scheduled for a future date (${wo.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
-                                  return;
-                                }
-                                handleStartWorkOrder(wo.id);
-                              }}
-                              title={
-                                isScheduledFuture
-                                  ? `Scheduled for future date (${wo.plannedStart?.substring(0, 10)}). Cannot issue raw materials before planned start date.`
-                                  : (wo.maintAllCompleted ? "Issue Raw Materials for Manufacture (Stock Entry)" : "Maintenance checklists must be 100% completed first")
-                              }
-                            >
-                              📦 Issue Raw Materials
-                            </button>
-                          ) : (
-                            <span
-                              className="badge"
-                              style={{
-                                fontSize: '11px',
-                                padding: '4px 8px',
-                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                color: 'var(--success)',
-                                border: '1px solid rgba(16, 185, 129, 0.3)',
-                                fontWeight: 600
-                              }}
-                              title="Raw Materials have been transferred for manufacture (Single Stock Entry submitted)"
-                            >
-                              ✓ Raw Materials Issued
-                            </span>
-                          )}
-
                           {isWorkOrderReadyForFinish(wo) && (
                             <button
                               className="primary-btn"
@@ -280,20 +219,110 @@ export default function WorkOrdersTab({
 
                       {isSelected && (
                         <div className="job-cards-section">
+                          <div className="wo-operations-tabs" role="tablist" aria-label={`Operations for ${wo.id}`}>
+                            {operationTabOptions.map(([tab, label, disabled, reason]) => (
+                              <button
+                                key={tab}
+                                type="button"
+                                role="tab"
+                                id={`${wo.id}-${tab}-tab`}
+                                aria-controls={`${wo.id}-${tab}-panel`}
+                                aria-selected={activeTab === tab}
+                                disabled={disabled}
+                                title={disabled ? reason : undefined}
+                                tabIndex={activeTab === tab ? 0 : -1}
+                                className={`wo-operations-tab${activeTab === tab ? ' is-active' : ''}`}
+                                onClick={() => setOperationTabs(prev => ({ ...prev, [wo.id]: tab }))}
+                                onKeyDown={(event) => {
+                                  const tabs = operationTabOptions.filter(([, , unavailable]) => !unavailable);
+                                  const index = tabs.findIndex(([id]) => id === tab);
+                                  let nextIndex;
+                                  if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+                                  else if (event.key === 'ArrowLeft') nextIndex = (index + tabs.length - 1) % tabs.length;
+                                  else if (event.key === 'Home') nextIndex = 0;
+                                  else if (event.key === 'End') nextIndex = tabs.length - 1;
+                                  else return;
+                                  event.preventDefault();
+                                  const nextTab = tabs[nextIndex][0];
+                                  setOperationTabs(prev => ({ ...prev, [wo.id]: nextTab }));
+                                  document.getElementById(`${wo.id}-${nextTab}-tab`)?.focus();
+                                }}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <div role="tabpanel" id={`${wo.id}-maintenance-panel`} aria-labelledby={`${wo.id}-maintenance-tab`} hidden={activeTab !== 'maintenance'} tabIndex={0}>
+                            {activeTab === 'maintenance' && (
+                              <WorkOrderMaintenancePanel
+                                wo={wo}
+                                isScheduledFuture={isScheduledFuture}
+                                revision={maintenanceRevision}
+                                onFillChecklist={onFillMaintenanceChecklist}
+                              />
+                            )}
+                          </div>
+                          <div role="tabpanel" id={`${wo.id}-materials-panel`} aria-labelledby={`${wo.id}-materials-tab`} hidden={activeTab !== 'materials'} tabIndex={0}>
+                            <h4 className="section-subtitle">Issue Raw Materials</h4>
+                          {!isRawMaterialsIssued ? (
+                            <button
+                              className="primary-btn"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                opacity: (!isScheduledFuture) ? 1 : 0.6,
+                                backgroundColor: (!isScheduledFuture) ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
+                                borderColor: (!isScheduledFuture) ? 'var(--primary)' : 'var(--text-muted, #9ca3af)',
+                                cursor: isScheduledFuture ? 'not-allowed' : 'pointer'
+                              }}
+                              onClick={() => {
+                                if (isScheduledFuture) {
+                                  if (showAlert) showAlert(`Raw Materials cannot be issued yet because Work Order ${wo.id} is scheduled for a future date (${wo.plannedStart?.substring(0, 10)}).`, 'warning', 'Future Planned Date');
+                                  return;
+                                }
+                                handleStartWorkOrder(wo.id);
+                              }}
+                              title={
+                                isScheduledFuture
+                                  ? `Scheduled for future date (${wo.plannedStart?.substring(0, 10)}). Cannot issue raw materials before planned start date.`
+                                  : "Issue Raw Materials for Manufacture (Stock Entry)"
+                              }
+                            >
+                              📦 Issue Raw Materials
+                            </button>
+                          ) : (
+                            <span
+                              className="badge"
+                              style={{
+                                fontSize: '11px',
+                                padding: '4px 8px',
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                color: 'var(--success)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                fontWeight: 600
+                              }}
+                              title="Raw Materials have been transferred for manufacture (Single Stock Entry submitted)"
+                            >
+                              ✓ Raw Materials Issued
+                            </span>
+                          )}
+
+                          </div>
+                          <div role="tabpanel" id={`${wo.id}-job-card-panel`} aria-labelledby={`${wo.id}-job-card-tab`} hidden={activeTab !== 'job-card'} tabIndex={0}>
                           <h4 className="section-subtitle">Operational Job Cards ({wo.jobCards ? wo.jobCards.length : 0})</h4>
 
                           {(!wo.jobCards || wo.jobCards.length === 0) ? (
                             <p className="text-muted" style={{ fontSize: '13px', padding: '10px 0' }}>
-                              No Job Cards found for this Work Order. If this is a new WO, click <strong>"Start Run"</strong> to issue materials and auto-generate job cards from the BOM operations. If the BOM has no operations defined, no job cards will be created in ERPNext.
+                              No Job Cards found for this Work Order. If this is a new WO, use the <strong>Issue Raw Materials</strong> tab to issue materials and auto-generate job cards from the BOM operations. If the BOM has no operations defined, no job cards will be created in ERPNext.
                             </p>
                           ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div className="wo-job-card-list">
                               {wo.jobCards.map((jc, index) => (
-                                <div key={jc.id} className="jc-item-row" style={{ gridTemplateColumns: '50px 1.8fr 1fr 1fr 2.2fr' }}>
+                                <div key={jc.id} className={`wo-operation-card${jc.status === 'Completed' ? ' is-completed' : JOB_CARD_RUNNING_STATUSES.includes(jc.status) ? ' is-running' : ''}`} role="group" aria-label={`Operation ${index + 1}: ${jc.operation}`}>
                                   <div className="jc-index">{(index + 1).toString().padStart(2, '0')}</div>
                                   <div className="jc-op-details">
                                     <h4>{jc.operation}</h4>
-                                    <p>{jc.station} {jc.status !== 'Completed' && <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>({jc.status})</span>}</p>
+                                    <p><span aria-hidden="true">🏭</span> {jc.station || 'Workstation not assigned'}</p>
                                     {(() => {
                                       let start = jc.actualStartTime || '';
                                       let end = jc.actualEndTime || '';
@@ -316,13 +345,11 @@ export default function WorkOrdersTab({
                                     })()}
                                   </div>
 
-                                  <div className="jc-operator-log text-muted">
-                                    {jc.operator ? (
+                                  {jc.operator && (
+                                    <div className="jc-operator-log text-muted">
                                       <span>👤 {jc.operator}</span>
-                                    ) : (
-                                      <span>-</span>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
 
                                   <div className="jc-status-badge">
                                     <span className={`badge badge-${jc.status.toLowerCase().replace(' ', '-')}`}>
@@ -394,6 +421,7 @@ export default function WorkOrdersTab({
                               ))}
                             </div>
                           )}
+                          </div>
                         </div>
                       )}
                     </div>
